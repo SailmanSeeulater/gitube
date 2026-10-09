@@ -64,12 +64,22 @@ export interface FetchOptions {
   maxBranches?: number
   onProgress?: (p: FetchProgress) => void
   signal?: AbortSignal
+  /** Fetch implementation handed to Octokit; defaults to globalThis.fetch. Tests inject a fake. */
+  fetch?: typeof globalThis.fetch
 }
 
 export class GitHubFetchError extends Error {
   constructor(
     message: string,
-    public readonly code: 'not_found' | 'rate_limited' | 'unauthorized' | 'network' | 'invalid_url' | 'aborted' | 'unknown',
+    public readonly code:
+      | 'not_found'
+      | 'rate_limited'
+      | 'unauthorized'
+      | 'network'
+      | 'invalid_url'
+      | 'aborted'
+      | 'empty_repo'
+      | 'unknown',
     public readonly resetAt?: string | null,
   ) {
     super(message)

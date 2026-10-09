@@ -1,0 +1,92 @@
+import type { Graph, RepoData } from '../types'
+import { useGardenStore } from '../store/useGardenStore'
+import { formatClock, stageLabel } from './gardenUtils'
+
+export interface StatusStripProps {
+  data: RepoData | undefined
+  graph: Graph | null
+  isFetching: boolean
+}
+
+const shell =
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
+
+export default function StatusStrip({ data, graph, isFetching }: StatusStripProps) {
+  const progress = useGardenStore((s) => s.progress)
+
+  if (isFetching) {
+    const stage = progress ? stageLabel(progress.stage) : 'starting'
+    const hasTotal = progress !== null && progress.total > 0
+    const pct = hasTotal ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0
+    const reset = progress ? formatClock(progress.rateLimitResetAt) : ''
+    return (
+      <div className={`${shell} w-[320px] max-w-[calc(100vw-2rem)] px-3 py-2`} role="status" aria-live="polite">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-garden-text">{stage}</span>
+          <span className="shrink-0 font-mono tabular-nums text-garden-muted">
+            {hasTotal ? `${progress.done}/${progress.total}` : ''}
+          </span>
+        </div>
+        <div className="mt-1.5 h-0.5 overflow-hidden rounded bg-garden-hover">
+          {hasTotal ? (
+            <div className="h-full bg-garden-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
+          ) : (
+            <div className="h-full w-1/3 animate-pulse bg-garden-accent/70" />
+          )}
+        </div>
+        {progress?.message && <div className="mt-1 truncate text-garden-muted">{progress.message}</div>}
+        {progress && (
+          <div className="mt-1 flex flex-wrap gap-x-3 text-garden-muted">
+            <span>
+              {progress.requestsUsed} request{progress.requestsUsed === 1 ? '' : 's'}
+            </span>
+            {progress.rateLimitRemaining !== null && (
+              <span>
+                {progress.rateLimitRemaining} left
+                {reset && ` · resets ${reset}`}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (!data) return null
+
+  const commitCount = Object.keys(data.commits).length
+  const remaining = progress?.rateLimitRemaining ?? null
+
+  return (
+    <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
+      <span className="text-garden-text-dim">
+        {data.branches.length} branch{data.branches.length === 1 ? '' : 'es'}
+      </span>
+      <span className="text-garden-border">·</span>
+      <span className="text-garden-text-dim">
+        {commitCount} commit{commitCount === 1 ? '' : 's'}
+      </span>
+      {graph && (
+        <>
+          <span className="text-garden-border">·</span>
+          <span className="text-garden-muted">
+            {graph.nodes.length} node{graph.nodes.length === 1 ? '' : 's'} shown
+          </span>
+        </>
+      )}
+      {data.truncated && (
+        <span
+          className="rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1.5 py-px text-[11px] text-garden-warn"
+          title={`History was cut short by fetch caps at ${data.truncatedAt.length} commit${data.truncatedAt.length === 1 ? '' : 's'}; dashed roots mark where it stops.`}
+        >
+          history truncated
+        </span>
+      )}
+      {remaining !== null && (
+        <span className="text-garden-muted" title="GitHub API requests remaining this hour">
+          {remaining} requests left
+        </span>
+      )}
+    </div>
+  )
+}

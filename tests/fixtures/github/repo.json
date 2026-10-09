@@ -1,0 +1,17 @@
+{
+  "id": 1296269,
+  "node_id": "MDEwOlJlcG9zaXRvcnkxMjk2MjY5",
+  "name": "repo",
+  "full_name": "owner/repo",
+  "private": false,
+  "owner": {
+    "login": "owner",
+    "id": 1,
+    "type": "User"
+  },
+  "html_url": "https://github.com/owner/repo",
+  "description": "Fixture repository for repo-garden tests",
+  "fork": false,
+  "default_branch": "main",
+  "visibility": "public"
+}

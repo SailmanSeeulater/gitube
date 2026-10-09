@@ -1,0 +1,58 @@
+{
+  "url": "https://api.github.com/repos/owner/repo/compare/main...feature%2Fx",
+  "html_url": "https://github.com/owner/repo/compare/main...feature/x",
+  "permalink_url": "https://github.com/owner/repo/compare/owner:a3a3a3a...owner:f2f2f2f",
+  "diff_url": "https://github.com/owner/repo/compare/main...feature/x.diff",
+  "patch_url": "https://github.com/owner/repo/compare/main...feature/x.patch",
+  "base_commit": {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "html_url": "https://github.com/owner/repo/commit/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "commit": {
+      "message": "Trunk commit 1 (tip of main)",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" },
+      "committer": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2" }]
+  },
+  "merge_base_commit": {
+    "sha": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "html_url": "https://github.com/owner/repo/commit/a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "commit": {
+      "message": "Trunk commit 3 (fork point of feature/x)\n\nLonger body that must not appear in the message.",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-03T10:00:00Z" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-10-03T10:05:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4" }]
+  },
+  "status": "diverged",
+  "ahead_by": 2,
+  "behind_by": 2,
+  "total_commits": 2,
+  "commits": [
+    {
+      "sha": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+      "html_url": "https://github.com/owner/repo/commit/f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+      "commit": {
+        "message": "feature: first commit on feature/x",
+        "author": { "name": "Bob", "email": "bob@example.com", "date": "2026-10-06T09:00:00Z" },
+        "committer": { "name": "Bob", "email": "bob@example.com", "date": "2026-10-06T09:00:00Z" }
+      },
+      "author": { "login": "bob" },
+      "parents": [{ "sha": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3" }]
+    },
+    {
+      "sha": "f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2",
+      "html_url": "https://github.com/owner/repo/commit/f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2f2",
+      "commit": {
+        "message": "feature: second commit on feature/x (tip)",
+        "author": null,
+        "committer": { "name": "Bob", "email": "bob@example.com", "date": "2026-10-07T09:00:00Z" }
+      },
+      "author": { "login": "bob" },
+      "parents": [{ "sha": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1" }]
+    }
+  ],
+  "files": []
+}

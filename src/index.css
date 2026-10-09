@@ -8,8 +8,29 @@
   --color-garden-muted: #999999;
   --color-garden-accent: #a78bfa;
   --color-garden-accent-strong: #7c3aed;
+  --color-garden-hover: #2e2e2e;
+  --color-garden-raised: #2a2a2a;
+  --color-garden-text-dim: #b8b8b8;
+  --color-garden-warn: #d9b35b;
+  --color-garden-danger: #e06c75;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 html, body, #root { height: 100%; margin: 0; }
-body { background: var(--color-garden-bg); color: var(--color-garden-text); font-family: var(--font-sans); }
+html { color-scheme: dark; overscroll-behavior: none; }
+body { background: var(--color-garden-bg); color: var(--color-garden-text); font-family: var(--font-sans); overflow: hidden; }
+#root { position: relative; }
+
+/* Quiet scrollbars for panel lists */
+.garden-scroll { scrollbar-width: thin; scrollbar-color: var(--color-garden-border) transparent; }
+.garden-scroll::-webkit-scrollbar { width: 8px; }
+.garden-scroll::-webkit-scrollbar-track { background: transparent; }
+.garden-scroll::-webkit-scrollbar-thumb { background: var(--color-garden-border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+
+/* force-graph adds .clickable on the canvas when a node is under the pointer */
+.force-graph-container canvas { display: block; }
+.force-graph-container canvas.clickable { cursor: pointer; }
+.force-graph-container .graph-tooltip { display: none; }
+
+:focus-visible { outline: 1px solid var(--color-garden-accent); outline-offset: 1px; }

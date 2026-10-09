@@ -1,0 +1,35 @@
+{
+  "url": "https://api.github.com/repos/owner/repo/compare/main...old",
+  "html_url": "https://github.com/owner/repo/compare/main...old",
+  "permalink_url": "https://github.com/owner/repo/compare/owner:a4a4a4a...owner:a4a4a4a",
+  "diff_url": "https://github.com/owner/repo/compare/main...old.diff",
+  "patch_url": "https://github.com/owner/repo/compare/main...old.patch",
+  "base_commit": {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "html_url": "https://github.com/owner/repo/commit/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "commit": {
+      "message": "Trunk commit 1 (tip of main)",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" },
+      "committer": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2" }]
+  },
+  "merge_base_commit": {
+    "sha": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+    "html_url": "https://github.com/owner/repo/commit/a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+    "commit": {
+      "message": "Trunk commit 4 (tip of old)",
+      "author": { "name": "Carol", "email": "carol@example.com", "date": "2026-10-02T10:00:00Z" },
+      "committer": { "name": "Carol", "email": "carol@example.com", "date": "2026-10-02T10:00:00Z" }
+    },
+    "author": { "login": "carol" },
+    "parents": [{ "sha": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5" }]
+  },
+  "status": "behind",
+  "ahead_by": 0,
+  "behind_by": 3,
+  "total_commits": 0,
+  "commits": [],
+  "files": []
+}

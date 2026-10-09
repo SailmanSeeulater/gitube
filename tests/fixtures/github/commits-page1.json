@@ -1,0 +1,35 @@
+[
+  {
+    "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "html_url": "https://github.com/owner/repo/commit/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "commit": {
+      "message": "Trunk commit 1 (tip of main)",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" },
+      "committer": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-05T10:00:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2" }]
+  },
+  {
+    "sha": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+    "html_url": "https://github.com/owner/repo/commit/a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+    "commit": {
+      "message": "Trunk commit 2",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-04T10:00:00Z" },
+      "committer": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-04T10:00:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3" }]
+  },
+  {
+    "sha": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "html_url": "https://github.com/owner/repo/commit/a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
+    "commit": {
+      "message": "Trunk commit 3 (fork point of feature/x)\n\nLonger body that must not appear in the message.",
+      "author": { "name": "Alice", "email": "alice@example.com", "date": "2026-10-03T10:00:00Z" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-10-03T10:05:00Z" }
+    },
+    "author": { "login": "alice" },
+    "parents": [{ "sha": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4" }]
+  }
+]
