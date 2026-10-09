@@ -71,6 +71,14 @@ interface ScaleCache {
 }
 
 const NO_DASH: number[] = []
+// force-graph treats a string here as a node attribute name, so the mode must be a function.
+const NODE_MODE_REPLACE = () => 'replace' as const
+// fit-to-view padding in screen px; the right side is wider because tip labels hang off tips
+const FIT_PAD_LEFT = 48
+const FIT_PAD_RIGHT = 150
+const FIT_PAD_TOP = 72
+const FIT_PAD_BOTTOM = 72
+const FIT_MAX_ZOOM = 2.5
 const TWO_PI = Math.PI * 2
 const DIM_ALPHA = 0.2
 const FALLBACK_LINK = hexToRgba(FALLBACK_COLOUR, 0.35)
@@ -417,6 +425,9 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
       setHoverVersion((v) => v + 1)
     }
   }, [])
+  // force-graph only reports hover changes while the pointer is over the canvas, so leaving it
+  // (onto the panel, say) would otherwise keep the last node hovered and the graph dimmed.
+  const handlePointerLeave = useCallback(() => handleHover(null), [handleHover])
 
   const handleNodeClick = useCallback(
     (node: GardenNode) => {
@@ -435,14 +446,36 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
     node.fy = undefined
   }, [])
 
+  /**
+   * Fit the settled layout into view once per graph. Hand-rolled instead of zoomToFit so the
+   * zoom is capped (a four-node repo should not become four giant discs) and the right edge
+   * leaves room for the tip labels that hang off the right of each tip.
+   */
   const handleEngineStop = useCallback(() => {
     if (fittedRef.current) return
     fittedRef.current = true
-    fgRef.current?.zoomToFit(400, 40)
+    const fg = fgRef.current
+    if (!fg) return
+    const { width, height } = sizeRef.current
+    if (width === 0 || height === 0) return
+    const bbox = fg.getGraphBbox()
+    if (!bbox) return
+    const [x0, x1] = bbox.x
+    const [y0, y1] = bbox.y
+    const bw = Math.max(x1 - x0, 1)
+    const bh = Math.max(y1 - y0, 1)
+    const availW = Math.max(width - FIT_PAD_LEFT - FIT_PAD_RIGHT, 50)
+    const availH = Math.max(height - FIT_PAD_TOP - FIT_PAD_BOTTOM, 50)
+    const k = Math.min(availW / bw, availH / bh, FIT_MAX_ZOOM)
+    // shift the centre so the padded area, not the raw canvas, is what the bbox fills
+    const cx = (x0 + x1) / 2 - (FIT_PAD_LEFT - FIT_PAD_RIGHT) / (2 * k)
+    const cy = (y0 + y1) / 2 - (FIT_PAD_TOP - FIT_PAD_BOTTOM) / (2 * k)
+    fg.centerAt(cx, cy, 400)
+    fg.zoom(k, 400)
   }, [])
 
   return (
-    <div ref={containerRef} className="h-full w-full">
+    <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave}>
       {ready && (
         <ForceGraph2D<GraphNode, GardenLinkFields>
           ref={fgRef}
@@ -451,7 +484,7 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
           graphData={index.graphData}
           backgroundColor={CANVAS_BG}
           nodeId="id"
-          nodeCanvasObjectMode="replace"
+          nodeCanvasObjectMode={NODE_MODE_REPLACE}
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={paintPointerArea}
           linkColor={linkColor}

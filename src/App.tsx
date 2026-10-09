@@ -13,6 +13,9 @@ import EmptyState from './components/EmptyState'
 import NodeInspector from './components/NodeInspector'
 import { staleBranchNames } from './components/gardenUtils'
 
+/** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
+const PANEL_INSET = 324
+
 /** GitHub owner and repo names are case-insensitive. */
 function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
   return a !== null && a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase()
@@ -34,6 +37,7 @@ export default function App() {
   const setSelectedBranch = useGardenStore((s) => s.setSelectedBranch)
   const clearSelection = useGardenStore((s) => s.clearSelection)
   const resetForNewRepo = useGardenStore((s) => s.resetForNewRepo)
+  const panelOpen = useGardenStore((s) => s.panelOpen)
 
   const { data, error, isFetching, refetch } = useRepoData(repoRef)
 
@@ -124,7 +128,8 @@ export default function App() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
-      <div className="absolute inset-0">
+      {/* The canvas stops short of the side panel so zoom-to-fit never hides nodes behind it. */}
+      <div className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
         {graph && (
           <Garden graph={graph} viewMode={viewMode} onNodeClick={handleNodeClick} onBackgroundClick={handleBackgroundClick} />
         )}
