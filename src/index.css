@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-garden-bg: #1e1e1e;
+  --color-garden-panel: #252525;
+  --color-garden-border: #363636;
+  --color-garden-text: #dcddde;
+  --color-garden-muted: #999999;
+  --color-garden-accent: #a78bfa;
+  --color-garden-accent-strong: #7c3aed;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--color-garden-bg); color: var(--color-garden-text); font-family: var(--font-sans); }
