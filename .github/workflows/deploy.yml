@@ -22,7 +22,7 @@ jobs:
       VPS_HOST: 146.235.217.254
       VPS_USER: ubuntu
       WEB_ROOT: /var/www/repo-garden
-      SITE_URL: https://repo-garden.latesailor.dev
+      SITE_URL: https://repogarden.latesailor.dev
       # Public host key of the VPS (not a secret); pinned so the deploy refuses an impostor server.
       VPS_HOST_KEY: 146.235.217.254 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjq3q6ZUmOdu85PlO0JdljadM+66ga2RSWuQng8129Z
 

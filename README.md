@@ -23,7 +23,7 @@ Then open http://localhost:5173.
 
 ## Deploy
 
-Pushes to `master` deploy to https://repo-garden.latesailor.dev on the Oracle
+Pushes to `master` deploy to https://repogarden.latesailor.dev on the Oracle
 VPS through GitHub Actions. One-time setup (DNS, nginx, the deploy key) is in
 [DEPLOY.md](DEPLOY.md).
 
