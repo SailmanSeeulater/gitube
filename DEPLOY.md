@@ -36,12 +36,20 @@ nslookup repogarden.latesailor.dev
 
 ## 2. A deploy key for this repo (laptop, once)
 
-Run the laptop commands in Git Bash, from the repo folder. GitHub Actions logs
+Run the laptop commands from the repo folder. They are written for Git Bash;
+the two that differ in Windows PowerShell have a PowerShell version below them. GitHub Actions logs
 in to the VPS with its own key, separate from your Oracle login key, so it can
 be revoked on its own if this repo ever leaks.
 
 ```bash
 ssh-keygen -t ed25519 -C "repo-garden deploy" -f ~/.ssh/repogarden_deploy -N ""
+```
+
+In Windows PowerShell, `-N ""` loses its empty value and ssh-keygen fails with
+"option requires an argument -- N". Use this there instead:
+
+```powershell
+ssh-keygen -t ed25519 -C "repo-garden deploy" -f "$HOME\.sshepogarden_deploy" -N '""'
 ```
 
 That makes two files. `repogarden_deploy` is the private half and goes into the
@@ -94,6 +102,12 @@ The secret holds the private half of the deploy key:
 
 ```bash
 gh secret set VPS_SSH_KEY -R SailmanSeeulater/repo-garden < ~/.ssh/repogarden_deploy
+```
+
+PowerShell has no `<` redirect, so pipe the file instead:
+
+```powershell
+Get-Content "$HOME\.sshepogarden_deploy" -Raw | gh secret set VPS_SSH_KEY -R SailmanSeeulater/repo-garden
 ```
 
 The workflow accepts the raw key file or the key as one base64 line.
