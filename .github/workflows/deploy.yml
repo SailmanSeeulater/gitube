@@ -1,0 +1,86 @@
+name: Deploy to VPS
+
+# Same shape as Portfolio_Website: build on GitHub's runner, rsync the static
+# dist/ into a web root on the Oracle VPS, and let the host nginx serve it.
+# The VPS never builds anything, so a deploy is a file copy.
+
+on:
+  push:
+    branches: [master]
+  # So a deploy can be re-run without an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-repo-garden
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: 146.235.217.254
+      VPS_USER: ubuntu
+      WEB_ROOT: /var/www/repo-garden
+      SITE_URL: https://repo-garden.latesailor.dev
+      # Public host key of the VPS (not a secret); pinned so the deploy refuses an impostor server.
+      VPS_HOST_KEY: 146.235.217.254 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjq3q6ZUmOdu85PlO0JdljadM+66ga2RSWuQng8129Z
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      # Tests gate the deploy: a graph-engine regression never reaches the site.
+      - run: npm test
+      # tsc -b && vite build
+      - run: npm run build
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -z "$VPS_SSH_KEY" ]; then
+            echo "::error::VPS_SSH_KEY is not set in this repository's secrets (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          # The secret may be the key file as one base64 line (preferred: nothing for a browser to mangle)
+          # or the raw PEM, which can arrive with CRLF endings, flattened lines, or stray spaces.
+          KEY=$(printf '%s' "$VPS_SSH_KEY" | tr -d '\r')
+          if printf '%s' "$KEY" | grep -q -- '-----BEGIN'; then
+            HEADER=$(printf '%s' "$KEY" | grep -o -- '-----BEGIN [A-Z ]*-----' | head -1)
+            FOOTER=$(printf '%s' "$KEY" | grep -o -- '-----END [A-Z ]*-----' | head -1)
+            BODY=${KEY#*"$HEADER"}
+            BODY=${BODY%"$FOOTER"*}
+            { echo "$HEADER"; printf '%s' "$BODY" | tr -d ' \t\n' | fold -w 64; echo; echo "$FOOTER"; } | sed '/^$/d' > ~/.ssh/deploy_key
+          else
+            printf '%s' "$KEY" | tr -d ' \t\n' | base64 -d > ~/.ssh/deploy_key 2>/dev/null || true
+          fi
+          chmod 600 ~/.ssh/deploy_key
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null; then
+            echo "::error::VPS_SSH_KEY is not a valid private key."
+            exit 1
+          fi
+          echo "Using key: $(ssh-keygen -lf ~/.ssh/deploy_key)"
+          printf '%s\n' "$VPS_HOST_KEY" > ~/.ssh/known_hosts
+
+      - name: Sync build to the web root
+        run: |
+          rsync -rlz --delete --checksum \
+            --chmod=D755,F644 --chown=www-data:www-data \
+            --rsync-path="sudo rsync" \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            dist/ "$VPS_USER@$VPS_HOST:$WEB_ROOT/"
+
+      # The page, the right build, and the security policy that lets it reach GitHub.
+      - name: Smoke test
+        run: |
+          curl -fsS "$SITE_URL/" | grep -q "<title>repo-garden</title>"
+          asset=$(grep -o '/assets/index-[A-Za-z0-9_-]*\.js' dist/index.html | head -1)
+          curl -fsSI "$SITE_URL$asset" | grep -qi "cache-control: public, max-age=31536000, immutable"
+          curl -fsSI "$SITE_URL/" | grep -i "content-security-policy" | grep -q "https://api.github.com"
