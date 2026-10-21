@@ -1,50 +1,53 @@
 import { useGardenStore } from '../store/useGardenStore'
-import { ACCENT, CANVAS_BG, ROOT_FILL, ROOT_RING } from './gardenUtils'
+import type { Theme } from '../theme/themes'
+import { useTheme } from '../theme/useTheme'
 
 type GlyphKind = 'tip' | 'fork' | 'merge' | 'root' | 'station' | 'interchange' | 'origin' | 'muted' | 'run'
 
-function Glyph({ kind }: { kind: GlyphKind }) {
+/** The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them. */
+function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
+  const branch = theme.derived.defaultBranchColour
   switch (kind) {
     // metro mode: the station glyphs Garden draws on the straight map
     case 'station':
       return (
         <svg {...common}>
-          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
-          <circle cx="9" cy="9" r="4.5" fill={ACCENT} stroke="#e8e8e8" strokeWidth="1.3" />
+          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="4.5" fill={branch} stroke="#e8e8e8" strokeWidth="1.3" />
         </svg>
       )
     case 'interchange':
       return (
         <svg {...common}>
-          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
+          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
           <circle cx="9" cy="9" r="4.5" fill="#e8e8e8" />
-          <circle cx="9" cy="9" r="2.2" fill={CANVAS_BG} />
+          <circle cx="9" cy="9" r="2.2" fill={theme.canvas} />
         </svg>
       )
     case 'origin':
       return (
         <svg {...common}>
-          <line x1="0" y1="9" x2="5" y2="9" stroke={ACCENT} strokeWidth="1.2" strokeDasharray="2 2" />
-          <line x1="12" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
-          <circle cx="9" cy="9" r="3.5" fill={CANVAS_BG} stroke={ACCENT} strokeWidth="1.5" />
+          <line x1="0" y1="9" x2="5" y2="9" stroke={branch} strokeWidth="1.2" strokeDasharray="2 2" />
+          <line x1="12" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="3.5" fill={theme.canvas} stroke={branch} strokeWidth="1.5" />
         </svg>
       )
     case 'muted':
       return (
         <svg {...common}>
-          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" strokeOpacity="0.45" />
-          <line x1="0" y1="14" x2="18" y2="4" stroke={ACCENT} strokeWidth="1.6" strokeDasharray="3 2" />
+          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" strokeOpacity="0.45" />
+          <line x1="0" y1="14" x2="18" y2="4" stroke={branch} strokeWidth="1.6" strokeDasharray="3 2" />
         </svg>
       )
     // the break Garden draws across a line where skeleton view hides commits (see paintMetro)
     case 'run':
       return (
         <svg {...common}>
-          <line x1="0" y1="11" x2="18" y2="11" stroke={ACCENT} strokeWidth="2.5" />
-          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke="#b8b8b8" strokeWidth="1.5" />
-          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke="#b8b8b8" strokeWidth="1.5" />
-          <text x="9" y="5" fill="#b8b8b8" fontSize="6" textAnchor="middle">
+          <line x1="0" y1="11" x2="18" y2="11" stroke={branch} strokeWidth="2.5" />
+          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke={theme.badgeText} strokeWidth="1.5" />
+          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke={theme.badgeText} strokeWidth="1.5" />
+          <text x="9" y="5" fill={theme.badgeText} fontSize="6" textAnchor="middle">
             +N
           </text>
         </svg>
@@ -52,28 +55,28 @@ function Glyph({ kind }: { kind: GlyphKind }) {
     case 'tip':
       return (
         <svg {...common}>
-          <circle cx="9" cy="9" r="4" fill={ACCENT} />
-          <circle cx="9" cy="9" r="6.5" fill="none" stroke={ACCENT} strokeWidth="1.5" />
+          <circle cx="9" cy="9" r="4" fill={branch} />
+          <circle cx="9" cy="9" r="6.5" fill="none" stroke={branch} strokeWidth="1.5" />
         </svg>
       )
     case 'fork':
       return (
         <svg {...common}>
-          <circle cx="9" cy="9" r="4" fill={CANVAS_BG} stroke={ACCENT} strokeWidth="1.5" />
+          <circle cx="9" cy="9" r="4" fill={theme.derived.forkNodeFill} stroke={branch} strokeWidth="1.5" />
         </svg>
       )
     case 'merge':
       return (
         <svg {...common}>
-          <circle cx="9" cy="9" r="3.5" fill={ACCENT} />
-          <circle cx="9" cy="9" r="6" fill="none" stroke={ACCENT} strokeWidth="0.8" />
+          <circle cx="9" cy="9" r="3.5" fill={branch} />
+          <circle cx="9" cy="9" r="6" fill="none" stroke={branch} strokeWidth="0.8" />
         </svg>
       )
     case 'root':
       return (
         <svg {...common}>
-          <circle cx="9" cy="9" r="3.5" fill={ROOT_FILL} />
-          <circle cx="9" cy="9" r="6" fill="none" stroke={ROOT_RING} strokeWidth="1.2" strokeDasharray="2.2 1.8" />
+          <circle cx="9" cy="9" r="3.5" fill={theme.rootFill} />
+          <circle cx="9" cy="9" r="6" fill="none" stroke={theme.rootRing} strokeWidth="1.2" strokeDasharray="2.2 1.8" />
         </svg>
       )
   }
@@ -95,13 +98,14 @@ const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string 
 ]
 
 export default function Legend() {
+  const theme = useTheme()
   const metro = useGardenStore((s) => s.layoutMode === 'metro')
   return (
     <div>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {(metro ? METRO_ITEMS : ITEMS).map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
-            <Glyph kind={item.kind} />
+            <Glyph kind={item.kind} theme={theme} />
             <span className="text-[12px] text-garden-text-dim">{item.label}</span>
           </li>
         ))}

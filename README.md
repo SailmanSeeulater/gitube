@@ -8,6 +8,10 @@ Obsidian-style node graph.
 - **Full view** shows every fetched commit.
 - Hover a node to spotlight its neighbours; pick a branch in the side panel to
   isolate its lineage; hide branches with the eye toggle; filter stale ones.
+- Ten colour themes (palette icon in the top bar): Obsidian, the original dark
+  look and the default, and Midnight are dark; Paper, Slate, Sage, Sand, Rose,
+  Sky, Contrast and Solar are light. Each has its own branch palette, checked
+  for contrast on its canvas. The choice is saved in this browser.
 - Everything runs in the browser against the GitHub REST API. No clone, no
   server. Add a personal access token (key icon) for private repos and a much
   higher rate limit.

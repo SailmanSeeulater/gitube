@@ -1,6 +1,8 @@
-import { useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { useGardenStore } from '../store/useGardenStore'
-import { KeyIcon, SproutIcon } from './icons'
+import { getTheme } from '../theme/themes'
+import { KeyIcon, PaletteIcon, SproutIcon } from './icons'
+import ThemePicker from './ThemePicker'
 
 export interface TopBarProps {
   value: string
@@ -26,6 +28,27 @@ export default function TopBar({ value, onChange, onSubmit, inputRef, tokenOpen,
     setDraft(token)
   }
   const dirty = draft.trim() !== token
+
+  // The theme picker and the token panel drop down from the bar in the same place: one at a time.
+  const themeId = useGardenStore((s) => s.themeId)
+  const setThemeId = useGardenStore((s) => s.setThemeId)
+  const [themeOpen, setThemeOpen] = useState(false)
+  const themeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const themeListId = useId()
+  const [seenTokenOpen, setSeenTokenOpen] = useState(tokenOpen)
+  if (tokenOpen !== seenTokenOpen) {
+    // the token panel opened (its button, or an error card's "add a token"): the picker gives way
+    setSeenTokenOpen(tokenOpen)
+    if (tokenOpen) setThemeOpen(false)
+  }
+  const toggleTheme = () => {
+    if (!themeOpen && tokenOpen) onToggleToken()
+    setThemeOpen((open) => !open)
+  }
+  const closeTheme = useCallback((refocus: boolean) => {
+    setThemeOpen(false)
+    if (refocus) themeButtonRef.current?.focus()
+  }, [])
 
   const commitToken = () => {
     if (dirty) setToken(draft)
@@ -91,7 +114,26 @@ export default function TopBar({ value, onChange, onSubmit, inputRef, tokenOpen,
           <KeyIcon size={15} />
           {token && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-garden-accent" aria-hidden />}
         </button>
+        <button
+          ref={themeButtonRef}
+          type="button"
+          onClick={toggleTheme}
+          aria-haspopup="listbox"
+          aria-expanded={themeOpen}
+          aria-controls={themeOpen ? themeListId : undefined}
+          aria-label="Colour theme"
+          title={`Theme: ${getTheme(themeId).name}`}
+          className={`rounded-lg p-1.5 transition-colors ${
+            themeOpen ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:bg-garden-hover hover:text-garden-text'
+          }`}
+        >
+          <PaletteIcon size={15} />
+        </button>
       </div>
+
+      {themeOpen && (
+        <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+      )}
 
       {tokenOpen && (
         <div className="flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-1.5 rounded-xl border border-garden-border bg-garden-panel/95 p-2.5 text-[12px] shadow-soft backdrop-blur">
@@ -107,7 +149,7 @@ export default function TopBar({ value, onChange, onSubmit, inputRef, tokenOpen,
               autoComplete="off"
               autoFocus
               spellCheck={false}
-              className="min-w-0 flex-1 rounded-lg bg-garden-bg/70 px-2 py-1 font-mono text-garden-text outline-none placeholder:font-sans placeholder:text-garden-muted"
+              className="min-w-0 flex-1 rounded-lg bg-garden-field px-2 py-1 font-mono text-garden-text outline-none placeholder:font-sans placeholder:text-garden-muted"
             />
             {dirty ? (
               <span className="shrink-0 px-1 text-garden-accent" aria-live="polite">

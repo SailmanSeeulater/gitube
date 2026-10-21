@@ -1,13 +1,15 @@
 import { useMemo, type KeyboardEvent } from 'react'
-import type { Branch, Graph, RepoData, ViewMode } from '../types'
+import type { Branch, RepoData, ViewMode } from '../types'
 import { useGardenStore, type LayoutMode } from '../store/useGardenStore'
-import { FALLBACK_COLOUR, STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
+import { useTheme } from '../theme/useTheme'
+import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import Legend from './Legend'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, SearchIcon } from './icons'
 
 export interface PanelProps {
   data: RepoData
-  graph: Graph
+  /** branch name -> colour in the active theme (App's palette, not graph.palette) */
+  palette: Record<string, string>
 }
 
 interface SegmentedProps<T extends string | number> {
@@ -19,7 +21,7 @@ interface SegmentedProps<T extends string | number> {
 
 function Segmented<T extends string | number>({ ariaLabel, options, value, onChange }: SegmentedProps<T>) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-lg bg-garden-bg/70 p-0.5">
+    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-lg bg-garden-field p-0.5">
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -117,7 +119,8 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
   )
 }
 
-export default function Panel({ data, graph }: PanelProps) {
+export default function Panel({ data, palette }: PanelProps) {
+  const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
   const viewMode = useGardenStore((s) => s.viewMode)
@@ -206,7 +209,7 @@ export default function Panel({ data, graph }: PanelProps) {
             <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
           </div>
         </div>
-        <label className="flex items-center gap-2 rounded-lg bg-garden-bg/70 px-2 py-1 text-garden-muted focus-within:text-garden-text">
+        <label className="flex items-center gap-2 rounded-lg bg-garden-field px-2 py-1 text-garden-muted focus-within:text-garden-text">
           <SearchIcon />
           <input
             type="search"
@@ -250,7 +253,7 @@ export default function Panel({ data, graph }: PanelProps) {
           <BranchRow
             key={branch.name}
             branch={branch}
-            colour={graph.palette[branch.name] ?? FALLBACK_COLOUR}
+            colour={palette[branch.name] ?? theme.fallback}
             selected={selectedBranch === branch.name}
             hidden={hiddenBranches.has(branch.name)}
             now={now}

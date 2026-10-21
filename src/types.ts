@@ -129,7 +129,11 @@ export interface GraphLink {
 export interface Graph {
   nodes: GraphNode[]
   links: GraphLink[]
-  /** branch name -> colour hex, stable for the session */
+  /**
+   * branch name -> colour hex in the theme buildGraph was given (Obsidian by default), stable for
+   * the session. The UI paints with App's palette for the active theme instead (assignPalette),
+   * so a theme switch never rebuilds the graph.
+   */
   palette: Record<string, string>
 }
 

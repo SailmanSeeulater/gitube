@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { FetchProgress, ViewMode } from '../types'
+import { readStoredThemeId, writeStoredThemeId } from '../theme/storage'
+import { isThemeId, type ThemeId } from '../theme/themes'
 
 /** How the garden is laid out: free force physics, or pinned to a straight metro map. */
 export type LayoutMode = 'organic' | 'metro'
@@ -71,6 +73,8 @@ export interface GardenState {
    * Written by the label placer only when its labels settle, never per frame.
    */
   hiddenLabels: number
+  /** Colour theme. Persisted under THEME_STORAGE_KEY; Obsidian on a first visit. */
+  themeId: ThemeId
 }
 
 export interface GardenActions {
@@ -93,9 +97,11 @@ export interface GardenActions {
   setInspectorNodeId: (id: string | null) => void
   setProgress: (progress: FetchProgress | null) => void
   setHiddenLabels: (count: number) => void
+  /** Switches the theme and saves the choice; unknown ids are ignored. */
+  setThemeId: (id: ThemeId) => void
   /** Clears branch selection and the inspector (Escape / background click). */
   clearSelection: () => void
-  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel, stale filter. */
+  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel, stale filter, theme. */
   resetForNewRepo: () => void
 }
 
@@ -113,6 +119,7 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   inspectorNodeId: null,
   progress: null,
   hiddenLabels: 0,
+  themeId: readStoredThemeId(),
 
   setToken: (token) => {
     const trimmed = token.trim()
@@ -167,6 +174,12 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
       const hiddenLabels = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
       return s.hiddenLabels === hiddenLabels ? s : { hiddenLabels }
     }),
+
+  setThemeId: (id) => {
+    if (!isThemeId(id)) return
+    writeStoredThemeId(id)
+    set((s) => (s.themeId === id ? s : { themeId: id }))
+  },
 
   clearSelection: () =>
     set((s) => (s.selectedBranch === null && s.inspectorNodeId === null ? s : { selectedBranch: null, inspectorNodeId: null })),
