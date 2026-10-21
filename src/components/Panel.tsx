@@ -1,6 +1,6 @@
 import { useMemo, type KeyboardEvent } from 'react'
 import type { Branch, Graph, RepoData, ViewMode } from '../types'
-import { useGardenStore } from '../store/useGardenStore'
+import { useGardenStore, type LayoutMode } from '../store/useGardenStore'
 import { FALLBACK_COLOUR, STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import Legend from './Legend'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, SearchIcon } from './icons'
@@ -44,6 +44,11 @@ function Segmented<T extends string | number>({ ariaLabel, options, value, onCha
 const VIEW_OPTIONS: ReadonlyArray<{ value: ViewMode; label: string }> = [
   { value: 'skeleton', label: 'skeleton' },
   { value: 'full', label: 'full' },
+]
+
+const LAYOUT_OPTIONS: ReadonlyArray<{ value: LayoutMode; label: string }> = [
+  { value: 'organic', label: 'organic' },
+  { value: 'metro', label: 'metro' },
 ]
 
 const STALE_SEGMENTS = STALE_OPTIONS.map((o) => ({ value: o.days, label: o.label }))
@@ -117,6 +122,8 @@ export default function Panel({ data, graph }: PanelProps) {
   const togglePanel = useGardenStore((s) => s.togglePanel)
   const viewMode = useGardenStore((s) => s.viewMode)
   const setViewMode = useGardenStore((s) => s.setViewMode)
+  const layoutMode = useGardenStore((s) => s.layoutMode)
+  const setLayoutMode = useGardenStore((s) => s.setLayoutMode)
   const search = useGardenStore((s) => s.search)
   const setSearch = useGardenStore((s) => s.setSearch)
   const staleDays = useGardenStore((s) => s.staleDays)
@@ -191,7 +198,14 @@ export default function Panel({ data, graph }: PanelProps) {
       </header>
 
       <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
-        <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
+          </div>
+          <div className="flex-1" title="organic: free physics. metro: straight lanes, like a tube map">
+            <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
+          </div>
+        </div>
         <label className="flex items-center gap-2 rounded-lg bg-garden-bg/70 px-2 py-1 text-garden-muted focus-within:text-garden-text">
           <SearchIcon />
           <input

@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { useGardenStore } from './useGardenStore'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LAYOUT_STORAGE_KEY, readStoredLayoutMode, useGardenStore } from './useGardenStore'
 
 const reset = () =>
   useGardenStore.setState({
     token: '',
     viewMode: 'skeleton',
+    layoutMode: 'organic',
     hiddenBranches: new Set<string>(),
     selectedBranch: null,
     search: '',
@@ -128,4 +129,43 @@ describe('useGardenStore', () => {
     expect(after.inspectorNodeId).toBeNull()
     expect(after.progress).toBeNull()
   })
+
+  it('toggles the layout mode and persists it', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    })
+    expect(useGardenStore.getState().layoutMode).toBe('organic')
+    useGardenStore.getState().toggleLayoutMode()
+    expect(useGardenStore.getState().layoutMode).toBe('metro')
+    expect(store.get(LAYOUT_STORAGE_KEY)).toBe('metro')
+    expect(readStoredLayoutMode()).toBe('metro')
+    useGardenStore.getState().setLayoutMode('organic')
+    expect(readStoredLayoutMode()).toBe('organic')
+    store.set(LAYOUT_STORAGE_KEY, 'bogus')
+    expect(readStoredLayoutMode()).toBe('organic')
+  })
+
+  it('layout mode survives broken storage and a new repo', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('blocked')
+      },
+      removeItem: () => {},
+    })
+    expect(readStoredLayoutMode()).toBe('organic')
+    useGardenStore.getState().setLayoutMode('metro')
+    expect(useGardenStore.getState().layoutMode).toBe('metro')
+    useGardenStore.getState().resetForNewRepo()
+    expect(useGardenStore.getState().layoutMode).toBe('metro')
+  })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })

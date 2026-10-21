@@ -12,6 +12,7 @@ import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
 import NodeInspector from './components/NodeInspector'
 import { staleBranchNames } from './components/gardenUtils'
+import { useMetroView } from './components/useMetroView'
 
 /** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
 const PANEL_INSET = 324
@@ -29,6 +30,7 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const viewMode = useGardenStore((s) => s.viewMode)
+  const layoutMode = useGardenStore((s) => s.layoutMode)
   const hiddenBranches = useGardenStore((s) => s.hiddenBranches)
   const staleDays = useGardenStore((s) => s.staleDays)
   const inspectorNodeId = useGardenStore((s) => s.inspectorNodeId)
@@ -63,6 +65,9 @@ export default function App() {
     () => (data ? buildGraph(data, viewMode, { hiddenBranches: effectiveHidden }) : null),
     [data, viewMode, effectiveHidden],
   )
+
+  // metro mode: the straight layout of exactly this graph (null in organic mode)
+  const metro = useMetroView(graph, data ?? null, viewMode, layoutMode === 'metro')
 
   const nodeById = useMemo(() => {
     if (!graph) return null
@@ -137,6 +142,7 @@ export default function App() {
             defaultBranch={data?.defaultBranch ?? ''}
             onNodeClick={handleNodeClick}
             onBackgroundClick={handleBackgroundClick}
+            metro={metro}
           />
         )}
       </div>

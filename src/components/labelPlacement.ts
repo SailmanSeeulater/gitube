@@ -210,6 +210,29 @@ export interface PlacerFrame {
    * fits. Default true.
    */
   admit?: boolean
+  /**
+   * Drawn lines a label must not sit on (metro routes): flat [x0, y0, x1, y1] per segment in
+   * screen px, lineCount segments. A label never settles across a line that does not touch its own
+   * node (lineSrc / lineTgt: the segment's end nodes); a pinned label that has to is drawn on a
+   * backing plate.
+   */
+  lineSegs?: Float32Array
+  lineSrc?: Int32Array
+  lineTgt?: Int32Array
+  lineCount?: number
+  /** half the drawn line width in screen px */
+  lineHalfPx?: number
+  /**
+   * Other drawn marks no label may cover, like a line (metro '+N' run text): flat [x0, y0, x1, y1]
+   * per box in screen px, boxCount boxes.
+   */
+  boxes?: Float32Array
+  boxCount?: number
+  /**
+   * Nodes whose glyphs block labels the way tips do (metro stations other than plain commits):
+   * 1 = blocks. The others are dots, which a label may cover at nodeHitCost.
+   */
+  hardNode?: Uint8Array
 }
 
 export type PlateRowKind = 'name' | 'neighbour' | 'more'
@@ -407,6 +430,32 @@ export function anchorOrigin(a: number, sx: number, sy: number, sr: number, w: n
   }
 }
 
+/**
+ * Whether the segment (ax, ay)-(bx, by) runs through the box [x0, x1] x [y0, y1] (Liang-Barsky
+ * clipping; a segment that only touches the box's edge or corner does not count).
+ */
+export function segmentCrossesBox(ax: number, ay: number, bx: number, by: number, x0: number, y0: number, x1: number, y1: number): boolean {
+  const dx = bx - ax
+  const dy = by - ay
+  let t0 = 0
+  let t1 = 1
+  for (let side = 0; side < 4; side++) {
+    const p = side === 0 ? -dx : side === 1 ? dx : side === 2 ? -dy : dy
+    const q = side === 0 ? ax - x0 : side === 1 ? x1 - ax : side === 2 ? ay - y0 : y1 - ay
+    if (p === 0) {
+      // parallel to this side: outside it (or on it) misses the open box
+      if (q <= 0) return false
+      continue
+    }
+    const t = q / p
+    if (p < 0) {
+      if (t > t0) t0 = t
+    } else if (t < t1) t1 = t
+    if (t0 >= t1) return false
+  }
+  return true
+}
+
 /** Distance from (px, py) to the nearest point of the box (0 inside). */
 function rectDistance(x0: number, y0: number, x1: number, y1: number, px: number, py: number): number {
   const dx = px < x0 ? x0 - px : px > x1 ? px - x1 : 0
@@ -507,6 +556,14 @@ export class LabelPlacer {
   private ghostGrid = new RectGrid(48)
   private tipGrid = new RectGrid(48)
   private dotGrid = new RectGrid(48)
+  /** line segments of the current frame (tag = segment index), see PlacerFrame.lineSegs */
+  private lineGrid = new RectGrid(48)
+  private lineSegs: Float32Array = new Float32Array(0)
+  private lineSrc: Int32Array = new Int32Array(0)
+  private lineTgt: Int32Array = new Int32Array(0)
+  private lineHalf = 0
+  /** PlacerFrame.boxes of the current frame */
+  private boxGrid = new RectGrid(48)
   private isTipNode = new Uint8Array(0)
   private fx0: number[] = []
   private fy0: number[] = []
@@ -609,6 +666,15 @@ export class LabelPlacer {
     if (next.length === this.forced.length && next.every((v, k) => v === this.forced[k]) && explore === this.explore) return
     this.forced = next
     this.explore = explore
+    this.retryAt.fill(0)
+    this.quietFrames = 0
+  }
+
+  /**
+   * The obstacles (PlacerFrame lines or hard nodes) changed without any node or label moving:
+   * labels waiting for a state change search again, and a calm scene polishes again.
+   */
+  obstaclesChanged(): void {
     this.retryAt.fill(0)
     this.quietFrames = 0
   }
@@ -775,6 +841,32 @@ export class LabelPlacer {
   }
 
   /**
+   * Lines (PlacerFrame.lineSegs) running through the box w x h at (bx, by), shrunk by 1 px and
+   * grown by half the line width, that do not touch node j (the label's own), plus the marks
+   * (PlacerFrame.boxes) it overlaps; stops at limit.
+   */
+  private obstacleHits(bx: number, by: number, w: number, h: number, j: number, limit = 1 << 30): number {
+    let hits = this.boxGrid.size === 0 ? 0 : this.boxGrid.count(bx + 1, by + 1, bx + w - 1, by + h - 1, -1, limit)
+    const grid = this.lineGrid
+    if (hits >= limit || grid.size === 0) return hits
+    const n = grid.query(bx + 1, by + 1, bx + w - 1, by + h - 1)
+    if (n === 0) return hits
+    const hw = this.lineHalf
+    const x0 = bx + 1 - hw
+    const y0 = by + 1 - hw
+    const x1 = bx + w - 1 + hw
+    const y1 = by + h - 1 + hw
+    const segs = this.lineSegs
+    for (let k = 0; k < n; k++) {
+      const s = grid.tag[grid.found[k]]
+      if (this.lineSrc[s] === j || this.lineTgt[s] === j) continue
+      if (!segmentCrossesBox(segs[4 * s], segs[4 * s + 1], segs[4 * s + 2], segs[4 * s + 3], x0, y0, x1, y1)) continue
+      if (++hits >= limit) break
+    }
+    return hits
+  }
+
+  /**
    * True when some other node disc (tips, and dots too when includeDots) sits closer to the box
    * than the label's own node does, beyond the tolerance.
    */
@@ -884,15 +976,18 @@ export class LabelPlacer {
     const admit = f.admit !== false
     const n = this.n
 
-    // ---- 0. grids of node discs, motion, calm
+    // ---- 0. grids of node discs and lines, motion, calm
     this.labelGrid.reset(W, H)
     this.ghostGrid.reset(W, H)
     this.tipGrid.reset(W, H)
     this.dotGrid.reset(W, H)
+    this.lineGrid.reset(W, H)
+    this.boxGrid.reset(W, H)
     if (this.isTipNode.length < f.nodeCount) {
       this.isTipNode = new Uint8Array(f.nodeCount)
       for (const sp of this.specs) if (sp.node < f.nodeCount) this.isTipNode[sp.node] = 1
     }
+    const hard = f.hardNode
     let maxAny = 0
     for (let j = 0; j < f.nodeCount; j++) {
       const s = f.speed[j]
@@ -901,8 +996,44 @@ export class LabelPlacer {
       const y = f.sy[j]
       const r = f.sr[j]
       if (!(x > -r && x < W + r && y > -r && y < H + r)) continue
-      if (this.isTipNode[j]) this.tipGrid.insert(x - r, y - r, x + r, y + r, j)
+      // tips, and the station glyphs of hardNode, block labels; other nodes are coverable dots
+      if (this.isTipNode[j] || (hard !== undefined && hard[j] === 1)) this.tipGrid.insert(x - r, y - r, x + r, y + r, j)
       else this.dotGrid.insert(x - r, y - r, x + r, y + r, j)
+    }
+    const lineSegs = f.lineSegs
+    const lineSrc = f.lineSrc
+    const lineTgt = f.lineTgt
+    if (lineSegs !== undefined && lineSrc !== undefined && lineTgt !== undefined) {
+      const count = Math.min(f.lineCount ?? 0, lineSegs.length >> 2, lineSrc.length, lineTgt.length)
+      const hw = Math.max(0, f.lineHalfPx ?? 0)
+      this.lineSegs = lineSegs
+      this.lineSrc = lineSrc
+      this.lineTgt = lineTgt
+      this.lineHalf = hw
+      for (let s = 0; s < count; s++) {
+        const ax = lineSegs[4 * s]
+        const ay = lineSegs[4 * s + 1]
+        const bx = lineSegs[4 * s + 2]
+        const by = lineSegs[4 * s + 3]
+        const x0 = Math.min(ax, bx) - hw
+        const x1 = Math.max(ax, bx) + hw
+        const y0 = Math.min(ay, by) - hw
+        const y1 = Math.max(ay, by) + hw
+        // pieces off the canvas would only crowd its edge cells (NaN fails this too)
+        if (!(x1 > 0 && x0 < W && y1 > 0 && y0 < H)) continue
+        this.lineGrid.insert(x0, y0, x1, y1, s)
+      }
+    }
+    const boxes = f.boxes
+    if (boxes !== undefined) {
+      const count = Math.min(f.boxCount ?? 0, boxes.length >> 2)
+      for (let b = 0; b < count; b++) {
+        const x0 = boxes[4 * b]
+        const y0 = boxes[4 * b + 1]
+        const x1 = boxes[4 * b + 2]
+        const y1 = boxes[4 * b + 3]
+        if (x1 > 0 && x0 < W && y1 > 0 && y0 < H) this.boxGrid.insert(x0, y0, x1, y1, b)
+      }
     }
     let maxTip = 0
     for (let i = 0; i < n; i++) {
@@ -1235,8 +1366,11 @@ export class LabelPlacer {
           // after a hold, a label shown during it (placed before the camera was) may also move to a
           // clearly cheaper anchor. Pinned labels too: they cover tips only when nothing else fits,
           // and keep their spot when the search finds nothing
+          // a spot across another line (or on a mark) counts like one on a tip: the label must move
+          // or, if it is not pinned and nothing is free, hide (it settled there while things moved:
+          // a metro tween)
           const tipHits = this.tipGrid.count(bx, by, bx + w, by + h, j, 1)
-          if (tipHits > 0) {
+          if (tipHits > 0 || this.obstacleHits(bx, by, w, h, j, 1) > 0) {
             polish = true
             bestA = -1
             bestCost = Infinity
@@ -1246,8 +1380,8 @@ export class LabelPlacer {
               keepX = bx
               keepY = by
               keepW = w
-              // costed like pass 2, and only a clearly cheaper spot wins (any tip-free one does)
-              const tips = this.tipGrid.count(bx, by, bx + w, by + h, j)
+              // costed like pass 2, and only a clearly cheaper spot wins (any tip- and line-free one does)
+              const tips = this.tipGrid.count(bx, by, bx + w, by + h, j) + this.obstacleHits(bx, by, w, h, j)
               const dots = this.dotGrid.count(bx, by, bx + w, by + h, j)
               const owner = this.violatesOwnership(bx, by, w, h, x, y, r, j, false) ? o.pinOwnerCost : 0
               bestCost = o.anchorCost[prevA] + prevV * o.variantCost + o.pinTipCost * tips + o.nodeHitCost * dots + owner - o.polishMargin
@@ -1280,6 +1414,8 @@ export class LabelPlacer {
       //         no other tip closer than its own
       // pass 2: pinned only: may cover other tips or sit nearer to one than to its own node, at
       //         pinTipCost per covered tip and pinOwnerCost, so that loses to covering dots
+      // lines and marks (PlacerFrame.lineSegs, boxes) block like tips: passes 0 and 1 never cross
+      // one, pass 2 pays pinTipCost per line crossed or mark covered
       // a pass runs only when the ones before it found nothing
       for (let pass = 0; pass < 3; pass++) {
         if (pass > 0 && bestA >= 0) break
@@ -1307,11 +1443,16 @@ export class LabelPlacer {
             if ((!incumbent || optional) && this.ghostGrid.count(x0, y0, x1, y1, i, 1) > 0) continue
             const tipHits = this.tipGrid.count(bx, by, bx + w, by + h, j)
             if (tipHits > 0 && tipsHard) continue
+            const blocked = this.obstacleHits(bx, by, w, h, j, tipsHard ? 1 : 1 << 30)
+            if (blocked > 0 && tipsHard) continue
             if (owner > 0 && this.violatesOwnership(bx, by, w, h, x, y, r, j, owner === 2)) continue
             const dots = this.dotGrid.count(bx, by, bx + w, by + h, j)
             const cost =
               pass === 2
-                ? base + o.nodeHitCost * dots + o.pinTipCost * tipHits + (this.violatesOwnership(bx, by, w, h, x, y, r, j, false) ? o.pinOwnerCost : 0)
+                ? base +
+                  o.nodeHitCost * dots +
+                  o.pinTipCost * (tipHits + blocked) +
+                  (this.violatesOwnership(bx, by, w, h, x, y, r, j, false) ? o.pinOwnerCost : 0)
                 : base + o.nodeHitCost * (tipHits + dots)
             if (cost < bestCost) {
               bestCost = cost
@@ -1362,10 +1503,15 @@ export class LabelPlacer {
       this.h[i] = h
       this.labelGrid.insert(bestX, bestY, bestX + bestW, bestY + h, i)
       this.masked[i] = masked ? 1 : 0
-      // only pinned labels may end up on (or nearer to) another tip; checked every frame, so a
-      // sticky spot a tip drifts under is flagged too
+      // only pinned labels may end up on (or nearer to) another tip, or across a line; checked
+      // every frame, so a sticky spot a tip or a line drifts under is flagged too
       this.leader[i] =
-        pinned && (this.tipGrid.count(bestX, bestY, bestX + bestW, bestY + h, j, 1) > 0 || this.violatesOwnership(bestX, bestY, bestW, h, x, y, r, j, false)) ? 1 : 0
+        pinned &&
+        (this.tipGrid.count(bestX, bestY, bestX + bestW, bestY + h, j, 1) > 0 ||
+          this.obstacleHits(bestX, bestY, bestW, h, j, 1) > 0 ||
+          this.violatesOwnership(bestX, bestY, bestW, h, x, y, r, j, false))
+          ? 1
+          : 0
       if (!wasShown) {
         this.pendingMs[i] += dt
         this.frameBusy = true

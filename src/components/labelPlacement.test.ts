@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ANCHORS, LABEL_PLACER_DEFAULTS, LabelPlacer, RectGrid, anchorOrigin, type LabelSpec, type PlacerFrame, type PlacerOptions } from './labelPlacement'
+import { ANCHORS, LABEL_PLACER_DEFAULTS, LabelPlacer, RectGrid, anchorOrigin, segmentCrossesBox, type LabelSpec, type PlacerFrame, type PlacerOptions } from './labelPlacement'
 
 // ---------------- helpers ----------------
 
@@ -1255,5 +1255,119 @@ describe.skipIf(env.SKIP_PERF_TESTS === '1')('LabelPlacer performance', () => {
       total += performance.now() - t0
     }
     expect(total / 600).toBeLessThan(1)
+  })
+})
+
+// ---------------- metro: lines and station glyphs as obstacles ----------------
+
+describe('segmentCrossesBox', () => {
+  it('counts a segment through the box, not one that misses or only touches it', () => {
+    expect(segmentCrossesBox(0, 5, 20, 5, 2, 0, 10, 10)).toBe(true)
+    expect(segmentCrossesBox(0, 0, 20, 20, 2, 0, 10, 10)).toBe(true)
+    expect(segmentCrossesBox(0, 12, 20, 12, 2, 0, 10, 10)).toBe(false)
+    expect(segmentCrossesBox(0, 10, 20, 10, 2, 0, 10, 10)).toBe(false)
+    expect(segmentCrossesBox(12, 0, 30, 30, 2, 0, 10, 10)).toBe(false)
+    expect(segmentCrossesBox(5, 5, 6, 6, 2, 0, 10, 10)).toBe(true)
+  })
+})
+
+describe('LabelPlacer metro obstacles', () => {
+  /** segments [x0, y0, x1, y1, src, tgt] as PlacerFrame line fields */
+  const lineFrame = (segs: number[][], halfPx = 1.5): Partial<PlacerFrame> => ({
+    lineSegs: Float32Array.from(segs.flatMap((s) => s.slice(0, 4))),
+    lineSrc: Int32Array.from(segs.map((s) => s[4])),
+    lineTgt: Int32Array.from(segs.map((s) => s[5])),
+    lineCount: segs.length,
+    lineHalfPx: halfPx,
+  })
+  const crosses = (p: LabelPlacer, i: number, s: number[], halfPx = 1.5) =>
+    segmentCrossesBox(s[0], s[1], s[2], s[3], p.x0[i] + 1 - halfPx, p.y0[i] + 1 - halfPx, p.x0[i] + p.w[i] - 1 + halfPx, p.y0[i] + p.h[i] - 1 + halfPx)
+  // a tip at (100, 100) with another line running through it, end to end (its ends: nodes 1 and 2)
+  const throughScene = () => new Scene(3, 600, 400).set(0, 100, 100).set(1, 20, 100, 3).set(2, 400, 100, 3)
+  const through = [20, 100, 400, 100, 1, 2]
+
+  it('a label does not settle at R or L across another line; it takes a clear anchor', () => {
+    const p = placer([mkSpec(0, 'feature/x')])
+    run(p, throughScene(), 60)
+    // control: with no lines given the label sits at R, across the line
+    expect(p.anchor[0]).toBe(R)
+    const q = placer([mkSpec(0, 'feature/x')])
+    run(q, throughScene(), 60, lineFrame([through]))
+    expect(q.shown[0]).toBe(1)
+    expect([R, L]).not.toContain(q.anchor[0])
+    expect(['UR', 'DR', 'UL', 'DL', 'T', 'B']).toContain(ANCHORS[q.anchor[0]])
+    expect(crosses(q, 0, through)).toBe(false)
+  })
+
+  it("the label's own line does not block it", () => {
+    const own = [20, 100, 400, 100, 0, 2]
+    const p = placer([mkSpec(0, 'feature/x')])
+    run(p, throughScene(), 60, lineFrame([own]))
+    expect(p.anchor[0]).toBe(R)
+  })
+
+  it('a shown label that a line now crosses moves off it once the scene is calm', () => {
+    const scene = throughScene()
+    const p = placer([mkSpec(0, 'feature/x')])
+    run(p, scene, 60)
+    expect(p.anchor[0]).toBe(R)
+    p.obstaclesChanged()
+    run(p, scene, 60, lineFrame([through]))
+    expect(p.shown[0]).toBe(1)
+    expect([R, L]).not.toContain(p.anchor[0])
+    expect(crosses(p, 0, through)).toBe(false)
+  })
+
+  // every anchor of the tip at (100, 100) crosses one of these
+  const cage = [
+    [0, 100, 600, 100, 1, 2],
+    [0, 80, 600, 80, 1, 2],
+    [0, 120, 600, 120, 1, 2],
+    [100, 0, 100, 400, 1, 2],
+  ]
+
+  it('a label with no line-free spot hides; a pinned one stays on a backing plate', () => {
+    const p = placer([mkSpec(0, 'feature/x')])
+    run(p, throughScene(), 60, lineFrame(cage))
+    expect(p.shown[0]).toBe(0)
+    const q = placer([mkSpec(0, 'feature/x')], {}, undefined, [0])
+    run(q, throughScene(), 60, lineFrame(cage))
+    expect(q.shown[0]).toBe(1)
+    expect(q.leader[0]).toBe(1)
+  })
+
+  // a tip near the left edge (L, UL, DL, T and B do not fit), interchanges right of it at (70, 92)
+  // and (70, 108): R covers both, UR the upper and DR the lower
+  const ringScene = (both: boolean) => {
+    const s = new Scene(3, 600, 400).set(0, 30, 100).set(1, 70, 92, 5).set(2, both ? 70 : 500, both ? 108 : 300, 5)
+    return s
+  }
+  const coversDisc = (p: LabelPlacer, i: number, s: Scene, j: number) => {
+    const cx = Math.min(Math.max(s.sx[j], p.x0[i]), p.x0[i] + p.w[i])
+    const cy = Math.min(Math.max(s.sy[j], p.y0[i]), p.y0[i] + p.h[i])
+    return Math.hypot(cx - s.sx[j], cy - s.sy[j]) < s.sr[j]
+  }
+  const name = 'feature/long-branch'
+  const hardRings = { hardNode: Uint8Array.from([0, 1, 1]) }
+
+  it('station rings block labels like tips do (hardNode); as plain dots they are covered', () => {
+    const s = ringScene(true)
+    const p = placer([mkSpec(0, name)])
+    run(p, s, 60)
+    expect(p.shown[0]).toBe(1)
+    expect(coversDisc(p, 0, s, 1) || coversDisc(p, 0, s, 2)).toBe(true)
+    const q = placer([mkSpec(0, name)])
+    run(q, s, 60, hardRings)
+    expect(q.shown[0] === 0 || !(coversDisc(q, 0, s, 1) || coversDisc(q, 0, s, 2))).toBe(true)
+    expect(q.shown[0]).toBe(0)
+  })
+
+  it('a tip beside an interchange takes the spot that leaves the ring clear', () => {
+    const s = ringScene(false)
+    const q = placer([mkSpec(0, name)])
+    run(q, s, 60, hardRings)
+    expect(q.shown[0]).toBe(1)
+    expect(ANCHORS[q.anchor[0]]).toBe('DR')
+    expect(coversDisc(q, 0, s, 1)).toBe(false)
   })
 })

@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type { FetchProgress, ViewMode } from '../types'
 
+/** How the garden is laid out: free force physics, or pinned to a straight metro map. */
+export type LayoutMode = 'organic' | 'metro'
+
 /** localStorage key for the GitHub personal access token. */
 export const TOKEN_STORAGE_KEY = 'repo-garden:token'
 
@@ -10,6 +13,27 @@ function readStoredToken(): string {
     return localStorage.getItem(TOKEN_STORAGE_KEY) ?? ''
   } catch {
     return ''
+  }
+}
+
+/** localStorage key for the organic | metro layout toggle. */
+export const LAYOUT_STORAGE_KEY = 'repo-garden:layout'
+
+export function readStoredLayoutMode(): LayoutMode {
+  try {
+    if (typeof localStorage === 'undefined') return 'organic'
+    return localStorage.getItem(LAYOUT_STORAGE_KEY) === 'metro' ? 'metro' : 'organic'
+  } catch {
+    return 'organic'
+  }
+}
+
+function writeStoredLayoutMode(mode: LayoutMode): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(LAYOUT_STORAGE_KEY, mode)
+  } catch {
+    // storage unavailable; the choice still holds for this session
   }
 }
 
@@ -27,6 +51,8 @@ export interface GardenState {
   /** GitHub personal access token, '' when unset. Persisted under TOKEN_STORAGE_KEY. */
   token: string
   viewMode: ViewMode
+  /** organic (force physics) or metro (straight lanes). Persisted under LAYOUT_STORAGE_KEY. */
+  layoutMode: LayoutMode
   /** Branch names hidden via the eye toggle. Replaced immutably on every change. */
   hiddenBranches: ReadonlySet<string>
   /** Branch isolated from the panel; null when nothing is selected. */
@@ -51,6 +77,8 @@ export interface GardenActions {
   setToken: (token: string) => void
   setViewMode: (mode: ViewMode) => void
   toggleViewMode: () => void
+  setLayoutMode: (mode: LayoutMode) => void
+  toggleLayoutMode: () => void
   hideBranch: (name: string) => void
   showBranch: (name: string) => void
   toggleBranchHidden: (name: string) => void
@@ -67,7 +95,7 @@ export interface GardenActions {
   setHiddenLabels: (count: number) => void
   /** Clears branch selection and the inspector (Escape / background click). */
   clearSelection: () => void
-  /** Resets per-repo UI state when a different repo is grown. Keeps token, view mode, panel, stale filter. */
+  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel, stale filter. */
   resetForNewRepo: () => void
 }
 
@@ -76,6 +104,7 @@ export type GardenStore = GardenState & GardenActions
 export const useGardenStore = create<GardenStore>()((set, get) => ({
   token: readStoredToken(),
   viewMode: 'skeleton',
+  layoutMode: readStoredLayoutMode(),
   hiddenBranches: new Set<string>(),
   selectedBranch: null,
   search: '',
@@ -92,6 +121,11 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   },
   setViewMode: (viewMode) => set({ viewMode }),
   toggleViewMode: () => set((s) => ({ viewMode: s.viewMode === 'skeleton' ? 'full' : 'skeleton' })),
+  setLayoutMode: (layoutMode) => {
+    writeStoredLayoutMode(layoutMode)
+    set({ layoutMode })
+  },
+  toggleLayoutMode: () => get().setLayoutMode(get().layoutMode === 'metro' ? 'organic' : 'metro'),
 
   hideBranch: (name) =>
     set((s) => {

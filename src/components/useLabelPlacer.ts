@@ -42,6 +42,46 @@ export interface UseLabelPlacerArgs {
   labelHoverRef: RefObject<string | null>
   /** called when labelHoverRef changes, so Garden can redraw with the new dimming */
   onLabelHoverChange: () => void
+  /**
+   * Drawn radius of a node in graph units, when it is not the organic reach-based body (metro
+   * stations). Omit for organic mode. A new function identity rebuilds the label specs.
+   */
+  radiusOf?: (node: GraphNode) => number
+  /** Screen px a node's glyph reaches beyond radiusOf (metro commit beads). Default: the tip ring in organic mode, else 0. */
+  ringPxOf?: (node: GraphNode) => number
+  /**
+   * Nodes whose glyphs block labels like tips do (metro stations other than plain commits). Omit for
+   * organic mode. A new function identity rebuilds the label specs.
+   */
+  isHardNode?: (node: GraphNode) => boolean
+  /** Drawn lines labels keep off (metro routes), in graph units; omit when none are drawn. */
+  lines?: LabelLines
+  /**
+   * Marks drawn in this frame that labels keep off (metro '+N' run text), written by the frame's
+   * pre-paint before paintLabels runs: flat [x0, y0, x1, y1] per box in graph units.
+   */
+  marks?: RefObject<LabelMarks>
+  /** draw a background-coloured halo behind label text (metro mode: lines may still pass close) */
+  halo?: boolean
+}
+
+/** Boxes for the label placer to keep clear of, in graph units, rewritten every frame. */
+export interface LabelMarks {
+  rects: Float32Array
+  count: number
+}
+
+/** Line segments for the label placer, in graph units (see MetroView.segs). */
+export interface LabelLines {
+  /** flat [x0, y0, x1, y1] per segment */
+  segs: Float64Array
+  /** per segment: the indices (in index.graphData.nodes) of the two nodes its route joins */
+  segSrc: Int32Array
+  segTgt: Int32Array
+  /** half the drawn line width in graph units */
+  halfWidth: number
+  /** and in screen px at least (lines have a minimum drawn width) */
+  minHalfPx: number
 }
 
 export interface LabelPlacerApi {
@@ -76,6 +116,8 @@ const DOT_RADIUS = 3
 const TIP_RING_PX = 2.5
 /** safety cap on the first-load admission hold (no fit ever started, or the layout never calms) */
 const MAX_HOLD_MS = 8000
+/** width of the background-coloured halo stroked behind label text (UseLabelPlacerArgs.halo) */
+const HALO_PX = 3
 
 // ---- text measurement: one offscreen canvas, cached widths, cleared when fonts finish loading ----
 let measureCtx: CanvasRenderingContext2D | null | undefined
@@ -103,6 +145,8 @@ interface LabelIndex {
   /** per node: body radius in graph units and the extra screen px of a tip's ring */
   baseR: Float32Array
   ringPx: Float32Array
+  /** per node: 1 when its glyph blocks labels like a tip (PlacerFrame.hardNode); undefined for none */
+  hardNode: Uint8Array | undefined
 }
 
 interface PlacerState {
@@ -131,6 +175,9 @@ interface FrameBuffers {
   prevX: Float64Array
   prevY: Float64Array
   prevOk: Uint8Array
+  /** projected line segments and marks (screen px), see PlacerFrame.lineSegs and boxes */
+  lineXY: Float32Array
+  markXY: Float32Array
   lastTime: number
   a: number
   d: number
@@ -185,6 +232,8 @@ const allocBuffers = (n: number): FrameBuffers => ({
   prevX: new Float64Array(n),
   prevY: new Float64Array(n),
   prevOk: new Uint8Array(n),
+  lineXY: new Float32Array(0),
+  markXY: new Float32Array(0),
   lastTime: -1,
   a: NaN,
   d: NaN,
@@ -199,7 +248,8 @@ const allocBuffers = (n: number): FrameBuffers => ({
  * redrawing only while labels still change.
  */
 export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
-  const { index, defaultBranch, reachSet, query, selectedBranch, inspectorNodeId, hoverRef, labelHoverRef, onLabelHoverChange } = args
+  const { index, defaultBranch, reachSet, query, selectedBranch, inspectorNodeId, hoverRef, labelHoverRef, onLabelHoverChange, radiusOf, ringPxOf, isHardNode, lines, marks, halo } =
+    args
 
   // ---- specs, rebuilt per graph and when web fonts finish loading (widths change) ----
   const [fontVersion, setFontVersion] = useState(0)
@@ -224,14 +274,16 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
     meta.forEach((m, i) => labelOfNode.set(m.nodeId, i))
     const baseR = new Float32Array(nodes.length)
     const ringPx = new Float32Array(nodes.length)
+    const hardNode = isHardNode ? new Uint8Array(nodes.length) : undefined
     nodes.forEach((node, j) => {
-      baseR[j] = bodyRadius(node)
-      ringPx[j] = node.isTip ? TIP_RING_PX : 0
+      baseR[j] = radiusOf ? radiusOf(node) : bodyRadius(node)
+      ringPx[j] = ringPxOf ? ringPxOf(node) : !radiusOf && node.isTip ? TIP_RING_PX : 0
+      if (hardNode && isHardNode?.(node)) hardNode[j] = 1
     })
-    return { specs, meta, labelOfNode, baseR, ringPx }
+    return { specs, meta, labelOfNode, baseR, ringPx, hardNode }
     // fontVersion is a dependency on purpose: new widths after a font load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, defaultBranch, fontVersion])
+  }, [index, defaultBranch, fontVersion, radiusOf, ringPxOf, isHardNode])
 
   // ---- the placer, inheriting from the previous graph's placer by tip node id ----
   const prevPlacerRef = useRef<PlacerState | null>(null)
@@ -277,12 +329,13 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
   const dragRef = useRef<string | null>(null)
   const inspectorRef = useRef(inspectorNodeId)
   inspectorRef.current = inspectorNodeId
-  const appliedRef = useRef<{ placer: LabelPlacer | null; ranking: unknown; hover: number; inspect: number; drag: number }>({
+  const appliedRef = useRef<{ placer: LabelPlacer | null; ranking: unknown; hover: number; inspect: number; drag: number; lines: LabelLines | undefined }>({
     placer: null,
     ranking: null,
     hover: -2,
     inspect: -2,
     drag: -2,
+    lines: undefined,
   })
   const setDragNode = useCallback((id: string | null) => {
     dragRef.current = id
@@ -368,6 +421,36 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         buf.prevY[j] = y
         buf.prevOk[j] = 1
       }
+      // lines, with the same projection
+      let lineCount = 0
+      let lineHalfPx = 0
+      if (lines !== undefined) {
+        const segs = lines.segs
+        if (buf.lineXY.length < segs.length) buf.lineXY = new Float32Array(Math.max(segs.length, buf.lineXY.length * 2))
+        const xy = buf.lineXY
+        for (let q = 0; q + 3 < segs.length; q += 4) {
+          xy[q] = segs[q] * k + tx
+          xy[q + 1] = segs[q + 1] * k + ty
+          xy[q + 2] = segs[q + 2] * k + tx
+          xy[q + 3] = segs[q + 3] * k + ty
+        }
+        lineCount = segs.length >> 2
+        lineHalfPx = Math.max(lines.minHalfPx, lines.halfWidth * k)
+      }
+      let markCount = 0
+      const markSrc = marks?.current
+      if (markSrc && markSrc.count > 0) {
+        markCount = Math.min(markSrc.count, markSrc.rects.length >> 2)
+        if (buf.markXY.length < 4 * markCount) buf.markXY = new Float32Array(Math.max(4 * markCount, buf.markXY.length * 2))
+        const xy = buf.markXY
+        const r = markSrc.rects
+        for (let q = 0; q < 4 * markCount; q += 4) {
+          xy[q] = r[q] * k + tx
+          xy[q + 1] = r[q + 1] * k + ty
+          xy[q + 2] = r[q + 2] * k + tx
+          xy[q + 3] = r[q + 3] * k + ty
+        }
+      }
 
       // inputs that changed since the last frame
       const applied = appliedRef.current
@@ -392,6 +475,9 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         applied.inspect = inspectLabel
         applied.drag = dragLabel
       }
+      // new lines on a still scene (a metro tween ended): labels waiting for a change look again
+      if (!placerChanged && applied.lines !== lines) placer.obstaclesChanged()
+      applied.lines = lines
       applied.placer = placer
 
       if (placerState.held && ((now >= placerState.holdUntil && placer.calm) || now - placerState.createdAt > MAX_HOLD_MS)) {
@@ -411,6 +497,14 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         dtMs: dt,
         cameraMoving,
         admit,
+        lineSegs: lineCount > 0 ? buf.lineXY : undefined,
+        lineSrc: lines?.segSrc,
+        lineTgt: lines?.segTgt,
+        lineCount,
+        lineHalfPx,
+        boxes: markCount > 0 ? buf.markXY : undefined,
+        boxCount: markCount,
+        hardNode: labelIndex.hardNode,
       })
 
       // labels moved under a still pointer: hover follows (picked up on the next frame)
@@ -434,6 +528,17 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = TEXT_COLOUR
+      ctx.lineJoin = 'round'
+      // the halo is stroked under each text, so a line passing close to it never runs into the
+      // letters (set each time: drawLeader strokes its leader line in between)
+      const text = (s: string, x: number, y: number) => {
+        if (halo) {
+          ctx.strokeStyle = CANVAS_BG
+          ctx.lineWidth = HALO_PX
+          ctx.strokeText(s, x, y)
+        }
+        ctx.fillText(s, x, y)
+      }
       for (let q = n - 1; q >= 0; q--) {
         const i = order[q]
         if (placer.forcedNow[i]) continue
@@ -443,12 +548,12 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         const dim = isDimmed(meta[i].nodeId, hovered, index.neighbours, reachSet) ? DIM_ALPHA : 1
         if (ghost > 0.01) {
           ctx.globalAlpha = ghost * dim
-          ctx.fillText(placer.variantText(i, placer.fromVariant[i]), placer.fromX0[i] + o.padX, placer.fromY0[i] + lineMid)
+          text(placer.variantText(i, placer.fromVariant[i]), placer.fromX0[i] + o.padX, placer.fromY0[i] + lineMid)
         }
         if (fade > 0.01) {
           if (placer.leader[i]) drawLeader(ctx, placer, i, buf, fade * dim)
           ctx.globalAlpha = fade * dim
-          ctx.fillText(placer.textOf(i), placer.x0[i] + o.padX, placer.y0[i] + lineMid)
+          text(placer.textOf(i), placer.x0[i] + o.padX, placer.y0[i] + lineMid)
         }
       }
       ctx.globalAlpha = 1
@@ -507,7 +612,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         }
       }
     },
-    [placerState, index, labelIndex, ranking, reachSet, hoverRef, labelHoverRef, setHiddenLabels, hoverHit, onLabelHoverChange],
+    [placerState, index, labelIndex, ranking, reachSet, hoverRef, labelHoverRef, setHiddenLabels, hoverHit, onLabelHoverChange, lines, marks, halo],
   )
 
   // a new placer needs frames even if the last one had gone quiet
