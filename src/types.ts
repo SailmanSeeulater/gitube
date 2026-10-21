@@ -11,6 +11,10 @@ export interface Commit {
   /** First line of the commit message. */
   message: string
   author: string
+  /** GitHub login of the author; absent when GitHub could not link the commit to an account. */
+  login?: string
+  /** Avatar of that GitHub account; absent with login. */
+  avatarUrl?: string
   /** ISO 8601 committer date. */
   date: string
   /** html_url on github.com */

@@ -3,6 +3,7 @@
  * canvas draws (graph units, centred on the origin), and the camera, tween and dimming rules that
  * go with it. No DOM, no React (strokeRunBars only draws on the canvas context it is handed).
  */
+import { linkKey } from '../graph/contributors'
 import type { MetroLayout, MetroOptions, MetroStationKind } from '../graph/metro'
 import type { ThemeDerived } from '../theme/themes'
 import type { ViewMode } from '../types'
@@ -471,8 +472,19 @@ export function easeInOutCubic(t: number): number {
   return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2
 }
 
-/** The link half of the dim rule (see isDimmed): dimmed unless it touches the hovered node and lies inside the selected reach. */
-export function isLinkDimmed(source: string, target: string, hovered: string | null, reach: ReadonlySet<string> | null): boolean {
+/**
+ * The link half of the dim rule (see isDimmed): dimmed unless it touches the hovered node and lies
+ * inside the selected reach. With lit (a selected contributor's ContributorFocus.links, by linkKey)
+ * the link must be in it instead: a person's commits do not form a closed reach the way a branch's do.
+ */
+export function isLinkDimmed(
+  source: string,
+  target: string,
+  hovered: string | null,
+  reach: ReadonlySet<string> | null,
+  lit: ReadonlySet<string> | null = null,
+): boolean {
   if (hovered !== null && source !== hovered && target !== hovered) return true
+  if (lit !== null) return !lit.has(linkKey(source, target))
   return reach !== null && !(reach.has(source) && reach.has(target))
 }

@@ -8,9 +8,13 @@ export interface NodeInspectorProps {
   /** branch name -> colour in the active theme */
   palette: Record<string, string>
   onClose: () => void
+  /** Contributor.key of the commit's author; null hides the author link. */
+  authorKey?: string | null
+  /** Highlights the author's commits (and shows them in the leaderboard). */
+  onShowAuthor?: (key: string) => void
 }
 
-export default function NodeInspector({ node, palette, onClose }: NodeInspectorProps) {
+export default function NodeInspector({ node, palette, onClose, authorKey = null, onShowAuthor }: NodeInspectorProps) {
   const { commit } = node
   const kinds: string[] = []
   if (node.isTip) kinds.push('tip')
@@ -50,7 +54,19 @@ export default function NodeInspector({ node, palette, onClose }: NodeInspectorP
       <p className="mt-2 break-words leading-snug text-garden-text">{commit.message || '(no message)'}</p>
 
       <p className="mt-1.5 text-[12px] text-garden-muted">
-        <span className="text-garden-text-dim">{commit.author || 'unknown'}</span>
+        {authorKey !== null && onShowAuthor ? (
+          <button
+            type="button"
+            onClick={() => onShowAuthor(authorKey)}
+            title={`Highlight every commit by ${commit.author || 'this author'}`}
+            className="text-garden-text-dim underline decoration-garden-border underline-offset-2 hover:text-garden-accent hover:decoration-garden-accent"
+          >
+            {commit.author || 'unknown'}
+          </button>
+        ) : (
+          <span className="text-garden-text-dim">{commit.author || 'unknown'}</span>
+        )}
+        {commit.login && commit.login.toLowerCase() !== commit.author.toLowerCase() && <span> (@{commit.login})</span>}
         {' · '}
         <span title={commit.date}>{formatDateTime(commit.date) || commit.date}</span>
         {relativeTime(commit.date) && <span> ({relativeTime(commit.date)})</span>}

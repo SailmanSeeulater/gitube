@@ -207,6 +207,7 @@ describe('fetchRepoData', () => {
       parents: [M4],
       message: 'Trunk commit 3 (fork point of feature/x)',
       author: 'Alice',
+      login: 'alice',
       date: '2026-10-03T10:05:00Z', // committer date wins over author date
       url: `https://github.com/owner/repo/commit/${M3}`,
     })
@@ -683,6 +684,22 @@ describe('fetchRepoData', () => {
     expect(data.truncated).toBe(false)
     expect(Object.keys(data.commits)).toHaveLength(151)
     expect(data.truncatedAt).toEqual([trunk[149].sha])
+  })
+
+  it('keeps the GitHub login and avatar, and leaves both out for a commit linked to no account', async () => {
+    const trunk = linearTrunk(3)
+    ;(trunk[0] as { author: unknown }).author = { login: 'gen', avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4' }
+    ;(trunk[1] as { author: unknown }).author = null
+    const { fetch } = makeFetch(linearTrunkRouter(trunk, [mainOnly(trunk)]))
+    const data = await fetchRepoData(REF, { fetch })
+
+    expect(data.commits[trunk[0].sha].login).toBe('gen')
+    expect(data.commits[trunk[0].sha].avatarUrl).toBe('https://avatars.githubusercontent.com/u/1?v=4')
+    expect(data.commits[trunk[1].sha]).not.toHaveProperty('login')
+    expect(data.commits[trunk[1].sha]).not.toHaveProperty('avatarUrl')
+    expect(data.commits[trunk[1].sha].author).toBe('Gen')
+    expect(data.commits[trunk[2].sha].login).toBe('gen')
+    expect(data.commits[trunk[2].sha]).not.toHaveProperty('avatarUrl')
   })
 
   it('walks a trunk-only repo to trunkLimit instead of stopping at 100', async () => {
