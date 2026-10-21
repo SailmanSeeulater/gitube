@@ -32,11 +32,11 @@ export function serializeGarden(data: RepoData, now: Date = new Date()): string 
   return JSON.stringify(file)
 }
 
-/** 'owner-repo-garden-2026-10-21.png' (local date). */
-export function gardenFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date()): string {
+/** 'owner-repo-garden-2026-10-21.png' (local date); kind replaces 'garden' ('timelapse'). */
+export function gardenFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date(), kind = 'garden'): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  return `${data.owner}-${data.repo}-garden-${day}.${ext}`
+  return `${data.owner}-${data.repo}-${kind}-${day}.${ext}`
 }
 
 const SHA_RE = /^[0-9a-f]{4,64}$/i

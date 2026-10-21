@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
 import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
 import type { ContributorFocus } from '../graph/contributors'
+import { clockAt, growth, stemGrowth, type Timeline } from '../graph/timeline'
+import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
 import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
@@ -80,6 +82,17 @@ export interface GardenProps {
   metro?: MetroView | null
   /** The selected contributor's commits, links and labels to keep lit; null when nobody is selected. */
   focus?: ContributorFocus | null
+  /** The time-lapse: only what has grown by its progress is drawn. null when it is off. */
+  timelapse?: GardenTimelapse | null
+}
+
+export interface GardenTimelapse {
+  /** of exactly the graph passed in */
+  timeline: Timeline
+  /** 0..1, written by the controls every frame and read by every paint (no React render per frame) */
+  progress: RefObject<number>
+  /** 'owner/repo', in the corner of the canvas so a recording names its repo */
+  title: string
 }
 
 interface GardenIndex {
@@ -117,6 +130,12 @@ const NODE_MODE_REPLACE = () => 'replace' as const
 const FIT_MS = 400
 /** metro mode: a search brings its hits into view once typing has paused this long */
 const SEARCH_REVEAL_MS = 300
+// time-lapse in metro mode: the camera pans when the growing edge leaves [MIN, MAX] of the view's
+// width, putting it at FOLLOW_AT, in a glide of FOLLOW_MS
+const FOLLOW_MIN = 0.1
+const FOLLOW_MAX = 0.85
+const FOLLOW_AT = 0.55
+const FOLLOW_MS = 600
 // fit early, once the layout has roughly settled (every tip slower than 1 px per frame after 20
 // ticks), instead of after all 200 cooldown ticks; onEngineStop stays as the fallback
 const EARLY_FIT_TICKS = 20
@@ -164,6 +183,44 @@ function drawBadge(
   ctx.globalAlpha = 1
 }
 
+/**
+ * The time-lapse caption, drawn on the canvas so recordings carry it: the date the clock has reached
+ * and the commits so far (top right), the repo (bottom right), and the progress along the bottom edge.
+ */
+function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: GardenTimelapse, theme: Theme): void {
+  const dpr = typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
+  const W = ctx.canvas.width / dpr
+  const H = ctx.canvas.height / dpr
+  const progress = Math.min(1, Math.max(0, timelapse.progress.current))
+  const { time, commits } = clockAt(timelapse.timeline, progress)
+  ctx.save()
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.globalAlpha = 1
+  ctx.textAlign = 'right'
+  ctx.textBaseline = 'alphabetic'
+  ctx.lineJoin = 'round'
+  const text = (s: string, x: number, y: number) => {
+    ctx.strokeStyle = theme.derived.textHalo
+    ctx.lineWidth = 4
+    ctx.strokeText(s, x, y)
+    ctx.fillText(s, x, y)
+  }
+  if (Number.isFinite(time)) {
+    ctx.font = `600 22px ${LABEL_FONT}`
+    ctx.fillStyle = theme.text
+    text(new Date(time).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }), W - 18, 38)
+  }
+  ctx.font = `12px ${LABEL_FONT}`
+  ctx.fillStyle = theme.muted
+  text(`${commits} commit${commits === 1 ? '' : 's'}`, W - 18, 58)
+  ctx.font = `11px ${LABEL_FONT}`
+  text(`${timelapse.title} · repo-garden`, W - 14, H - 14)
+  ctx.globalAlpha = 0.85
+  ctx.fillStyle = theme.accent
+  ctx.fillRect(0, H - 3, W * progress, 3)
+  ctx.restore()
+}
+
 export default function Garden({
   graph,
   palette,
@@ -174,6 +231,7 @@ export default function Garden({
   onBackgroundClick,
   metro = null,
   focus = null,
+  timelapse = null,
 }: GardenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
@@ -353,6 +411,18 @@ export default function Garden({
         : undefined,
     [metro, tweening],
   )
+  // ---- time-lapse: how far each node and stem has grown at timelapse.progress (read per paint) ----
+  /** 0 = not there yet, 1 = fully grown; always 1 with the time-lapse off */
+  const nodeGrowth = useCallback(
+    (id: string): number => (timelapse ? growth(timelapse.timeline.nodeAt.get(id) ?? 0, timelapse.progress.current) : 1),
+    [timelapse],
+  )
+  const stemShown = useCallback(
+    (source: string, target: string): number => (timelapse ? stemGrowth(timelapse.timeline, source, target, timelapse.progress.current) : 1),
+    [timelapse],
+  )
+  const labelHidden = useMemo(() => (timelapse ? (id: string) => nodeGrowth(id) <= 0 : undefined), [timelapse, nodeGrowth])
+
   const { paintLabels, onPointerMove, onPointerLeave, clickTest, labelsBusy, maxTipSpeed, setDragNode, fitStarted } = useLabelPlacer({
     index,
     defaultBranch,
@@ -371,6 +441,7 @@ export default function Garden({
     lines: labelLines,
     marks: metroOn ? markBoxesRef : undefined,
     halo: metroOn,
+    isHidden: labelHidden,
   })
 
   const syncScale = (globalScale: number): ScaleCache => {
@@ -391,9 +462,19 @@ export default function Garden({
       const x = node.x
       const y = node.y
       if (x === undefined || y === undefined) return
+      const id = node.id
+      // time-lapse: nothing until it has appeared, then a quick pop to full size
+      const grown = nodeGrowth(id)
+      if (grown <= 0) return
+      const pop = grown < 1 ? popScale(grown) : 1
+      if (pop !== 1) {
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.scale(pop, pop)
+        ctx.translate(-x, -y)
+      }
       const c = syncScale(globalScale)
       const px = c.px
-      const id = node.id
       const hovered = hoverRef.current ?? labelHoverRef.current
       const dim = isDimmed(id, hovered, index.neighbours, reachSet)
       const th = colours.theme
@@ -410,7 +491,8 @@ export default function Garden({
       const matches = query !== '' && isLabelled && (index.tipLabelLower.get(id) ?? '').includes(query)
       const outer = metro ? r : r + (node.isTip ? 2 : 0)
 
-      ctx.globalAlpha = dim ? th.dimAlpha : 1
+      // a growing node fades in over the first half of its pop
+      ctx.globalAlpha = (dim ? th.dimAlpha : 1) * Math.min(1, grown * 2)
 
       if (matches) {
         ctx.beginPath()
@@ -523,11 +605,12 @@ export default function Garden({
       }
 
       ctx.globalAlpha = 1
+      if (pop !== 1) ctx.restore()
     },
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth],
   )
 
   const paintPointerArea = useCallback(
@@ -535,6 +618,8 @@ export default function Garden({
       const x = node.x
       const y = node.y
       if (x === undefined || y === undefined) return
+      // nothing to hover or click before it has grown
+      if (nodeGrowth(node.id) <= 0) return
       const px = 1 / globalScale
       const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip, px) : nodeRadius(node.reach) + (node.isTip ? 2 : 0)
       ctx.fillStyle = colour
@@ -542,7 +627,7 @@ export default function Garden({
       ctx.arc(x, y, outer + (node.isTip ? 3.25 : 1) * px, 0, TWO_PI)
       ctx.fill()
     },
-    [metro],
+    [metro, nodeGrowth],
   )
 
   const linkColor = useCallback(
@@ -595,6 +680,42 @@ export default function Garden({
   )
 
   /**
+   * Time-lapse links replace force-graph's own stroke: a stem growing from the parent towards the
+   * child along the same curve (force-graph's __controlPoints, computed just before custom paints),
+   * with its '+N' badge once it is whole.
+   */
+  const paintStem = useCallback(
+    (link: GardenLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const s = link.source
+      const t = link.target
+      if (typeof s !== 'object' || typeof t !== 'object') return
+      if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return
+      const f = stemShown(linkEndId(s), linkEndId(t))
+      if (f <= 0) return
+      ctx.strokeStyle = linkColor(link)
+      ctx.lineWidth = linkWidth(link) / globalScale
+      ctx.beginPath()
+      ctx.moveTo(t.x, t.y)
+      const cp = (link as { __controlPoints?: number[] | null }).__controlPoints
+      if (cp && cp.length === 2) {
+        const [qx, qy, ex, ey] = partialQuad(t.x, t.y, cp[0], cp[1], s.x, s.y, f)
+        ctx.quadraticCurveTo(qx, qy, ex, ey)
+      } else {
+        ctx.lineTo(t.x + (s.x - t.x) * f, t.y + (s.y - t.y) * f)
+      }
+      ctx.stroke()
+      if (f >= 1) paintLink(link, ctx, globalScale)
+    },
+    [stemShown, linkColor, linkWidth, paintLink],
+  )
+  const stemMode = useCallback(() => 'replace' as const, [])
+  // ungrown links are left out of force-graph's hit canvas too, so they cannot be clicked
+  const linkVisible = useMemo(
+    () => (timelapse ? (link: GardenLink) => !metroOn && stemShown(linkEndId(link.source), linkEndId(link.target)) > 0 : !metroOn),
+    [timelapse, metroOn, stemShown],
+  )
+
+  /**
    * Metro mode draws every link itself, before the nodes (onRenderFramePre), so it controls the
    * order: muted and dashed routes first, lane changes next, plain lane runs on top. While the nodes
    * tween, links are drawn straight between their current positions instead of along the routes.
@@ -619,12 +740,14 @@ export default function Garden({
           const s = typeof link.source === 'object' ? link.source : index.nodeById.get(String(link.source))
           const t = typeof link.target === 'object' ? link.target : index.nodeById.get(String(link.target))
           if (!s || !t || s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue
+          const f = stemShown(String(s.id), String(t.id))
+          if (f <= 0) continue
           const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet, litLinks)
           ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroMutedAlpha
           ctx.strokeStyle = palette[link.owner] ?? th.fallback
           ctx.beginPath()
           ctx.moveTo(t.x, t.y)
-          ctx.lineTo(s.x, s.y)
+          ctx.lineTo(t.x + (s.x - t.x) * f, t.y + (s.y - t.y) * f)
           ctx.stroke()
         }
         ctx.restore()
@@ -634,8 +757,10 @@ export default function Garden({
       ctx.setLineDash([4, 4])
       ctx.lineWidth = Math.max(1.2, px)
       for (const stub of metro.stubs) {
+        const grown = nodeGrowth(stub.nodeId)
+        if (grown <= 0) continue
         const dim = (hovered !== null && hovered !== stub.nodeId) || (reachSet !== null && !reachSet.has(stub.nodeId))
-        ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroStubAlpha
+        ctx.globalAlpha = (dim ? th.metroDimAlpha : th.metroStubAlpha) * grown
         ctx.strokeStyle = palette[stub.colorBranch] ?? th.fallback
         ctx.beginPath()
         ctx.moveTo(stub.x0, stub.y0)
@@ -645,6 +770,9 @@ export default function Garden({
       ctx.setLineDash(NO_DASH)
       let dashed = false
       for (const r of metro.routes) {
+        // the time-lapse grows each route from its parent end (pts run parent to child)
+        const f = stemShown(r.source, r.target)
+        if (f <= 0) continue
         const dim = isLinkDimmed(r.source, r.target, hovered, reachSet, litLinks)
         ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
         ctx.strokeStyle = palette[r.colorBranch] ?? th.fallback
@@ -653,7 +781,7 @@ export default function Garden({
           dashed = r.dashed
           ctx.setLineDash(dashed ? [Math.max(5, 4 * px), Math.max(4, 3 * px)] : NO_DASH)
         }
-        const pts = r.pts
+        const pts = f >= 1 ? r.pts : partialPolyline(r.pts, f)
         ctx.beginPath()
         ctx.moveTo(pts[0], pts[1])
         for (let k = 2; k < pts.length; k += 2) ctx.lineTo(pts[k], pts[k + 1])
@@ -667,6 +795,8 @@ export default function Garden({
       const marks = markBoxesRef.current
       if (metro.badges.length > 0) {
         for (const b of metro.badges) {
+          // run markers wait for their route to finish growing
+          if (stemShown(b.source, b.target) < 1) continue
           ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.metroDimAlpha : 1
           strokeRunBars(ctx, b, px, width, th)
         }
@@ -678,7 +808,7 @@ export default function Garden({
           ctx.lineJoin = 'round'
           const halfH = (fontPx / 2 + 1) * px
           for (const b of metro.badges) {
-            if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge') continue
+            if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge' || stemShown(b.source, b.target) < 1) continue
             ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.dimAlpha : 1
             ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
@@ -702,7 +832,31 @@ export default function Garden({
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, colours, reachSet, litLinks, hoverVersion],
+    [metro, index, colours, reachSet, litLinks, hoverVersion, stemShown, nodeGrowth],
+  )
+
+  // Time-lapse frames paint their own background (the canvas is otherwise transparent over a CSS
+  // colour), so a recording of the canvas is not black; metro lines go on top of it.
+  const paintPre = useCallback(
+    (ctx: CanvasRenderingContext2D, globalScale: number) => {
+      if (timelapse) {
+        ctx.save()
+        ctx.setTransform(1, 0, 0, 1, 0, 0)
+        ctx.fillStyle = colours.theme.canvas
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        ctx.restore()
+      }
+      if (metroOn) paintMetro(ctx, globalScale)
+    },
+    [timelapse, colours, metroOn, paintMetro],
+  )
+
+  const paintPost = useCallback(
+    (ctx: CanvasRenderingContext2D, globalScale: number) => {
+      paintLabels(ctx, globalScale)
+      if (timelapse) drawTimelapseHud(ctx, timelapse, colours.theme)
+    },
+    [paintLabels, timelapse, colours],
   )
 
   // ---- interaction ----
@@ -869,6 +1023,47 @@ export default function Garden({
     }
   }, [index, metro, ready, fitStarted])
 
+  // ---- time-lapse in metro mode: the camera keeps up with the growing edge ----
+  // A long map opens at a readable zoom with its old lines off-screen, which is exactly where a
+  // time-lapse starts. The camera holds still and glides in steps: when the newest growth leaves the
+  // middle stretch of the view, it pans to put it just past the centre, never past either end of
+  // the map (the zoom is left alone). Holding still matters: labels only appear while the camera rests.
+  useEffect(() => {
+    if (!timelapse || !metro || !ready) return
+    let raf = 0
+    let busyUntil = 0
+    let first = true
+    const follow = (now: number) => {
+      raf = requestAnimationFrame(follow)
+      const fg = fgRef.current
+      if (!fg || tweenRef.current || now < busyUntil) return
+      let front = -Infinity
+      for (const node of index.graphData.nodes) {
+        if (nodeGrowth(node.id) <= 0) continue
+        const t = metro.targets.get(node.id)
+        if (t && t.x > front) front = t.x
+      }
+      if (!Number.isFinite(front)) return
+      const k = fg.zoom()
+      const viewW = sizeRef.current.width / k
+      const at = fg.centerAt()
+      const across = (front - (at.x - viewW / 2)) / viewW
+      if (!first && across > FOLLOW_MIN && across < FOLLOW_MAX) return
+      const [x0, x1] = metro.bbox.x
+      const pad = FIT_PAD.left / k
+      const lo = x0 - pad + viewW / 2
+      const hi = x1 + pad - viewW / 2
+      const goal = lo >= hi ? (x0 + x1) / 2 : Math.min(hi, Math.max(lo, front - (FOLLOW_AT - 0.5) * viewW))
+      if (Math.abs(goal - at.x) * k < 2) return
+      const ms = first ? 0 : FOLLOW_MS
+      first = false
+      fg.centerAt(goal, at.y, ms)
+      busyUntil = now + ms + 60
+    }
+    raf = requestAnimationFrame(follow)
+    return () => cancelAnimationFrame(raf)
+  }, [timelapse, metro, ready, index, nodeGrowth])
+
   // ---- metro mode: bring a selected branch or contributor, or the search hits, into view ----
   // A long map opens right-aligned at a readable zoom, so its older lines start off-screen; a
   // selection or a search there would only dim or halo things nobody can see. Runs on selection and
@@ -941,13 +1136,13 @@ export default function Garden({
           nodeCanvasObjectMode={NODE_MODE_REPLACE}
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={paintPointerArea}
-          linkVisibility={!metroOn}
+          linkVisibility={linkVisible}
           linkColor={linkColor}
           linkWidth={linkWidth}
           linkCurvature={linkCurvature}
           linkDirectionalArrowLength={0}
-          linkCanvasObjectMode={linkMode}
-          linkCanvasObject={paintLink}
+          linkCanvasObjectMode={timelapse ? stemMode : linkMode}
+          linkCanvasObject={timelapse ? paintStem : paintLink}
           cooldownTicks={metroOn ? 0 : 200}
           onNodeHover={handleHover}
           onNodeClick={handleNodeClick}
@@ -957,9 +1152,9 @@ export default function Garden({
           onNodeDragEnd={handleDragEnd}
           onEngineTick={handleEngineTick}
           onEngineStop={handleEngineStop}
-          onRenderFramePre={metroOn ? paintMetro : undefined}
-          onRenderFramePost={paintLabels}
-          autoPauseRedraw={!labelsBusy && !tweening}
+          onRenderFramePre={metroOn || timelapse ? paintPre : undefined}
+          onRenderFramePost={paintPost}
+          autoPauseRedraw={!labelsBusy && !tweening && !timelapse}
           enableNodeDrag={!metroOn}
         />
       )}

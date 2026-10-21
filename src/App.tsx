@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
+import { buildTimeline } from './graph/timeline'
+import TimelapseBar from './components/TimelapseBar'
+import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
 import { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from './export/gardenFile'
@@ -145,6 +148,32 @@ export default function App() {
     const branches = person ? person.branches.map((b) => b.name) : []
     return contributorFocus(graph, full, contributors.keyBySha, selectedContributor, branches)
   }, [data, graph, contributors, selectedContributor, viewMode, effectiveHidden])
+
+  // ---- time-lapse ----
+  const [timelapseOpen, setTimelapseOpen] = useState(false)
+  /** 0..1; the controls write it every frame and Garden reads it in every paint, without renders */
+  const timelapseProgress = useRef(1)
+  // when each shown node and stem appears; skeleton links are dated through the full graph
+  const timeline = useMemo(() => {
+    if (!timelapseOpen || !data || !graph) return null
+    return buildTimeline(graph, viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden))
+  }, [timelapseOpen, data, graph, viewMode, effectiveHidden])
+  const gardenTimelapse = useMemo<GardenTimelapse | null>(
+    () => (timeline && data ? { timeline, progress: timelapseProgress, title: `${data.owner}/${data.repo}` } : null),
+    [timeline, data],
+  )
+  const openTimelapse = useCallback(() => setTimelapseOpen(true), [])
+  const closeTimelapse = useCallback(() => {
+    setTimelapseOpen(false)
+    timelapseProgress.current = 1
+  }, [])
+  // a different repo starts with the whole garden on show
+  useEffect(() => closeTimelapse(), [data, closeTimelapse])
+  const getGraphCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
+  const timelapseFileName = useCallback(
+    (ext: string) => (data ? gardenFileName(data, ext, new Date(), 'timelapse') : `repo-garden-timelapse.${ext}`),
+    [data],
+  )
 
   // metro mode: the straight layout of exactly this graph (null in organic mode)
   const metro = useMetroView(graph, data ?? null, viewMode, layoutMode === 'metro')
@@ -317,6 +346,7 @@ export default function App() {
             onBackgroundClick={handleBackgroundClick}
             metro={metro}
             focus={focus}
+            timelapse={gardenTimelapse}
           />
         )}
       </div>
@@ -356,14 +386,26 @@ export default function App() {
 
       {data && graph && contributors && <Panel data={data} palette={palette} contributors={contributors} />}
 
-      <StatusStrip
-        data={data}
-        graph={graph}
-        isFetching={isFetching}
-        fileSavedAt={opened ? opened.savedAt : null}
-        cachedAt={cachedAt}
-        onRefresh={refetch}
-      />
+      {timelapseOpen && graph ? (
+        <TimelapseBar
+          onClose={closeTimelapse}
+          timeline={timeline}
+          progress={timelapseProgress}
+          getCanvas={getGraphCanvas}
+          fileName={timelapseFileName}
+          besidePanel={panelOpen}
+        />
+      ) : (
+        <StatusStrip
+          data={data}
+          graph={graph}
+          isFetching={isFetching}
+          fileSavedAt={opened ? opened.savedAt : null}
+          cachedAt={cachedAt}
+          onRefresh={refetch}
+          onTimelapse={graph ? openTimelapse : undefined}
+        />
+      )}
 
       {inspectorNode && graph && (
         <NodeInspector

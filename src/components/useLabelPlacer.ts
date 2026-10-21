@@ -64,6 +64,11 @@ export interface UseLabelPlacerArgs {
   marks?: RefObject<LabelMarks>
   /** draw a halo in the theme's textHalo (the canvas colour) behind label text (metro mode: lines may still pass close) */
   halo?: boolean
+  /**
+   * Nodes not drawn in this frame (the time-lapse before they have grown): their labels drop and they
+   * stop blocking others. Called every frame, so it may read state that changes without a render.
+   */
+  isHidden?: (nodeId: string) => boolean
 }
 
 /** Boxes for the label placer to keep clear of, in graph units, rewritten every frame. */
@@ -272,6 +277,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
     lines,
     marks,
     halo,
+    isHidden,
   } = args
 
   // ---- specs, rebuilt per graph and when web fonts finish loading (widths change) ----
@@ -428,7 +434,8 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         const node = nodes[j]
         const x = node.x
         const y = node.y
-        if (x === undefined || y === undefined || !Number.isFinite(x) || !Number.isFinite(y)) {
+        // a hidden node reads as one with no position: the placer drops its label at once
+        if (x === undefined || y === undefined || !Number.isFinite(x) || !Number.isFinite(y) || isHidden?.(node.id)) {
           buf.sx[j] = NaN
           buf.sy[j] = NaN
           buf.sr[j] = 0
@@ -651,6 +658,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
       lines,
       marks,
       halo,
+      isHidden,
     ],
   )
 
