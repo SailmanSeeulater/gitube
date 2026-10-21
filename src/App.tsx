@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
+import { buildScore } from './graph/score'
 import { findWeeds, type WeedReport } from './graph/weeds'
 import TimelapseBar from './components/TimelapseBar'
 import type { GardenTimelapse } from './components/Garden'
@@ -161,6 +162,11 @@ export default function App() {
     if (!timelapseOpen || !data || !graph) return null
     return buildTimeline(graph, viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden))
   }, [timelapseOpen, data, graph, viewMode, effectiveHidden])
+  // the same history as notes, for the music box (pitches follow the palette's branch order)
+  const score = useMemo(
+    () => (timeline && data && graph ? buildScore(graph, timeline, data.branches.map((b) => b.name), data.defaultBranch) : null),
+    [timeline, data, graph],
+  )
   const gardenTimelapse = useMemo<GardenTimelapse | null>(
     () => (timeline && data ? { timeline, progress: timelapseProgress, title: `${data.owner}/${data.repo}` } : null),
     [timeline, data],
@@ -395,6 +401,7 @@ export default function App() {
         <TimelapseBar
           onClose={closeTimelapse}
           timeline={timeline}
+          score={score}
           progress={timelapseProgress}
           getCanvas={getGraphCanvas}
           fileName={timelapseFileName}
