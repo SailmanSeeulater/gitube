@@ -1,17 +1,23 @@
 import type { Graph, RepoData } from '../types'
 import { useGardenStore } from '../store/useGardenStore'
-import { formatClock, stageLabel } from './gardenUtils'
+import { formatClock, formatDateTime, relativeTime, stageLabel } from './gardenUtils'
 
 export interface StatusStripProps {
   data: RepoData | undefined
   graph: Graph | null
   isFetching: boolean
+  /** the data came from a saved file: when it was saved (ISO, '' if unknown); null for live data */
+  fileSavedAt?: string | null
+  /** the data came from this browser's cache: when it was fetched (ISO); null for a live fetch */
+  cachedAt?: string | null
+  /** fetch the repo from GitHub again, skipping the cache */
+  onRefresh?: () => void
 }
 
 const shell =
   'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
 
-export default function StatusStrip({ data, graph, isFetching }: StatusStripProps) {
+export default function StatusStrip({ data, graph, isFetching, fileSavedAt = null, cachedAt = null, onRefresh }: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
   const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
 
@@ -91,7 +97,28 @@ export default function StatusStrip({ data, graph, isFetching }: StatusStripProp
           history truncated
         </span>
       )}
-      {remaining !== null && (
+      {fileSavedAt !== null && (
+        <span
+          className="rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
+          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Grow to load it live from GitHub.`}
+        >
+          from file{fileSavedAt && relativeTime(fileSavedAt) ? ` · saved ${relativeTime(fileSavedAt)}` : ''}
+        </span>
+      )}
+      {cachedAt !== null && fileSavedAt === null && (
+        <span
+          className="flex items-center gap-1.5 rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
+          title={`Shown from this browser's cache (fetched ${formatDateTime(cachedAt)}), so no GitHub requests were used.`}
+        >
+          cached {relativeTime(cachedAt)}
+          {onRefresh && (
+            <button type="button" onClick={onRefresh} className="text-garden-accent hover:underline">
+              refresh
+            </button>
+          )}
+        </span>
+      )}
+      {remaining !== null && fileSavedAt === null && cachedAt === null && (
         <span className="text-garden-muted" title="GitHub API requests remaining this hour">
           {remaining} requests left
         </span>

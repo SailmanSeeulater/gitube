@@ -2,7 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import type { ContributorFocus, ContributorIndex } from './graph'
-import type { Graph } from './types'
+import type { Graph, RepoData } from './types'
+import { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from './export/gardenFile'
+import { canvasToPng, composeGraphImage, downloadBlob } from './export/image'
+import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { useRepoData } from './hooks/useRepoData'
 import { useGardenStore } from './store/useGardenStore'
 import { applyTheme } from './theme/applyTheme'
@@ -28,11 +31,19 @@ function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
 }
 
 export default function App() {
-  const [input, setInput] = useState('')
-  const [repoRef, setRepoRef] = useState<RepoRef | null>(null)
+  // A share link (?repo=...&branch=... or &by=...) grows its repo straight away; its selection is
+  // applied once that repo's data is in (see the share link effects below).
+  const [initialShare] = useState<ShareState>(() => readShareState(typeof window === 'undefined' ? '' : window.location.search))
+  const pendingShare = useRef<ShareState | null>(initialShare.repo ? initialShare : null)
+  const [input, setInput] = useState(() => (initialShare.repo ? `${initialShare.repo.owner}/${initialShare.repo.repo}` : ''))
+  const [repoRef, setRepoRef] = useState<RepoRef | null>(initialShare.repo)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
+  /** A garden opened from a saved file; it stands in for fetched data until the next Grow. */
+  const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const canvasHostRef = useRef<HTMLDivElement | null>(null)
 
   const viewMode = useGardenStore((s) => s.viewMode)
   const layoutMode = useGardenStore((s) => s.layoutMode)
@@ -65,7 +76,10 @@ export default function App() {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const { data, error, isFetching, refetch } = useRepoData(repoRef)
+  const fetched = useRepoData(repoRef)
+  const { error, isFetching, refetch } = fetched
+  const data = opened?.data ?? fetched.data
+  const cachedAt = opened ? null : fetched.cachedAt
 
   // eye-toggled branches plus anything the stale filter removes
   const effectiveHidden = useMemo<ReadonlySet<string>>(() => {
@@ -92,6 +106,35 @@ export default function App() {
 
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
+
+  // ---- share links ----
+  // The link's selection, once its repo has loaded (a link to another repo's data is dropped).
+  useEffect(() => {
+    const pending = pendingShare.current
+    if (pending === null || !data || !contributors) return
+    pendingShare.current = null
+    if (!pending.repo || !sameRepo(pending.repo, data)) return
+    if (pending.branch !== null && data.branches.some((b) => b.name === pending.branch)) {
+      setSelectedBranch(pending.branch)
+    } else if (pending.person !== null && contributors.list.some((c) => c.key === pending.person)) {
+      setSelectedContributor(pending.person)
+      setPanelTab('contributors')
+    }
+  }, [data, contributors, setSelectedBranch, setSelectedContributor, setPanelTab])
+
+  // The address bar follows the repo on show and its selection, so copying it shares this view.
+  // replaceState: Back leaves the app rather than stepping through every click.
+  const shownOwner = data?.owner ?? repoRef?.owner ?? null
+  const shownRepo = data?.repo ?? repoRef?.repo ?? null
+  useEffect(() => {
+    // leave an incoming link alone until its selection has been applied
+    if (pendingShare.current !== null) return
+    const repo = shownOwner !== null && shownRepo !== null ? { owner: shownOwner, repo: shownRepo } : null
+    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor }, window.location.search)
+    if (search !== window.location.search) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
+    }
+  }, [shownOwner, shownRepo, selectedBranch, selectedContributor])
 
   // The selected person's commits to keep lit. Skeleton links stand for runs of hidden commits, so
   // the full graph (same hidden branches) is walked to see whose commits each run holds.
@@ -134,6 +177,8 @@ export default function App() {
         return
       }
       setInvalidUrl(false)
+      setFileError(null)
+      setOpened(null)
       resetForNewRepo()
       if (sameRepo(repoRef, parsed)) {
         if (!isFetching) refetch()
@@ -170,24 +215,97 @@ export default function App() {
     [setSelectedContributor, setPanelTab, setPanelOpen],
   )
 
+  // ---- save and open ----
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  /** The graph canvas as it is on screen, captioned with the repo and what the view shows. */
+  const exportImage = useCallback(async () => {
+    const canvas = canvasHostRef.current?.querySelector('canvas')
+    if (!data || !canvas) return
+    const commitCount = Object.keys(data.commits).length
+    const parts = [viewMode, layoutMode, `${data.branches.length} branches`, `${commitCount} commits`]
+    if (selectedBranch !== null) parts.push(`branch ${selectedBranch}`)
+    const person = selectedContributor !== null ? contributors?.list.find((c) => c.key === selectedContributor) : undefined
+    if (person) parts.push(`commits by ${person.name}`)
+    const day = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    try {
+      const image = composeGraphImage(canvas, theme, {
+        title: `${data.owner}/${data.repo}`,
+        detail: parts.join(' · '),
+        credit: `repo-garden · ${day}`,
+      })
+      downloadBlob(await canvasToPng(image), gardenFileName(data, 'png'))
+      setExportError(null)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err))
+    }
+  }, [data, viewMode, layoutMode, selectedBranch, selectedContributor, contributors, theme])
+
+  const exportData = useCallback(() => {
+    if (!data) return
+    downloadBlob(new Blob([serializeGarden(data)], { type: 'application/json' }), gardenFileName(data, 'json'))
+  }, [data])
+
+  const openFile = useCallback(
+    async (file: File) => {
+      try {
+        const saved = parseGardenFile(await file.text())
+        resetForNewRepo()
+        setOpened({ data: saved.data, savedAt: saved.savedAt })
+        // no fetch while a file is open; Grow (the input now names the repo) loads it live
+        setRepoRef(null)
+        setInput(`${saved.data.owner}/${saved.data.repo}`)
+        setInvalidUrl(false)
+        setFileError(null)
+      } catch (err) {
+        setFileError(err instanceof GardenFileError ? err.message : 'the file could not be read.')
+      }
+    },
+    [resetForNewRepo],
+  )
+
+  // a saved .json dropped anywhere on the page opens it
+  useEffect(() => {
+    const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false
+    const onDragOver = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const onDrop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      const file = event.dataTransfer?.files[0]
+      if (file) void openFile(file)
+    }
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [openFile])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       clearSelection()
       setInvalidUrl(false)
+      setFileError(null)
+      setExportError(null)
       setTokenOpen(false)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [clearSelection])
 
-  const showEmpty = !graph && !isFetching && !error && !invalidUrl
+  const showEmpty = !graph && !isFetching && !error && !invalidUrl && fileError === null
   const showGrowing = !graph && isFetching && repoRef !== null
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
       {/* The canvas stops short of the side panel so zoom-to-fit never hides nodes behind it. */}
-      <div className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
+      <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
         {graph && (
           <Garden
             graph={graph}
@@ -220,16 +338,32 @@ export default function App() {
         tokenOpen={tokenOpen}
         onToggleToken={toggleToken}
         busy={isFetching}
+        canExport={graph !== null}
+        onExportImage={exportImage}
+        onExportData={exportData}
+        onOpenFile={openFile}
+        besidePanel={graph !== null && panelOpen}
       />
 
       {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
-      {!invalidUrl && error && !isFetching && (
+      {!invalidUrl && fileError !== null && <ErrorCard code="bad_file" message={fileError} onDismiss={() => setFileError(null)} />}
+      {!invalidUrl && fileError === null && exportError !== null && (
+        <ErrorCard code="export_failed" message={exportError} onDismiss={() => setExportError(null)} />
+      )}
+      {!invalidUrl && fileError === null && exportError === null && error && !isFetching && (
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
       {data && graph && contributors && <Panel data={data} palette={palette} contributors={contributors} />}
 
-      <StatusStrip data={data} graph={graph} isFetching={isFetching} />
+      <StatusStrip
+        data={data}
+        graph={graph}
+        isFetching={isFetching}
+        fileSavedAt={opened ? opened.savedAt : null}
+        cachedAt={cachedAt}
+        onRefresh={refetch}
+      />
 
       {inspectorNode && graph && (
         <NodeInspector
