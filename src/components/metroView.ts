@@ -1,9 +1,10 @@
 /**
  * Pure helpers for Garden's metro ("straight") mode: turn a MetroLayout (lane units) into what the
  * canvas draws (graph units, centred on the origin), and the camera, tween and dimming rules that
- * go with it. No DOM, no React.
+ * go with it. No DOM, no React (strokeRunBars only draws on the canvas context it is handed).
  */
 import type { MetroLayout, MetroOptions, MetroStationKind } from '../graph/metro'
+import type { ThemeDerived } from '../theme/themes'
 import type { ViewMode } from '../types'
 import type { FitBbox, FitPadding } from './gardenUtils'
 
@@ -104,6 +105,57 @@ export function metroBadgeFontPx(k: number): number {
  */
 export function metroRunMarker(b: Pick<MetroBadge, 'textY'>, k: number): 'badge' | 'tick' {
   return b.textY !== null && metroBadgeFontPx(k) >= METRO_BADGE_MIN_PX ? 'badge' : 'tick'
+}
+
+/** run marker bars: half their length across the line, and the gap between the two, in screen px */
+export const RUN_BAR_HALF_PX = 3.5
+export const RUN_BAR_GAP_PX = 3.5
+/** width in screen px of each run bar (in runMark) */
+export const RUN_BAR_PX = 1.5
+/**
+ * width in screen px of the canvas-coloured (textHalo) stroke under each run bar: 1 px either side
+ * of the 1.5 px bar. With the 3.5 px gap the two halos meet, so together they cut a clean break
+ * across the route
+ */
+export const RUN_BAR_HALO_PX = 3.5
+/** run bars stick out this many screen px past each edge of the route, at any zoom */
+export const RUN_BAR_OVERHANG_PX = 1
+
+/** What strokeRunBars needs of a canvas context. */
+export type RunBarContext = Pick<CanvasRenderingContext2D, 'beginPath' | 'moveTo' | 'lineTo' | 'stroke' | 'strokeStyle' | 'lineWidth' | 'lineCap'>
+
+/**
+ * A run marker's break on its route (see metroRunMarker): two bars across the line at (b.x, b.y),
+ * RUN_BAR_GAP_PX apart, stroked first in the canvas colour (textHalo, RUN_BAR_HALO_PX wide; the
+ * two halos meet and cut the route) and then in runMark on top. The bars are at least as long as
+ * the route is wide, plus RUN_BAR_OVERHANG_PX either side, so the break crosses the whole line at
+ * any zoom; zoomed out they are 2 x RUN_BAR_HALF_PX. px = 1 / zoom; width is the route's width in
+ * graph units. Leaves globalAlpha to the caller and lineCap at 'butt'.
+ */
+export function strokeRunBars(
+  ctx: RunBarContext,
+  b: Pick<MetroBadge, 'x' | 'y' | 'dx' | 'dy'>,
+  px: number,
+  width: number,
+  theme: { derived: Pick<ThemeDerived, 'textHalo' | 'runMark'> },
+): void {
+  // at least as long as the line is wide, so the break crosses the whole route even when zoomed in
+  const half = Math.max(RUN_BAR_HALF_PX * px, width / 2 + RUN_BAR_OVERHANG_PX * px)
+  const gap = RUN_BAR_GAP_PX * px
+  ctx.lineCap = 'butt'
+  ctx.beginPath()
+  for (const side of [-0.5, 0.5]) {
+    const cx = b.x + b.dx * gap * side
+    const cy = b.y + b.dy * gap * side
+    ctx.moveTo(cx + b.dy * half, cy - b.dx * half)
+    ctx.lineTo(cx - b.dy * half, cy + b.dx * half)
+  }
+  ctx.strokeStyle = theme.derived.textHalo // canvas: cuts the route under the bars
+  ctx.lineWidth = RUN_BAR_HALO_PX * px
+  ctx.stroke()
+  ctx.strokeStyle = theme.derived.runMark
+  ctx.lineWidth = RUN_BAR_PX * px
+  ctx.stroke()
 }
 
 /** Point halfway along a polyline (flat x, y pairs) and the unit direction of the piece it is on. */

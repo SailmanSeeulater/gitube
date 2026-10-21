@@ -1,24 +1,32 @@
 @import "tailwindcss";
 
+/*
+ * Colours come from the active theme (src/theme/themes.ts), never from this file. The theme sets
+ * the --garden-* properties on <html> (src/theme/applyTheme.ts at runtime, and before the first
+ * paint the defaults and boot script that vite.config.ts injects into index.html), and the
+ * Tailwind tokens below read them, so bg-garden-panel/95, text-garden-accent and friends follow
+ * every theme switch with no change to the components.
+ */
 @theme {
-  --color-garden-bg: #1e1e1e;
-  --color-garden-panel: #252525;
-  --color-garden-border: #363636;
-  --color-garden-text: #dcddde;
-  --color-garden-muted: #999999;
-  --color-garden-accent: #a78bfa;
-  --color-garden-accent-strong: #7c3aed;
-  --color-garden-hover: #2e2e2e;
-  --color-garden-raised: #2a2a2a;
-  --color-garden-text-dim: #b8b8b8;
-  --color-garden-warn: #d9b35b;
-  --color-garden-danger: #e06c75;
+  --color-garden-bg: var(--garden-canvas);
+  --color-garden-panel: var(--garden-panel);
+  --color-garden-border: var(--garden-border);
+  --color-garden-text: var(--garden-text);
+  --color-garden-muted: var(--garden-muted);
+  --color-garden-accent: var(--garden-accent);
+  --color-garden-accent-text: var(--garden-accent-text);
+  --color-garden-hover: var(--garden-hover);
+  --color-garden-field: var(--garden-field);
+  --color-garden-raised: var(--garden-raised);
+  --color-garden-text-dim: var(--garden-text-dim);
+  --color-garden-warn: var(--garden-warn);
+  --color-garden-danger: var(--garden-danger);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-soft: var(--garden-shadow);
 }
 
 html, body, #root { height: 100%; margin: 0; }
-html { color-scheme: dark; overscroll-behavior: none; }
+html { overscroll-behavior: none; }
 body { background: var(--color-garden-bg); color: var(--color-garden-text); font-family: var(--font-sans); overflow: hidden; }
 #root { position: relative; }
 
@@ -35,3 +43,8 @@ body { background: var(--color-garden-bg); color: var(--color-garden-text); font
 .force-graph-container .graph-tooltip { display: none; }
 
 :focus-visible { outline: 1px solid var(--color-garden-accent); outline-offset: 1px; }
+
+/* A theme switch recolours everything in one step (src/theme/applyTheme.ts sets this for that restyle). */
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after { transition: none !important; }

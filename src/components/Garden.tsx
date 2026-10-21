@@ -2,31 +2,26 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
 import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
+import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
 import {
-  ACCENT,
-  CANVAS_BG,
-  DIM_ALPHA,
-  FALLBACK_COLOUR,
   FIT_MAX_ZOOM,
   FIT_PAD,
   LABEL_FONT,
   MAX_PINNED_SEARCH_HITS,
   MONO_FONT,
-  MUTED_COLOUR,
-  ROOT_FILL,
-  ROOT_RING,
   assignLinkCurvature,
   buildBranchReach,
+  buildLinkColours,
   buildNeighbourIndex,
   createTimeForce,
   fitTransform,
-  hexToRgba,
   isDimmed,
   linkEndId,
   nodeRadius,
   selectedReach,
   shortSha,
+  type LinkColours,
   type TimeForce,
 } from './gardenUtils'
 import { useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
@@ -45,6 +40,7 @@ import {
   metroRevealTransform,
   metroRunMarker,
   metroStationRadius,
+  strokeRunBars,
   type MetroView,
 } from './metroView'
 
@@ -64,6 +60,13 @@ type GardenMethods = ForceGraphMethods<NodeObject<GraphNode>, LinkObject<GraphNo
 
 export interface GardenProps {
   graph: Graph
+  /**
+   * branch name -> colour in the active theme. Kept apart from the graph (graph.palette is not
+   * read) so a theme switch recolours without rebuilding graphData or touching the layout.
+   */
+  palette: Record<string, string>
+  /** active theme: every canvas colour, the dim alpha and the link alphas */
+  theme: Theme
   viewMode: ViewMode
   /** the repo's default branch: its tip label is always placed first */
   defaultBranch: string
@@ -86,12 +89,15 @@ interface GardenIndex {
   /** tip node id -> 'branch-a, branch-b' */
   tipLabel: Map<string, string>
   tipLabelLower: Map<string, string>
-  /** owner branch -> rgba link colour at 35% / 7% */
-  linkColour: Map<string, string>
-  linkColourDim: Map<string, string>
-  palette: Record<string, string>
   /** nodes that had no position in the previous graph (a metro tween starts them at their target) */
   freshIds: Set<string>
+}
+
+/** Colours for one theme and palette; paint reads these, so a theme switch is a redraw, never a rebuild. */
+interface GardenColours {
+  theme: Theme
+  palette: Record<string, string>
+  links: LinkColours
 }
 
 interface ScaleCache {
@@ -113,21 +119,8 @@ const SEARCH_REVEAL_MS = 300
 const EARLY_FIT_TICKS = 20
 const EARLY_FIT_SPEED = 1
 const TWO_PI = Math.PI * 2
-const FALLBACK_LINK = hexToRgba(FALLBACK_COLOUR, 0.35)
-const FALLBACK_LINK_DIM = hexToRgba(FALLBACK_COLOUR, 0.07)
-const HALO_FILL = 'rgba(167, 139, 250, 0.22)'
-const HALO_RING = 'rgba(167, 139, 250, 0.7)'
-const HOVER_RING = 'rgba(220, 221, 222, 0.45)'
-const BADGE_BG = '#2a2a2a'
-const BADGE_TEXT = '#b8b8b8'
-// metro mode
-const STATION_WHITE = '#e8e8e8'
-const METRO_ALPHA = 0.9
-const METRO_MUTED_ALPHA = 0.45
-const METRO_DIM_ALPHA = 0.1
-/** run marker bars: half their length across the line, and the gap between the two, in screen px */
-const RUN_BAR_HALF_PX = 3.5
-const RUN_BAR_GAP_PX = 3.5
+// metro mode (its colours and line alphas come from the theme: stationRing, metro*Alpha, derived);
+// the run marker bars' sizes live with strokeRunBars in metroView.ts
 
 /**
  * A station's radius for the label placer in graph units: the glyph's, except a plain commit's bead,
@@ -137,7 +130,7 @@ function labelStationRadius(kind: MetroStation | undefined, isTip: boolean): num
   return kind === 'commit' && !isTip ? METRO_LINE_WIDTH / 2 : metroStationRadius(kind, isTip)
 }
 
-/** A '+N' run badge centred on (mx, my); px = 1 / globalScale. Leaves globalAlpha at 1. */
+/** A '+N' run badge centred on (mx, my) in the theme's badge colours; px = 1 / globalScale. Leaves globalAlpha at 1. */
 function drawBadge(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -147,6 +140,7 @@ function drawBadge(
   font: string,
   ring: string,
   alpha: number,
+  theme: Theme,
 ): void {
   ctx.font = font
   const w = ctx.measureText(text).width + 8 * px
@@ -155,19 +149,19 @@ function drawBadge(
   ctx.beginPath()
   if (typeof ctx.roundRect === 'function') ctx.roundRect(mx - w / 2, my - h / 2, w, h, 3 * px)
   else ctx.rect(mx - w / 2, my - h / 2, w, h)
-  ctx.fillStyle = BADGE_BG
+  ctx.fillStyle = theme.badgeBg
   ctx.fill()
   ctx.strokeStyle = ring
   ctx.lineWidth = px
   ctx.stroke()
-  ctx.fillStyle = BADGE_TEXT
+  ctx.fillStyle = theme.badgeText
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, mx, my + 0.5 * px)
   ctx.globalAlpha = 1
 }
 
-export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, onBackgroundClick, metro = null }: GardenProps) {
+export default function Garden({ graph, palette, theme, viewMode, defaultBranch, onNodeClick, onBackgroundClick, metro = null }: GardenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
   const sizeRef = useRef({ width: 0, height: 0 })
@@ -259,13 +253,6 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       }
     }
 
-    const linkColour = new Map<string, string>()
-    const linkColourDim = new Map<string, string>()
-    for (const [branch, hex] of Object.entries(graph.palette)) {
-      linkColour.set(branch, hexToRgba(hex, 0.35))
-      linkColourDim.set(branch, hexToRgba(hex, 0.07))
-    }
-
     return {
       graphData: { nodes, links },
       nodeById,
@@ -273,12 +260,14 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       reach: buildBranchReach(graph.nodes, graph.links),
       tipLabel,
       tipLabelLower,
-      linkColour,
-      linkColourDim,
-      palette: graph.palette,
       freshIds,
     }
   }, [graph])
+
+  // ---- colours, keyed on the theme and its palette only. The paint callbacks depend on them, so a
+  // theme switch hands force-graph new callbacks, which it answers with one redraw: graphData,
+  // the simulation and the label placer are untouched. ----
+  const colours = useMemo<GardenColours>(() => ({ theme, palette, links: buildLinkColours(palette, theme) }), [theme, palette])
 
   useEffect(() => {
     prevNodesRef.current = index.nodeById
@@ -356,6 +345,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
     hoverRef,
     labelHoverRef,
     onLabelHoverChange: bumpHover,
+    theme,
+    palette,
     radiusOf: labelRadius,
     ringPxOf: labelRing,
     isHardNode: labelHard,
@@ -387,60 +378,63 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       const id = node.id
       const hovered = hoverRef.current ?? labelHoverRef.current
       const dim = isDimmed(id, hovered, index.neighbours, reachSet)
+      const th = colours.theme
 
       const kind = metro ? metro.stations.get(id) : undefined
       // a plain commit in metro full view is a bead sized to its line and its neighbours
       const bead = metro && kind === 'commit' && !node.isTip ? metroCommitGlyph(px, metro.commitGap.get(id)) : null
       const r = bead ? bead.r : metro ? metroStationRadius(kind, node.isTip) : nodeRadius(node.reach)
-      const colour = index.palette[node.owner] ?? FALLBACK_COLOUR
-      const fill = node.isRoot && !node.isTip ? ROOT_FILL : colour
+      const colour = colours.palette[node.owner] ?? th.fallback
+      const fill = node.isRoot && !node.isTip ? th.rootFill : colour
       const isHovered = hovered === id
       const isInspected = inspectorNodeId === id
       const isLabelled = index.tipLabel.has(id)
       const matches = query !== '' && isLabelled && (index.tipLabelLower.get(id) ?? '').includes(query)
       const outer = metro ? r : r + (node.isTip ? 2 : 0)
 
-      ctx.globalAlpha = dim ? DIM_ALPHA : 1
+      ctx.globalAlpha = dim ? th.dimAlpha : 1
 
       if (matches) {
         ctx.beginPath()
         ctx.arc(x, y, outer + 7 * px, 0, TWO_PI)
-        ctx.fillStyle = HALO_FILL
+        ctx.fillStyle = th.derived.searchHaloFill
         ctx.fill()
-        ctx.strokeStyle = HALO_RING
+        ctx.strokeStyle = th.derived.searchHaloRing
         ctx.lineWidth = 1 * px
         ctx.stroke()
       }
       if (isInspected || isHovered) {
         ctx.beginPath()
         ctx.arc(x, y, outer + 4.5 * px, 0, TWO_PI)
-        ctx.strokeStyle = isInspected ? ACCENT : HOVER_RING
+        ctx.strokeStyle = isInspected ? th.derived.inspectedRing : th.derived.hoverRing
         ctx.lineWidth = 1.2 * px
         ctx.stroke()
       }
 
       if (metro) {
-        // station glyphs: tips in branch colour with a white outline, interchanges as white rings,
-        // origins hollow (their dashed stub is drawn with the lines), plain commits as beads (a
-        // ring in the line's colour, wider than the line, around a dark core), stops as dots
+        // station glyphs: tips in branch colour outlined in the station colour, interchanges as
+        // station-colour rings, origins hollow (their dashed stub is drawn with the lines), plain
+        // commits as beads (a ring in the line's colour, wider than the line, around a
+        // canvas-coloured core), stops as dots. The station colour contrasts hard with the canvas:
+        // near-white on the dark themes, the text colour on the light ones.
         const ring = Math.max(1.5, 1.2 * px)
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
         if (node.isTip) {
           ctx.fillStyle = colour
           ctx.fill()
-          ctx.strokeStyle = STATION_WHITE
+          ctx.strokeStyle = th.stationRing
           ctx.lineWidth = ring
           ctx.stroke()
         } else if (kind === 'interchange') {
-          ctx.fillStyle = STATION_WHITE
+          ctx.fillStyle = th.stationRing
           ctx.fill()
           ctx.beginPath()
           ctx.arc(x, y, r * 0.5, 0, TWO_PI)
-          ctx.fillStyle = CANVAS_BG
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
         } else if (kind === 'origin') {
-          ctx.fillStyle = CANVAS_BG
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
           ctx.strokeStyle = colour
           ctx.lineWidth = ring
@@ -450,7 +444,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
           ctx.fill()
           ctx.beginPath()
           ctx.arc(x, y, bead.core, 0, TWO_PI)
-          ctx.fillStyle = CANVAS_BG
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
         } else {
           ctx.fillStyle = colour
@@ -479,9 +473,9 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       } else if (node.isFork) {
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
-        ctx.fillStyle = CANVAS_BG
+        ctx.fillStyle = th.derived.forkNodeFill
         ctx.fill()
-        ctx.strokeStyle = node.isRoot ? ROOT_RING : colour
+        ctx.strokeStyle = node.isRoot ? th.rootRing : colour
         ctx.lineWidth = 1.5 * px
         ctx.stroke()
       } else {
@@ -495,7 +489,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
         ctx.setLineDash(c.dash)
         ctx.beginPath()
         ctx.arc(x, y, outer + (node.isTip ? 5 : 2.5) * px, 0, TWO_PI)
-        ctx.strokeStyle = ROOT_RING
+        ctx.strokeStyle = th.rootRing
         ctx.lineWidth = 1.2 * px
         ctx.stroke()
         ctx.setLineDash(NO_DASH)
@@ -506,7 +500,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
         ctx.font = c.shaFont
         ctx.textAlign = 'left'
         ctx.textBaseline = 'middle'
-        ctx.fillStyle = MUTED_COLOUR
+        ctx.fillStyle = th.muted
         ctx.fillText(shortSha(id), x + r + 5 * px, y)
       }
 
@@ -515,7 +509,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening],
   )
 
   const paintPointerArea = useCallback(
@@ -542,11 +536,11 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       if (hovered !== null && s !== hovered && t !== hovered) dim = true
       if (!dim && reachSet !== null && !(reachSet.has(s) && reachSet.has(t))) dim = true
       return dim
-        ? (index.linkColourDim.get(link.owner) ?? FALLBACK_LINK_DIM)
-        : (index.linkColour.get(link.owner) ?? FALLBACK_LINK)
+        ? (colours.links.dim.get(link.owner) ?? colours.theme.derived.fallbackLinkDim)
+        : (colours.links.full.get(link.owner) ?? colours.theme.derived.fallbackLink)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, reachSet, hoverVersion],
+    [colours, reachSet, hoverVersion],
   )
 
   const linkWidth = useCallback((link: GardenLink) => (link.collapsedCount > 0 ? 2 : 1), [])
@@ -579,10 +573,12 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
         mx += 0.5 * link.curvature * (t.y - s.y)
         my -= 0.5 * link.curvature * (t.x - s.x)
       }
-      drawBadge(ctx, link.badge, mx, my, px, c.badgeFont, index.linkColour.get(link.owner) ?? FALLBACK_LINK, dim ? DIM_ALPHA : 1)
+      const th = colours.theme
+      const ring = colours.links.full.get(link.owner) ?? th.derived.fallbackLink
+      drawBadge(ctx, link.badge, mx, my, px, c.badgeFont, ring, dim ? th.dimAlpha : 1, th)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, reachSet, hoverVersion],
+    [colours, reachSet, hoverVersion],
   )
 
   /**
@@ -599,7 +595,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       const px = c.px
       const hovered = hoverRef.current ?? labelHoverRef.current
       const width = Math.max(METRO_LINE_WIDTH, METRO_MIN_LINE_PX * px)
-      const palette = index.palette
+      const th = colours.theme
+      const palette = colours.palette
       ctx.save()
       ctx.lineJoin = 'round'
       ctx.lineCap = 'round'
@@ -610,8 +607,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
           const t = typeof link.target === 'object' ? link.target : index.nodeById.get(String(link.target))
           if (!s || !t || s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue
           const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet)
-          ctx.globalAlpha = dim ? METRO_DIM_ALPHA : METRO_MUTED_ALPHA
-          ctx.strokeStyle = palette[link.owner] ?? FALLBACK_COLOUR
+          ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroMutedAlpha
+          ctx.strokeStyle = palette[link.owner] ?? th.fallback
           ctx.beginPath()
           ctx.moveTo(t.x, t.y)
           ctx.lineTo(s.x, s.y)
@@ -625,8 +622,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       ctx.lineWidth = Math.max(1.2, px)
       for (const stub of metro.stubs) {
         const dim = (hovered !== null && hovered !== stub.nodeId) || (reachSet !== null && !reachSet.has(stub.nodeId))
-        ctx.globalAlpha = dim ? METRO_DIM_ALPHA : 0.6
-        ctx.strokeStyle = palette[stub.colorBranch] ?? FALLBACK_COLOUR
+        ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroStubAlpha
+        ctx.strokeStyle = palette[stub.colorBranch] ?? th.fallback
         ctx.beginPath()
         ctx.moveTo(stub.x0, stub.y0)
         ctx.lineTo(stub.x1, stub.y1)
@@ -636,8 +633,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       let dashed = false
       for (const r of metro.routes) {
         const dim = isLinkDimmed(r.source, r.target, hovered, reachSet)
-        ctx.globalAlpha = dim ? METRO_DIM_ALPHA : r.muted ? METRO_MUTED_ALPHA : METRO_ALPHA
-        ctx.strokeStyle = palette[r.colorBranch] ?? FALLBACK_COLOUR
+        ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
+        ctx.strokeStyle = palette[r.colorBranch] ?? th.fallback
         ctx.lineWidth = r.muted || r.dashed ? width * 0.65 : width
         if (r.dashed !== dashed) {
           dashed = r.dashed
@@ -650,26 +647,15 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
         ctx.stroke()
       }
       ctx.setLineDash(NO_DASH)
-      // run markers (hidden commits): a break on the line at every zoom, two short bars across
-      // it, and the '+N' in the spot beside the line the layout kept free, once it is readable
+      // run markers (hidden commits): a break on the line at every zoom, a canvas-coloured
+      // (textHalo) cut across the whole route under two short runMark bars (strokeRunBars), and
+      // the '+N' in the spot beside the line the layout kept free, once it is readable
       // (metroRunMarker). The text boxes go to the label placer, which keeps names off them.
       const marks = markBoxesRef.current
       if (metro.badges.length > 0) {
-        ctx.lineCap = 'butt'
-        ctx.lineWidth = 1.5 * px
-        ctx.strokeStyle = BADGE_TEXT
-        const half = RUN_BAR_HALF_PX * px
-        const gap = RUN_BAR_GAP_PX * px
         for (const b of metro.badges) {
-          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? METRO_DIM_ALPHA : 1
-          ctx.beginPath()
-          for (const side of [-0.5, 0.5]) {
-            const cx = b.x + b.dx * gap * side
-            const cy = b.y + b.dy * gap * side
-            ctx.moveTo(cx + b.dy * half, cy - b.dx * half)
-            ctx.lineTo(cx - b.dy * half, cy + b.dx * half)
-          }
-          ctx.stroke()
+          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.metroDimAlpha : 1
+          strokeRunBars(ctx, b, px, width, th)
         }
         const fontPx = metroBadgeFontPx(globalScale)
         if (fontPx >= METRO_BADGE_MIN_PX) {
@@ -680,11 +666,11 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
           const halfH = (fontPx / 2 + 1) * px
           for (const b of metro.badges) {
             if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge') continue
-            ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? DIM_ALPHA : 1
-            ctx.strokeStyle = CANVAS_BG
+            ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.dimAlpha : 1
+            ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
             ctx.strokeText(b.text, b.x, b.textY)
-            ctx.fillStyle = BADGE_TEXT
+            ctx.fillStyle = th.derived.runMark
             ctx.fillText(b.text, b.x, b.textY)
             const halfW = ctx.measureText(b.text).width / 2 + px
             if (marks.rects.length < 4 * (marks.count + 1)) {
@@ -703,7 +689,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, reachSet, hoverVersion],
+    [metro, index, colours, reachSet, hoverVersion],
   )
 
   // ---- interaction ----
@@ -921,7 +907,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
           width={size.width}
           height={size.height}
           graphData={index.graphData}
-          backgroundColor={CANVAS_BG}
+          backgroundColor={theme.canvas}
           nodeId="id"
           nodeCanvasObjectMode={NODE_MODE_REPLACE}
           nodeCanvasObject={paintNode}

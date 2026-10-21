@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { GraphNode } from '../types'
+import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
 import {
-  CANVAS_BG,
-  DIM_ALPHA,
-  FALLBACK_COLOUR,
   LABEL_FONT,
-  MUTED_COLOUR,
-  TEXT_COLOUR,
   bodyRadius,
   buildLabelSpecs,
-  hexToRgba,
   isDimmed,
   middleEllipsis,
   rankLabels,
@@ -24,7 +19,6 @@ import { LabelPlacer, type LabelSpec } from './labelPlacement'
 export interface LabelGraphIndex {
   graphData: { nodes: ReadonlyArray<GraphNode> }
   neighbours: ReadonlyMap<string, ReadonlySet<string>>
-  palette: Record<string, string>
   tipLabelLower: ReadonlyMap<string, string>
 }
 
@@ -42,6 +36,13 @@ export interface UseLabelPlacerArgs {
   labelHoverRef: RefObject<string | null>
   /** called when labelHoverRef changes, so Garden can redraw with the new dimming */
   onLabelHoverChange: () => void
+  /**
+   * active theme (label text, plates, halos, the dim alpha) and its branch palette (plate dots).
+   * Only the drawing reads them: a theme switch redraws the labels where they are, it never
+   * re-places or re-measures them (every theme uses the same fonts).
+   */
+  theme: Theme
+  palette: Record<string, string>
   /**
    * Drawn radius of a node in graph units, when it is not the organic reach-based body (metro
    * stations). Omit for organic mode. A new function identity rebuilds the label specs.
@@ -61,7 +62,7 @@ export interface UseLabelPlacerArgs {
    * pre-paint before paintLabels runs: flat [x0, y0, x1, y1] per box in graph units.
    */
   marks?: RefObject<LabelMarks>
-  /** draw a background-coloured halo behind label text (metro mode: lines may still pass close) */
+  /** draw a halo in the theme's textHalo (the canvas colour) behind label text (metro mode: lines may still pass close) */
   halo?: boolean
 }
 
@@ -106,8 +107,6 @@ export interface LabelPlacerApi {
 }
 
 const LABEL_CSS_FONT = `12px ${LABEL_FONT}`
-const PLATE_FILL = hexToRgba(CANVAS_BG, 0.92)
-const PLATE_RING = 'rgba(220, 221, 222, 0.25)'
 const PLATE_RADIUS = 4
 /** backing plate of a pinned label drawn over another tip (see drawLeader) */
 const LEADER_PLATE_RADIUS = 3
@@ -116,7 +115,7 @@ const DOT_RADIUS = 3
 const TIP_RING_PX = 2.5
 /** safety cap on the first-load admission hold (no fit ever started, or the layout never calms) */
 const MAX_HOLD_MS = 8000
-/** width of the background-coloured halo stroked behind label text (UseLabelPlacerArgs.halo) */
+/** width of the halo (the theme's textHalo, the canvas colour) stroked behind label text (UseLabelPlacerArgs.halo) */
 const HALO_PX = 3
 
 // ---- text measurement: one offscreen canvas, cached widths, cleared when fonts finish loading ----
@@ -188,9 +187,16 @@ interface FrameBuffers {
 /**
  * Backing plate and leader line of a pinned label that sits on (or nearer to) another tip: the
  * plate hides the covered disc behind the text, and a faint line runs from the box to the label's
- * own node, so the name does not read as the covered tip's. Leaves fillStyle at TEXT_COLOUR.
+ * own node, so the name does not read as the covered tip's. Leaves fillStyle at the text colour.
  */
-function drawLeader(ctx: CanvasRenderingContext2D, placer: LabelPlacer, i: number, buf: FrameBuffers, alpha: number): void {
+function drawLeader(
+  ctx: CanvasRenderingContext2D,
+  placer: LabelPlacer,
+  i: number,
+  buf: FrameBuffers,
+  alpha: number,
+  theme: Theme,
+): void {
   const x0 = placer.x0[i]
   const y0 = placer.y0[i]
   const w = placer.w[i]
@@ -199,7 +205,7 @@ function drawLeader(ctx: CanvasRenderingContext2D, placer: LabelPlacer, i: numbe
   ctx.beginPath()
   if (typeof ctx.roundRect === 'function') ctx.roundRect(x0, y0, w, h, LEADER_PLATE_RADIUS)
   else ctx.rect(x0, y0, w, h)
-  ctx.fillStyle = PLATE_FILL
+  ctx.fillStyle = theme.derived.labelPlateFill
   ctx.fill()
   const j = placer.specs[i].node
   const cx = buf.sx[j]
@@ -216,11 +222,11 @@ function drawLeader(ctx: CanvasRenderingContext2D, placer: LabelPlacer, i: numbe
     ctx.beginPath()
     ctx.moveTo(px, py)
     ctx.lineTo(cx + (dx / d) * cr, cy + (dy / d) * cr)
-    ctx.strokeStyle = TEXT_COLOUR
+    ctx.strokeStyle = theme.text
     ctx.lineWidth = 1
     ctx.stroke()
   }
-  ctx.fillStyle = TEXT_COLOUR
+  ctx.fillStyle = theme.text
 }
 
 const allocBuffers = (n: number): FrameBuffers => ({
@@ -248,8 +254,25 @@ const allocBuffers = (n: number): FrameBuffers => ({
  * redrawing only while labels still change.
  */
 export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
-  const { index, defaultBranch, reachSet, query, selectedBranch, inspectorNodeId, hoverRef, labelHoverRef, onLabelHoverChange, radiusOf, ringPxOf, isHardNode, lines, marks, halo } =
-    args
+  const {
+    index,
+    defaultBranch,
+    reachSet,
+    query,
+    selectedBranch,
+    inspectorNodeId,
+    hoverRef,
+    labelHoverRef,
+    onLabelHoverChange,
+    theme,
+    palette,
+    radiusOf,
+    ringPxOf,
+    isHardNode,
+    lines,
+    marks,
+    halo,
+  } = args
 
   // ---- specs, rebuilt per graph and when web fonts finish loading (widths change) ----
   const [fontVersion, setFontVersion] = useState(0)
@@ -527,13 +550,13 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
       ctx.font = LABEL_CSS_FONT
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillStyle = TEXT_COLOUR
+      ctx.fillStyle = theme.text
       ctx.lineJoin = 'round'
       // the halo is stroked under each text, so a line passing close to it never runs into the
       // letters (set each time: drawLeader strokes its leader line in between)
       const text = (s: string, x: number, y: number) => {
         if (halo) {
-          ctx.strokeStyle = CANVAS_BG
+          ctx.strokeStyle = theme.derived.textHalo
           ctx.lineWidth = HALO_PX
           ctx.strokeText(s, x, y)
         }
@@ -545,13 +568,13 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         const fade = placer.alpha[i]
         const ghost = placer.fromAlpha[i]
         if (fade <= 0.01 && ghost <= 0.01) continue
-        const dim = isDimmed(meta[i].nodeId, hovered, index.neighbours, reachSet) ? DIM_ALPHA : 1
+        const dim = isDimmed(meta[i].nodeId, hovered, index.neighbours, reachSet) ? theme.dimAlpha : 1
         if (ghost > 0.01) {
           ctx.globalAlpha = ghost * dim
           text(placer.variantText(i, placer.fromVariant[i]), placer.fromX0[i] + o.padX, placer.fromY0[i] + lineMid)
         }
         if (fade > 0.01) {
-          if (placer.leader[i]) drawLeader(ctx, placer, i, buf, fade * dim)
+          if (placer.leader[i]) drawLeader(ctx, placer, i, buf, fade * dim, theme)
           ctx.globalAlpha = fade * dim
           text(placer.textOf(i), placer.x0[i] + o.padX, placer.y0[i] + lineMid)
         }
@@ -567,9 +590,9 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         ctx.beginPath()
         if (typeof ctx.roundRect === 'function') ctx.roundRect(x0, y0, w, h, PLATE_RADIUS)
         else ctx.rect(x0, y0, w, h)
-        ctx.fillStyle = PLATE_FILL
+        ctx.fillStyle = theme.derived.labelPlateFill
         ctx.fill()
-        ctx.strokeStyle = PLATE_RING
+        ctx.strokeStyle = theme.derived.labelPlateRing
         ctx.lineWidth = 1
         ctx.stroke()
         const inner = w - 2 * o.platePadX
@@ -581,7 +604,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
             const owner = row.label >= 0 ? nodes[placer.specs[row.label].node]?.owner : undefined
             ctx.beginPath()
             ctx.arc(tx0 + DOT_RADIUS, cy, DOT_RADIUS, 0, Math.PI * 2)
-            ctx.fillStyle = (owner !== undefined ? index.palette[owner] : undefined) ?? FALLBACK_COLOUR
+            ctx.fillStyle = (owner !== undefined ? palette[owner] : undefined) ?? theme.fallback
             ctx.fill()
             tx0 += o.plateIndent
             room -= o.plateIndent
@@ -596,7 +619,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
             }
             text = short
           }
-          ctx.fillStyle = row.kind === 'more' ? MUTED_COLOUR : TEXT_COLOUR
+          ctx.fillStyle = row.kind === 'more' ? theme.muted : theme.text
           ctx.fillText(text, tx0, cy)
         })
       }
@@ -612,7 +635,23 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         }
       }
     },
-    [placerState, index, labelIndex, ranking, reachSet, hoverRef, labelHoverRef, setHiddenLabels, hoverHit, onLabelHoverChange, lines, marks, halo],
+    [
+      placerState,
+      index,
+      labelIndex,
+      ranking,
+      reachSet,
+      hoverRef,
+      labelHoverRef,
+      setHiddenLabels,
+      hoverHit,
+      onLabelHoverChange,
+      theme,
+      palette,
+      lines,
+      marks,
+      halo,
+    ],
   )
 
   // a new placer needs frames even if the last one had gone quiet

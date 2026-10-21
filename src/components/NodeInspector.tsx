@@ -1,9 +1,11 @@
 import type { GraphNode } from '../types'
-import { FALLBACK_COLOUR, formatDateTime, relativeTime, shortSha } from './gardenUtils'
+import { useTheme } from '../theme/useTheme'
+import { formatDateTime, relativeTime, shortSha } from './gardenUtils'
 import { CloseIcon, ExternalIcon } from './icons'
 
 export interface NodeInspectorProps {
   node: GraphNode
+  /** branch name -> colour in the active theme */
   palette: Record<string, string>
   onClose: () => void
 }
@@ -15,7 +17,8 @@ export default function NodeInspector({ node, palette, onClose }: NodeInspectorP
   if (node.isFork) kinds.push('fork')
   if (node.isMerge) kinds.push('merge')
   if (node.isRoot) kinds.push('root')
-  const ownerColour = palette[node.owner] ?? FALLBACK_COLOUR
+  const fallback = useTheme().fallback
+  const ownerColour = palette[node.owner] ?? fallback
 
   return (
     <div
@@ -60,7 +63,7 @@ export default function NodeInspector({ node, palette, onClose }: NodeInspectorP
               key={tip}
               className="flex items-center gap-1.5 rounded-full border border-garden-border px-2 py-px text-[11px] text-garden-text-dim"
             >
-              <span className="h-2 w-2 rounded-full" style={{ background: palette[tip] ?? FALLBACK_COLOUR }} />
+              <span className="h-2 w-2 rounded-full" style={{ background: palette[tip] ?? fallback }} />
               {tip}
             </span>
           ))}

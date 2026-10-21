@@ -3,6 +3,7 @@ import { buildGraph } from '../graph'
 import { metroLayout } from '../graph/metro'
 import { fixtures } from '../../tests/fixtures/repos'
 import { loadReplay } from '../../tests/fixtures/replay'
+import { THEMES } from '../theme/themes'
 import type { RepoData, ViewMode } from '../types'
 import { FIT_MAX_ZOOM, FIT_PAD, buildLabelSpecs, rankLabels } from './gardenUtils'
 import { LabelPlacer } from './labelPlacement'
@@ -13,6 +14,11 @@ import {
   METRO_MIN_LINE_PX,
   METRO_MIN_ZOOM,
   METRO_SCALE,
+  RUN_BAR_GAP_PX,
+  RUN_BAR_HALF_PX,
+  RUN_BAR_HALO_PX,
+  RUN_BAR_OVERHANG_PX,
+  RUN_BAR_PX,
   buildMetroView,
   easeInOutCubic,
   isLinkDimmed,
@@ -25,6 +31,8 @@ import {
   metroRunMarker,
   metroStationRadius,
   routeLayer,
+  strokeRunBars,
+  type RunBarContext,
 } from './metroView'
 
 const PAD = { left: 10, right: 10, top: 10, bottom: 10 }
@@ -477,6 +485,71 @@ describe('metro run markers', () => {
     expect(metroRunMarker({ textY: 3 }, 0.2)).toBe('tick')
     expect(metroBadgeFontPx(METRO_MIN_ZOOM)).toBeGreaterThanOrEqual(METRO_BADGE_MIN_PX)
     expect(metroBadgeFontPx(FIT_MAX_ZOOM)).toBe(METRO_BADGE_MAX_PX)
+  })
+
+  it('cut a canvas-coloured break across the whole route under the two bars, at any zoom', () => {
+    // the two halos, centred RUN_BAR_GAP_PX apart, meet in the middle, and each one shows past its bar
+    expect(RUN_BAR_HALO_PX).toBeGreaterThanOrEqual(RUN_BAR_GAP_PX)
+    expect(RUN_BAR_HALO_PX).toBeGreaterThan(RUN_BAR_PX)
+    /** a canvas context that records each stroke: its style, width, cap and the segments of its path */
+    interface Stroke {
+      strokeStyle: unknown
+      lineWidth: number
+      lineCap: string
+      segments: [number, number, number, number][]
+    }
+    const strokes: Stroke[] = []
+    let path: [number, number, number, number][] = []
+    let at: [number, number] = [0, 0]
+    const ctx: RunBarContext = {
+      strokeStyle: '',
+      lineWidth: 0,
+      lineCap: 'round',
+      beginPath: () => void (path = []),
+      moveTo: (x: number, y: number) => void (at = [x, y]),
+      lineTo: (x: number, y: number) => {
+        path.push([at[0], at[1], x, y])
+        at = [x, y]
+      },
+      stroke: () => void strokes.push({ strokeStyle: ctx.strokeStyle, lineWidth: ctx.lineWidth, lineCap: ctx.lineCap, segments: [...path] }),
+    }
+    for (const theme of THEMES) {
+      for (const b of [
+        { x: 10, y: -4, dx: 1, dy: 0 },
+        { x: -3, y: 7, dx: 0.6, dy: 0.8 },
+      ]) {
+        for (const k of [0.2, METRO_MIN_ZOOM, 1, FIT_MAX_ZOOM, 4, 8]) {
+          const px = 1 / k
+          const width = Math.max(METRO_LINE_WIDTH, METRO_MIN_LINE_PX * px) // a full route, as Garden's paintMetro draws it
+          strokes.length = 0
+          strokeRunBars(ctx, b, px, width, theme)
+          const label = `${theme.id} k=${k}`
+          // the cut first, in the canvas colour, then the bars on top
+          expect(strokes.map((s) => [s.strokeStyle, s.lineCap]), label).toEqual([
+            [theme.derived.textHalo, 'butt'],
+            [theme.derived.runMark, 'butt'],
+          ])
+          expect(theme.derived.textHalo).toBe(theme.canvas)
+          expect(strokes[0].lineWidth, label).toBeCloseTo(RUN_BAR_HALO_PX * px)
+          expect(strokes[1].lineWidth, label).toBeCloseTo(RUN_BAR_PX * px)
+          expect(strokes[1].segments).toEqual(strokes[0].segments)
+          const bars = strokes[0].segments
+          expect(bars).toHaveLength(2)
+          for (const [x0, y0, x1, y1] of bars) {
+            const len = Math.hypot(x1 - x0, y1 - y0)
+            // across the line, as long as it is wide plus the overhang either side, and never shorter than zoomed out
+            expect(Math.abs((x1 - x0) * b.dx + (y1 - y0) * b.dy) / len, label).toBeLessThan(1e-9)
+            expect(len, label).toBeGreaterThanOrEqual(width + 2 * RUN_BAR_OVERHANG_PX * px - 1e-9)
+            expect(len, label).toBeGreaterThanOrEqual(2 * RUN_BAR_HALF_PX * px - 1e-9)
+          }
+          // centred on the marker, RUN_BAR_GAP_PX apart along the line
+          const mid = bars.map(([x0, y0, x1, y1]) => [(x0 + x1) / 2, (y0 + y1) / 2])
+          expect((mid[0][0] + mid[1][0]) / 2).toBeCloseTo(b.x)
+          expect((mid[0][1] + mid[1][1]) / 2).toBeCloseTo(b.y)
+          expect(Math.hypot(mid[1][0] - mid[0][0], mid[1][1] - mid[0][1])).toBeCloseTo(RUN_BAR_GAP_PX * px)
+        }
+      }
+    }
   })
 })
 

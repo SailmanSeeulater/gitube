@@ -10,6 +10,7 @@ import {
   assignLinkCurvature,
   buildBranchReach,
   buildLabelSpecs,
+  buildLinkColours,
   buildNeighbourIndex,
   createTimeForce,
   ellipsizeAround,
@@ -59,6 +60,19 @@ describe('hexToRgba', () => {
   it('clamps alpha and passes through non-hex input', () => {
     expect(hexToRgba('#000', 7)).toBe('rgba(0, 0, 0, 1)')
     expect(hexToRgba('rgb(1, 2, 3)', 0.2)).toBe('rgb(1, 2, 3)')
+  })
+})
+
+describe('buildLinkColours', () => {
+  it('gives every branch its colour at the theme link alphas', () => {
+    const { full, dim } = buildLinkColours({ main: '#a78bfa', dev: '#34d399' }, { linkAlpha: 0.35, linkDimAlpha: 0.07 })
+    expect([...full]).toEqual([
+      ['main', 'rgba(167, 139, 250, 0.35)'],
+      ['dev', 'rgba(52, 211, 153, 0.35)'],
+    ])
+    expect(dim.get('main')).toBe('rgba(167, 139, 250, 0.07)')
+    expect(dim.get('dev')).toBe('rgba(52, 211, 153, 0.07)')
+    expect(buildLinkColours({}, { linkAlpha: 0.5, linkDimAlpha: 0.1 }).full.size).toBe(0)
   })
 })
 

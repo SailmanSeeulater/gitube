@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
-import { buildGraph } from './graph'
+import { assignPalette, buildGraph } from './graph'
 import type { Graph } from './types'
 import { useRepoData } from './hooks/useRepoData'
 import { useGardenStore } from './store/useGardenStore'
+import { applyTheme } from './theme/applyTheme'
+import { readStoredThemeId } from './theme/storage'
+import { THEME_STORAGE_KEY } from './theme/themes'
+import { useTheme } from './theme/useTheme'
 import Garden from './components/Garden'
 import TopBar from './components/TopBar'
 import Panel from './components/Panel'
@@ -40,6 +44,21 @@ export default function App() {
   const clearSelection = useGardenStore((s) => s.clearSelection)
   const resetForNewRepo = useGardenStore((s) => s.resetForNewRepo)
   const panelOpen = useGardenStore((s) => s.panelOpen)
+  const theme = useTheme()
+
+  // The DOM half of a theme switch: CSS variables, color-scheme and theme-color, before paint.
+  useLayoutEffect(() => applyTheme(theme), [theme])
+
+  // Another tab picked a theme: follow it (the storage event only fires in the other tabs).
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== null && event.key !== THEME_STORAGE_KEY) return
+      const themeId = readStoredThemeId()
+      if (useGardenStore.getState().themeId !== themeId) useGardenStore.setState({ themeId })
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   const { data, error, isFetching, refetch } = useRepoData(repoRef)
 
@@ -68,6 +87,13 @@ export default function App() {
 
   // metro mode: the straight layout of exactly this graph (null in organic mode)
   const metro = useMetroView(graph, data ?? null, viewMode, layoutMode === 'metro')
+
+  // Branch colours in the active theme. Kept out of the graph memo so a theme switch is a repaint:
+  // the graph, its layout and the labels stay put. Covers every branch, hidden ones included.
+  const palette = useMemo<Record<string, string>>(
+    () => (data ? assignPalette(data.branches.map((branch) => branch.name), data.defaultBranch, theme) : {}),
+    [data, theme],
+  )
 
   const nodeById = useMemo(() => {
     if (!graph) return null
@@ -138,6 +164,8 @@ export default function App() {
         {graph && (
           <Garden
             graph={graph}
+            palette={palette}
+            theme={theme}
             viewMode={viewMode}
             defaultBranch={data?.defaultBranch ?? ''}
             onNodeClick={handleNodeClick}
@@ -171,11 +199,11 @@ export default function App() {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && <Panel data={data} graph={graph} />}
+      {data && graph && <Panel data={data} palette={palette} />}
 
       <StatusStrip data={data} graph={graph} isFetching={isFetching} />
 
-      {inspectorNode && graph && <NodeInspector node={inspectorNode} palette={graph.palette} onClose={closeInspector} />}
+      {inspectorNode && graph && <NodeInspector node={inspectorNode} palette={palette} onClose={closeInspector} />}
     </div>
   )
 }

@@ -13,6 +13,7 @@ const reset = () =>
     panelOpen: true,
     inspectorNodeId: null,
     progress: null,
+    themeId: 'obsidian',
   })
 
 describe('useGardenStore', () => {
@@ -29,6 +30,22 @@ describe('useGardenStore', () => {
     expect(s.panelOpen).toBe(true)
     expect(s.inspectorNodeId).toBeNull()
     expect(s.progress).toBeNull()
+    expect(s.themeId).toBe('obsidian') // nothing saved (no localStorage in node): the default theme
+  })
+
+  it('switches theme, ignores unknown ids, and keeps the theme across a new repo', () => {
+    const s = useGardenStore.getState()
+    s.setThemeId('paper')
+    expect(useGardenStore.getState().themeId).toBe('paper')
+    s.setThemeId('neon' as never)
+    expect(useGardenStore.getState().themeId).toBe('paper')
+    const before = useGardenStore.getState()
+    s.setThemeId('paper')
+    expect(useGardenStore.getState()).toBe(before) // same theme: no state change
+    s.resetForNewRepo()
+    expect(useGardenStore.getState().themeId).toBe('paper')
+    s.setThemeId('obsidian')
+    expect(useGardenStore.getState().themeId).toBe('obsidian')
   })
 
   it('trims the token and clears it with an empty string', () => {

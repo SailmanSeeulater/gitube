@@ -2,19 +2,14 @@
  * Pure helpers for the garden UI (no React, no DOM) so they can be unit-tested in node.
  */
 import type { Branch, FetchStage, GraphNode } from '../types'
+import { linkColour, linkColourDim, type ThemeTokens } from '../theme/themes'
 import type { LabelSpec } from './labelPlacement'
 
-export const CANVAS_BG = '#1e1e1e'
-export const TEXT_COLOUR = '#dcddde'
-export const MUTED_COLOUR = '#999999'
-export const ACCENT = '#a78bfa'
-export const ROOT_FILL = '#5a5a5a'
-export const ROOT_RING = '#8a8a8a'
-export const FALLBACK_COLOUR = '#8b8b8b'
+// Every colour (and the dim alpha) comes from the active theme: see src/theme/themes.ts.
+export { hexToRgba } from '../theme/themes'
+
 export const LABEL_FONT = 'Inter, ui-sans-serif, system-ui, sans-serif'
 export const MONO_FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-/** Opacity of nodes, links and labels outside the hovered neighbourhood or the selected reach. */
-export const DIM_ALPHA = 0.2
 
 const DAY_MS = 86_400_000
 
@@ -33,17 +28,24 @@ export function bodyRadius(node: Pick<GraphNode, 'reach' | 'isTip'>): number {
   return nodeRadius(node.reach) + (node.isTip ? 2 : 0)
 }
 
-/** '#rgb' | '#rrggbb' | '#rrggbbaa' -> 'rgba(r, g, b, a)'. Non-hex input is returned unchanged. */
-export function hexToRgba(hex: string, alpha: number): string {
-  const match = /^#?([0-9a-f]{3,8})$/i.exec(hex.trim())
-  if (!match) return hex
-  let h = match[1]
-  if (h.length === 3 || h.length === 4) h = h.split('').map((c) => c + c).join('')
-  if (h.length !== 6 && h.length !== 8) return hex
-  const r = parseInt(h.slice(0, 2), 16)
-  const g = parseInt(h.slice(2, 4), 16)
-  const b = parseInt(h.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${clamp(alpha, 0, 1)})`
+/** owner branch -> link colour (palette colour at the theme's linkAlpha) and dimmed link colour (linkDimAlpha). */
+export interface LinkColours {
+  full: Map<string, string>
+  dim: Map<string, string>
+}
+
+/** Link colours for every branch in the palette, in one theme. Rebuilt per palette and theme, never per frame. */
+export function buildLinkColours(
+  palette: Readonly<Record<string, string>>,
+  theme: Pick<ThemeTokens, 'linkAlpha' | 'linkDimAlpha'>,
+): LinkColours {
+  const full = new Map<string, string>()
+  const dim = new Map<string, string>()
+  for (const [branch, hex] of Object.entries(palette)) {
+    full.set(branch, linkColour(theme, hex))
+    dim.set(branch, linkColourDim(theme, hex))
+  }
+  return { full, dim }
 }
 
 export type LinkEnd = string | number | { id?: string | number } | null | undefined

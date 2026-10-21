@@ -1,4 +1,5 @@
 import type { Graph, RepoData, ViewMode } from '../types'
+import type { PaletteScheme } from '../theme/themes'
 import { buildFullGraph } from './build'
 import { collapseToSkeleton } from './collapse'
 import { assignPalette } from './color'
@@ -6,6 +7,8 @@ import { assignPalette } from './color'
 export interface BuildOptions {
   /** Branch names to exclude from the graph entirely (their unique commits disappear). */
   hiddenBranches?: ReadonlySet<string>
+  /** Theme whose accent and branch colours make up Graph.palette; the default theme (Obsidian) when omitted. */
+  scheme?: PaletteScheme
 }
 
 /**
@@ -13,7 +16,8 @@ export interface BuildOptions {
  * tips, forks, merges and roots and collapses linear runs into one link with collapsedCount.
  *
  * The palette covers every branch in the data, hidden ones included, so toggling a branch
- * never recolours the others.
+ * never recolours the others. The app recolours for its active theme with assignPalette instead
+ * of passing opts.scheme, so a theme switch never rebuilds the graph (or resets its layout).
  */
 export function buildGraph(data: RepoData, mode: ViewMode, opts: BuildOptions = {}): Graph {
   const full = buildFullGraph(data, opts.hiddenBranches)
@@ -21,6 +25,7 @@ export function buildGraph(data: RepoData, mode: ViewMode, opts: BuildOptions = 
   const palette = assignPalette(
     data.branches.map((branch) => branch.name),
     data.defaultBranch,
+    opts.scheme,
   )
   return { nodes: body.nodes, links: body.links, palette }
 }
