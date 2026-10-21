@@ -13,6 +13,7 @@ const shell =
 
 export default function StatusStrip({ data, graph, isFetching }: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
+  const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
 
   if (isFetching) {
     const stage = progress ? stageLabel(progress.stage) : 'starting'
@@ -71,6 +72,14 @@ export default function StatusStrip({ data, graph, isFetching }: StatusStripProp
           <span className="text-garden-border">·</span>
           <span className="text-garden-muted">
             {graph.nodes.length} node{graph.nodes.length === 1 ? '' : 's'} shown
+          </span>
+        </>
+      )}
+      {graph && hiddenLabels > 0 && (
+        <>
+          <span className="text-garden-border">·</span>
+          <span className="text-garden-muted" title="Branch names that do not fit at this zoom. Hover a tip, zoom in or search to read them.">
+            {hiddenLabels} name{hiddenLabels === 1 ? '' : 's'} hidden · hover, zoom or search
           </span>
         </>
       )}

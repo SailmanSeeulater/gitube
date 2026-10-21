@@ -131,7 +131,13 @@ export default function App() {
       {/* The canvas stops short of the side panel so zoom-to-fit never hides nodes behind it. */}
       <div className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
         {graph && (
-          <Garden graph={graph} viewMode={viewMode} onNodeClick={handleNodeClick} onBackgroundClick={handleBackgroundClick} />
+          <Garden
+            graph={graph}
+            viewMode={viewMode}
+            defaultBranch={data?.defaultBranch ?? ''}
+            onNodeClick={handleNodeClick}
+            onBackgroundClick={handleBackgroundClick}
+          />
         )}
       </div>
 
