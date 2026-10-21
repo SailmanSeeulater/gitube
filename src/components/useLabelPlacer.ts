@@ -117,7 +117,7 @@ const PLATE_RADIUS = 4
 const LEADER_PLATE_RADIUS = 3
 const DOT_RADIUS = 3
 /** ring drawn around tips beyond their body (paintNode's outer + 2.5 px) */
-const TIP_RING_PX = 2.5
+export const TIP_RING_PX = 2.5
 /** safety cap on the first-load admission hold (no fit ever started, or the layout never calms) */
 const MAX_HOLD_MS = 8000
 /** width of the halo (the theme's textHalo, the canvas colour) stroked behind label text (UseLabelPlacerArgs.halo) */

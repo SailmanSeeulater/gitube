@@ -204,3 +204,19 @@ export function StopIcon(props: IconProps) {
     </svg>
   )
 }
+
+/** A ring of spikes: the thorns Garden draws on tips far apart from the default branch. */
+export function ThornIcon(props: IconProps) {
+  const spikes = Array.from({ length: 7 }, (_, i) => {
+    const a = (i / 7) * Math.PI * 2 - Math.PI / 2
+    const w = 0.28
+    const p = (r: number, t: number) => `${(12 + Math.cos(t) * r).toFixed(2)} ${(12 + Math.sin(t) * r).toFixed(2)}`
+    return `M${p(5, a - w)} L${p(10.5, a)} L${p(5, a + w)}Z`
+  }).join(' ')
+  return (
+    <svg {...base(props)}>
+      <path d={spikes} fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
