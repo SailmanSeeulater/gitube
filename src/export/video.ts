@@ -1,6 +1,7 @@
 /**
- * Recording the graph canvas to a video file in the browser (MediaRecorder over captureStream).
- * WebM where the browser can make it; Safari only records MP4, so that is the fallback.
+ * Recording the graph canvas to a video file in the browser (MediaRecorder over captureStream),
+ * optionally with a sound track (the music box). WebM where the browser can make it; Safari only
+ * records MP4, so that is the fallback.
  */
 
 export interface VideoType {
@@ -8,18 +9,24 @@ export interface VideoType {
   ext: 'webm' | 'mp4'
 }
 
-const CANDIDATES: ReadonlyArray<VideoType> = [
+const SILENT: ReadonlyArray<VideoType> = [
   { mimeType: 'video/webm;codecs=vp9', ext: 'webm' },
   { mimeType: 'video/webm;codecs=vp8', ext: 'webm' },
   { mimeType: 'video/webm', ext: 'webm' },
   { mimeType: 'video/mp4', ext: 'mp4' },
 ]
 
+const WITH_SOUND: ReadonlyArray<VideoType> = [
+  { mimeType: 'video/webm;codecs=vp9,opus', ext: 'webm' },
+  { mimeType: 'video/webm;codecs=vp8,opus', ext: 'webm' },
+  ...SILENT,
+]
+
 /** The best type this browser records to, or null when it cannot record a canvas at all. */
-export function pickVideoType(): VideoType | null {
+export function pickVideoType(withSound = false): VideoType | null {
   if (typeof MediaRecorder === 'undefined' || typeof HTMLCanvasElement === 'undefined') return null
   if (typeof HTMLCanvasElement.prototype.captureStream !== 'function') return null
-  return CANDIDATES.find((c) => MediaRecorder.isTypeSupported(c.mimeType)) ?? null
+  return (withSound ? WITH_SOUND : SILENT).find((c) => MediaRecorder.isTypeSupported(c.mimeType)) ?? null
 }
 
 export interface CanvasRecording {
@@ -31,19 +38,23 @@ export interface CanvasRecording {
 }
 
 /**
- * Starts recording a canvas. The stream only gets a frame when the canvas is painted, so keep it
- * redrawing (and the tab visible: hidden tabs stop painting) for as long as it records.
+ * Starts recording a canvas, with the audio tracks of `sound` mixed in when given. The stream only
+ * gets a frame when the canvas is painted, so keep it redrawing (and the tab visible: hidden tabs
+ * stop painting) for as long as it records. The sound stream is left running for the next one.
  */
-export function recordCanvas(canvas: HTMLCanvasElement, fps = 30): CanvasRecording {
-  const type = pickVideoType()
+export function recordCanvas(canvas: HTMLCanvasElement, fps = 30, sound: MediaStream | null = null): CanvasRecording {
+  const audio = sound?.getAudioTracks() ?? []
+  const type = pickVideoType(audio.length > 0)
   if (!type) throw new Error("this browser can't record video")
-  const stream = canvas.captureStream(fps)
+  const video = canvas.captureStream(fps)
+  const stream = audio.length > 0 ? new MediaStream([...video.getVideoTracks(), ...audio]) : video
   const recorder = new MediaRecorder(stream, { mimeType: type.mimeType, videoBitsPerSecond: 8_000_000 })
   const chunks: Blob[] = []
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data)
   }
-  const release = () => stream.getTracks().forEach((track) => track.stop())
+  // only the canvas tracks are ours to stop
+  const release = () => video.getTracks().forEach((track) => track.stop())
   recorder.start(250)
 
   return {

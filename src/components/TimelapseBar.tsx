@@ -1,13 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { MusicBox } from '../audio/musicBox'
+import { notesBetween, pickNotes, type Score } from '../graph/score'
 import { clockAt, type Timeline } from '../graph/timeline'
 import { downloadBlob } from '../export/image'
 import { pickVideoType, recordCanvas, type CanvasRecording } from '../export/video'
-import { CloseIcon, PauseIcon, PlayIcon, RecordIcon, StopIcon } from './icons'
+import { CloseIcon, MuteIcon, PauseIcon, PlayIcon, RecordIcon, SoundIcon, StopIcon } from './icons'
 
 export interface TimelapseBarProps {
   onClose: () => void
   /** of the graph on show */
   timeline: Timeline | null
+  /** the same history as notes, for the music box */
+  score: Score | null
   /** 0..1, shared with Garden, which reads it every frame */
   progress: RefObject<number>
   /** the graph canvas to record */
@@ -22,6 +26,26 @@ export interface TimelapseBarProps {
 const LENGTHS = [10, 20, 40, 60] as const
 /** A recording holds the grown garden this long before it ends. */
 const HOLD_MS = 1500
+/** Notes struck in one frame at most (pickNotes thins a burst of commits to this). */
+const NOTES_PER_FRAME = 4
+/** localStorage key of the music box switch. */
+const SOUND_STORAGE_KEY = 'repo-garden:sound'
+
+function readSound(): boolean {
+  try {
+    return localStorage.getItem(SOUND_STORAGE_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+function writeSound(on: boolean): void {
+  try {
+    localStorage.setItem(SOUND_STORAGE_KEY, on ? 'on' : 'off')
+  } catch {
+    // storage unavailable: the switch still holds for this visit
+  }
+}
 
 function shortDate(ms: number): string {
   return Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
@@ -34,10 +58,11 @@ function clock(ms: number): string {
 
 /**
  * The time-lapse controls, mounted while the time-lapse is on (it starts playing from the first
- * commit): play/pause, a scrubber over the garden's history, the length of a full play, and
- * recording the canvas to a video file. Unmounting throws away an unfinished recording.
+ * commit): play/pause, a scrubber over the garden's history, the length of a full play, the music
+ * box (each commit a note as it appears), and recording the canvas, with its sound, to a video
+ * file. Unmounting throws away an unfinished recording and closes the audio.
  */
-export default function TimelapseBar({ onClose, timeline, progress, getCanvas, fileName, besidePanel }: TimelapseBarProps) {
+export default function TimelapseBar({ onClose, timeline, score, progress, getCanvas, fileName, besidePanel }: TimelapseBarProps) {
   const [playing, setPlaying] = useState(true)
   const [shown, setShown] = useState(0)
   const [length, setLength] = useState<(typeof LENGTHS)[number]>(20)
@@ -47,14 +72,44 @@ export default function TimelapseBar({ onClose, timeline, progress, getCanvas, f
   const recorderRef = useRef<CanvasRecording | null>(null)
   const [canRecord] = useState(() => pickVideoType() !== null)
 
+  // ---- the music box: on by choice (remembered); the instrument is made on the first click ----
+  const [sound, setSound] = useState(readSound)
+  const soundRef = useRef(sound)
+  soundRef.current = sound
+  const musicRef = useRef<MusicBox | null>(null)
+  const scoreRef = useRef(score)
+  scoreRef.current = score
+  /** progress whose notes have sounded; a seek moves it without playing what was skipped */
+  const heardRef = useRef(-1)
+  const ensureMusic = (): MusicBox | null => {
+    if (!musicRef.current && typeof AudioContext !== 'undefined') musicRef.current = new MusicBox()
+    void musicRef.current?.resume()
+    return musicRef.current
+  }
+  const toggleSound = () => {
+    const next = !sound
+    if (next) ensureMusic()
+    setSound(next)
+    writeSound(next)
+  }
+  // left on last time: ready the instrument now (the click that opened the time-lapse lets audio start)
+  useEffect(() => {
+    if (soundRef.current) ensureMusic()
+    return () => musicRef.current?.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const seek = (p: number) => {
     progress.current = Math.min(1, Math.max(0, p))
+    // from the very start, the first commit still sounds
+    heardRef.current = progress.current === 0 ? -1 : progress.current
     setShown(progress.current)
   }
 
   // the garden starts from its first commit
   useLayoutEffect(() => {
     progress.current = 0
+    heardRef.current = -1
   }, [progress])
 
   // ---- playback, paced by the clock (not by frames, so dropped frames never slow it down); Garden
@@ -70,6 +125,13 @@ export default function TimelapseBar({ onClose, timeline, progress, getCanvas, f
         progress.current = Math.min(1, from + (now - startedAt) / (length * 1000))
         setShown(progress.current)
       }
+      // the commits that appeared since the last frame, as notes
+      const music = musicRef.current
+      const notes = scoreRef.current
+      if (soundRef.current && music && notes) {
+        for (const note of pickNotes(notesBetween(notes, heardRef.current, progress.current), NOTES_PER_FRAME)) music.play(note)
+      }
+      heardRef.current = progress.current
       const rec = recorderRef.current
       if (rec) setElapsed(now - (recording?.startedAt ?? now))
       if (progress.current >= 1) {
@@ -114,7 +176,9 @@ export default function TimelapseBar({ onClose, timeline, progress, getCanvas, f
     setError(null)
     try {
       seek(0)
-      recorderRef.current = recordCanvas(canvas)
+      // with the music box on, its mix is the sound track
+      const music = sound ? ensureMusic() : null
+      recorderRef.current = recordCanvas(canvas, 30, music?.stream ?? null)
       setElapsed(0)
       setRecording({ startedAt: performance.now() })
       setPlaying(true)
@@ -130,6 +194,7 @@ export default function TimelapseBar({ onClose, timeline, progress, getCanvas, f
       return
     }
     if (progress.current >= 1) seek(0)
+    if (sound) ensureMusic()
     setPlaying(true)
   }
 
@@ -188,6 +253,16 @@ export default function TimelapseBar({ onClose, timeline, progress, getCanvas, f
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-pressed={sound}
+          aria-label={sound ? 'Music box on' : 'Music box off'}
+          title="music box: every commit plays a note as it appears. each branch has its own pitch, merges are chords, and recordings carry the sound"
+          className={`shrink-0 rounded-lg p-1 hover:bg-garden-hover ${sound ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'}`}
+        >
+          {sound ? <SoundIcon size={15} /> : <MuteIcon size={15} />}
+        </button>
         {busy ? (
           <button
             type="button"
