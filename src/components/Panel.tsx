@@ -110,7 +110,7 @@ function Segmented<T extends string | number>({ ariaLabel, options, value, onCha
             role="radio"
             aria-checked={active}
             onClick={() => onChange(option.value)}
-            className={`flex-1 rounded-md px-2 py-1 text-[12px] transition-colors ${
+            className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
               active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
             }`}
           >
@@ -130,6 +130,7 @@ const VIEW_OPTIONS: ReadonlyArray<{ value: ViewMode; label: string }> = [
 const LAYOUT_OPTIONS: ReadonlyArray<{ value: LayoutMode; label: string }> = [
   { value: 'organic', label: 'organic' },
   { value: 'metro', label: 'metro' },
+  { value: 'garden', label: 'garden' },
 ]
 
 const STALE_SEGMENTS = STALE_OPTIONS.map((o) => ({ value: o.days, label: o.label }))
@@ -289,7 +290,7 @@ export default function Panel({ data, palette, contributors, weeds }: PanelProps
         <div className="flex-1">
           <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
         </div>
-        <div className="flex-1" title="organic: free physics. metro: straight lanes, like a tube map">
+        <div className="flex-[1.45]" title="organic: free physics. metro: straight lanes, like a tube map. garden: grown upward as plants">
           <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
         </div>
       </div>

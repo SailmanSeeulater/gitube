@@ -351,6 +351,7 @@ export default function App() {
             focus={focus}
             timelapse={gardenTimelapse}
             thorns={weeds?.thorns ?? null}
+            garden={layoutMode === 'garden'}
           />
         )}
       </div>
