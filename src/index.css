@@ -28,7 +28,8 @@ body { background: var(--color-garden-bg); color: var(--color-garden-text); font
 .garden-scroll::-webkit-scrollbar-track { background: transparent; }
 .garden-scroll::-webkit-scrollbar-thumb { background: var(--color-garden-border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 
-/* force-graph adds .clickable on the canvas when a node is under the pointer */
+/* force-graph adds .clickable on the canvas over a node, link or the background whenever the
+   matching click handler is set (Garden sets all three; labels are hit-tested from the latter two) */
 .force-graph-container canvas { display: block; }
 .force-graph-container canvas.clickable { cursor: pointer; }
 .force-graph-container .graph-tooltip { display: none; }

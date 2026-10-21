@@ -40,6 +40,11 @@ export interface GardenState {
   inspectorNodeId: string | null
   /** Latest fetch progress, null when idle. */
   progress: FetchProgress | null
+  /**
+   * Tip labels on the canvas whose names are hidden for lack of room (the status strip hint).
+   * Written by the label placer only when its labels settle, never per frame.
+   */
+  hiddenLabels: number
 }
 
 export interface GardenActions {
@@ -59,6 +64,7 @@ export interface GardenActions {
   togglePanel: () => void
   setInspectorNodeId: (id: string | null) => void
   setProgress: (progress: FetchProgress | null) => void
+  setHiddenLabels: (count: number) => void
   /** Clears branch selection and the inspector (Escape / background click). */
   clearSelection: () => void
   /** Resets per-repo UI state when a different repo is grown. Keeps token, view mode, panel, stale filter. */
@@ -77,6 +83,7 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   panelOpen: true,
   inspectorNodeId: null,
   progress: null,
+  hiddenLabels: 0,
 
   setToken: (token) => {
     const trimmed = token.trim()
@@ -121,6 +128,11 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
 
   setInspectorNodeId: (inspectorNodeId) => set({ inspectorNodeId }),
   setProgress: (progress) => set({ progress }),
+  setHiddenLabels: (count) =>
+    set((s) => {
+      const hiddenLabels = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
+      return s.hiddenLabels === hiddenLabels ? s : { hiddenLabels }
+    }),
 
   clearSelection: () =>
     set((s) => (s.selectedBranch === null && s.inspectorNodeId === null ? s : { selectedBranch: null, inspectorNodeId: null })),
@@ -131,5 +143,6 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
       search: '',
       inspectorNodeId: null,
       progress: null,
+      hiddenLabels: 0,
     }),
 }))

@@ -5,24 +5,28 @@ import { useGardenStore } from '../store/useGardenStore'
 import {
   ACCENT,
   CANVAS_BG,
+  DIM_ALPHA,
   FALLBACK_COLOUR,
   LABEL_FONT,
   MONO_FONT,
   MUTED_COLOUR,
   ROOT_FILL,
   ROOT_RING,
-  TEXT_COLOUR,
   assignLinkCurvature,
   buildBranchReach,
   buildNeighbourIndex,
   createTimeForce,
+  fitTransform,
   hexToRgba,
+  isDimmed,
   linkEndId,
   nodeRadius,
   selectedReach,
   shortSha,
+  type FitPadding,
   type TimeForce,
 } from './gardenUtils'
+import { useLabelPlacer } from './useLabelPlacer'
 
 /** Node object as react-force-graph sees it (GraphNode plus runtime x/y and a loose index signature). */
 export type GardenNode = NodeObject<GraphNode>
@@ -41,6 +45,8 @@ type GardenMethods = ForceGraphMethods<NodeObject<GraphNode>, LinkObject<GraphNo
 export interface GardenProps {
   graph: Graph
   viewMode: ViewMode
+  /** the repo's default branch: its tip label is always placed first */
+  defaultBranch: string
   onNodeClick: (id: string) => void
   onBackgroundClick: () => void
 }
@@ -64,7 +70,6 @@ interface GardenIndex {
 interface ScaleCache {
   scale: number
   px: number
-  labelFont: string
   shaFont: string
   badgeFont: string
   dash: number[]
@@ -73,14 +78,15 @@ interface ScaleCache {
 const NO_DASH: number[] = []
 // force-graph treats a string here as a node attribute name, so the mode must be a function.
 const NODE_MODE_REPLACE = () => 'replace' as const
-// fit-to-view padding in screen px; the right side is wider because tip labels hang off tips
-const FIT_PAD_LEFT = 48
-const FIT_PAD_RIGHT = 150
-const FIT_PAD_TOP = 72
-const FIT_PAD_BOTTOM = 72
+// fit-to-view padding in screen px; symmetric because labels flip to the left near the right edge
+const FIT_PAD: FitPadding = { left: 96, right: 96, top: 72, bottom: 72 }
 const FIT_MAX_ZOOM = 2.5
+const FIT_MS = 400
+// fit early, once the layout has roughly settled (every tip slower than 1 px per frame after 20
+// ticks), instead of after all 200 cooldown ticks; onEngineStop stays as the fallback
+const EARLY_FIT_TICKS = 20
+const EARLY_FIT_SPEED = 1
 const TWO_PI = Math.PI * 2
-const DIM_ALPHA = 0.2
 const FALLBACK_LINK = hexToRgba(FALLBACK_COLOUR, 0.35)
 const FALLBACK_LINK_DIM = hexToRgba(FALLBACK_COLOUR, 0.07)
 const HALO_FILL = 'rgba(167, 139, 250, 0.22)'
@@ -89,7 +95,7 @@ const HOVER_RING = 'rgba(220, 221, 222, 0.45)'
 const BADGE_BG = '#2a2a2a'
 const BADGE_TEXT = '#b8b8b8'
 
-export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick }: GardenProps) {
+export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, onBackgroundClick }: GardenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
   const sizeRef = useRef({ width: 0, height: 0 })
@@ -98,12 +104,17 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
   // Hover lives in a ref (paint reads it); hoverVersion only exists to hand the paint
   // callbacks a new identity so force-graph schedules a redraw after the engine has stopped.
   const hoverRef = useRef<string | null>(null)
+  // A label under the pointer hovers its node too. Kept apart from hoverRef because force-graph
+  // reports onNodeHover(null) whenever the pointer is off a node, which would wipe it; a node hit
+  // wins over a label hit (hoverRef ?? labelHoverRef).
+  const labelHoverRef = useRef<string | null>(null)
   const [hoverVersion, setHoverVersion] = useState(0)
 
   const fittedRef = useRef(false)
+  const tickCountRef = useRef(0)
   const prevNodesRef = useRef<Map<string, GardenNode>>(new Map())
   const timeForceRef = useRef<TimeForce | null>(null)
-  const scaleCache = useRef<ScaleCache>({ scale: -1, px: 1, labelFont: '', shaFont: '', badgeFont: '', dash: [3, 2] })
+  const scaleCache = useRef<ScaleCache>({ scale: -1, px: 1, shaFont: '', badgeFont: '', dash: [3, 2] })
 
   const selectedBranch = useGardenStore((s) => s.selectedBranch)
   const search = useGardenStore((s) => s.search)
@@ -183,6 +194,7 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
   useEffect(() => {
     prevNodesRef.current = index.nodeById
     fittedRef.current = false
+    tickCountRef.current = 0
   }, [index])
 
   const ready = size.width > 0 && size.height > 0
@@ -207,12 +219,24 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
   const reachSet = selectedReach(index.reach, selectedBranch)
   const query = search.trim().toLowerCase()
 
+  const bumpHover = useCallback(() => setHoverVersion((v) => v + 1), [])
+  const { paintLabels, onPointerMove, onPointerLeave, clickTest, labelsBusy, maxTipSpeed, setDragNode, fitStarted } = useLabelPlacer({
+    index,
+    defaultBranch,
+    reachSet,
+    query,
+    selectedBranch,
+    inspectorNodeId,
+    hoverRef,
+    labelHoverRef,
+    onLabelHoverChange: bumpHover,
+  })
+
   const syncScale = (globalScale: number): ScaleCache => {
     const c = scaleCache.current
     if (c.scale !== globalScale) {
       c.scale = globalScale
       c.px = 1 / globalScale
-      c.labelFont = `${12 / globalScale}px ${LABEL_FONT}`
       c.shaFont = `${10.5 / globalScale}px ${MONO_FONT}`
       c.badgeFont = `${10 / globalScale}px ${LABEL_FONT}`
       c.dash[0] = 3 / globalScale
@@ -229,22 +253,16 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
       const c = syncScale(globalScale)
       const px = c.px
       const id = node.id
-      const hovered = hoverRef.current
-
-      let dim = false
-      if (hovered !== null && hovered !== id) {
-        const near = index.neighbours.get(hovered)
-        if (near === undefined || !near.has(id)) dim = true
-      }
-      if (!dim && reachSet !== null && !reachSet.has(id)) dim = true
+      const hovered = hoverRef.current ?? labelHoverRef.current
+      const dim = isDimmed(id, hovered, index.neighbours, reachSet)
 
       const r = nodeRadius(node.reach)
       const colour = index.palette[node.owner] ?? FALLBACK_COLOUR
       const fill = node.isRoot && !node.isTip ? ROOT_FILL : colour
       const isHovered = hovered === id
       const isInspected = inspectorNodeId === id
-      const label = index.tipLabel.get(id)
-      const matches = query !== '' && label !== undefined && (index.tipLabelLower.get(id) ?? '').includes(query)
+      const isLabelled = index.tipLabel.has(id)
+      const matches = query !== '' && isLabelled && (index.tipLabelLower.get(id) ?? '').includes(query)
       const outer = r + (node.isTip ? 2 : 0)
 
       ctx.globalAlpha = dim ? DIM_ALPHA : 1
@@ -311,13 +329,8 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
         ctx.setLineDash(NO_DASH)
       }
 
-      if (label !== undefined) {
-        ctx.font = c.labelFont
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'middle'
-        ctx.fillStyle = TEXT_COLOUR
-        ctx.fillText(label, x + outer + 6 * px, y)
-      } else if (globalScale > 2.5 || isHovered || isInspected) {
+      // Tip names are placed and drawn by the label placer (paintLabels); only SHAs are drawn here.
+      if (!isLabelled && (globalScale > 2.5 || isHovered || isInspected)) {
         ctx.font = c.shaFont
         ctx.textAlign = 'left'
         ctx.textBaseline = 'middle'
@@ -351,7 +364,7 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
     (link: GardenLink) => {
       const s = linkEndId(link.source)
       const t = linkEndId(link.target)
-      const hovered = hoverRef.current
+      const hovered = hoverRef.current ?? labelHoverRef.current
       let dim = false
       if (hovered !== null && s !== hovered && t !== hovered) dim = true
       if (!dim && reachSet !== null && !(reachSet.has(s) && reachSet.has(t))) dim = true
@@ -377,7 +390,7 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
       if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return
       const sid = linkEndId(s)
       const tid = linkEndId(t)
-      const hovered = hoverRef.current
+      const hovered = hoverRef.current ?? labelHoverRef.current
       let dim = false
       if (hovered !== null && sid !== hovered && tid !== hovered) dim = true
       if (!dim && reachSet !== null && !(reachSet.has(sid) && reachSet.has(tid))) dim = true
@@ -427,7 +440,14 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
   }, [])
   // force-graph only reports hover changes while the pointer is over the canvas, so leaving it
   // (onto the panel, say) would otherwise keep the last node hovered and the graph dimmed.
-  const handlePointerLeave = useCallback(() => handleHover(null), [handleHover])
+  const handlePointerLeave = useCallback(() => {
+    onPointerLeave()
+    if (labelHoverRef.current !== null) {
+      labelHoverRef.current = null
+      setHoverVersion((v) => v + 1)
+    }
+    handleHover(null)
+  }, [handleHover, onPointerLeave])
 
   const handleNodeClick = useCallback(
     (node: GardenNode) => {
@@ -436,46 +456,72 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
     [onNodeClick],
   )
 
-  const handleBackgroundClick = useCallback(() => {
-    onBackgroundClick()
-  }, [onBackgroundClick])
+  // A click on a label (or a hover plate) selects its node, and a plate row naming another hidden
+  // tip selects that tip; force-graph sees it as background.
+  const handleBackgroundClick = useCallback(
+    (event?: MouseEvent) => {
+      const el = containerRef.current
+      if (event && el) {
+        const rect = el.getBoundingClientRect()
+        const id = clickTest(event.clientX - rect.left, event.clientY - rect.top)
+        if (id !== null) {
+          onNodeClick(id)
+          return
+        }
+      }
+      onBackgroundClick()
+    },
+    [clickTest, onNodeClick, onBackgroundClick],
+  )
 
-  const handleDragEnd = useCallback((node: GardenNode) => {
-    // release the node so the layout can settle it again (Obsidian behaviour)
-    node.fx = undefined
-    node.fy = undefined
-  }, [])
+  // Links have no click action of their own, so treat a click on one as a background click.
+  // Links are on force-graph's hit canvas (linkWidth + linkHoverPrecision), so without this a
+  // click on a label crossed by a link never reaches the label hit test.
+  const handleLinkClick = useCallback((_link: GardenLink, event: MouseEvent) => handleBackgroundClick(event), [handleBackgroundClick])
+
+  // the dragged node's label rides along on a plate
+  const handleNodeDrag = useCallback((node: GardenNode) => setDragNode(String(node.id)), [setDragNode])
+
+  const handleDragEnd = useCallback(
+    (node: GardenNode) => {
+      // release the node so the layout can settle it again (Obsidian behaviour)
+      node.fx = undefined
+      node.fy = undefined
+      setDragNode(null)
+    },
+    [setDragNode],
+  )
 
   /**
-   * Fit the settled layout into view once per graph. Hand-rolled instead of zoomToFit so the
-   * zoom is capped (a four-node repo should not become four giant discs) and the right edge
-   * leaves room for the tip labels that hang off the right of each tip.
+   * Fit the layout into view once per graph. Hand-rolled instead of zoomToFit so the zoom is
+   * capped (a four-node repo should not become four giant discs); see fitTransform. Labels of a
+   * freshly loaded repo are held back until the tween ends, so they appear once, in place.
    */
-  const handleEngineStop = useCallback(() => {
+  const runFit = useCallback(() => {
     if (fittedRef.current) return
     fittedRef.current = true
     const fg = fgRef.current
-    if (!fg) return
     const { width, height } = sizeRef.current
-    if (width === 0 || height === 0) return
-    const bbox = fg.getGraphBbox()
-    if (!bbox) return
-    const [x0, x1] = bbox.x
-    const [y0, y1] = bbox.y
-    const bw = Math.max(x1 - x0, 1)
-    const bh = Math.max(y1 - y0, 1)
-    const availW = Math.max(width - FIT_PAD_LEFT - FIT_PAD_RIGHT, 50)
-    const availH = Math.max(height - FIT_PAD_TOP - FIT_PAD_BOTTOM, 50)
-    const k = Math.min(availW / bw, availH / bh, FIT_MAX_ZOOM)
-    // shift the centre so the padded area, not the raw canvas, is what the bbox fills
-    const cx = (x0 + x1) / 2 - (FIT_PAD_LEFT - FIT_PAD_RIGHT) / (2 * k)
-    const cy = (y0 + y1) / 2 - (FIT_PAD_TOP - FIT_PAD_BOTTOM) / (2 * k)
-    fg.centerAt(cx, cy, 400)
-    fg.zoom(k, 400)
-  }, [])
+    const bbox = fg && width > 0 && height > 0 ? fg.getGraphBbox() : null
+    if (!fg || !bbox) {
+      fitStarted(0)
+      return
+    }
+    const { k, cx, cy } = fitTransform(bbox, { width, height }, FIT_PAD, FIT_MAX_ZOOM)
+    fg.centerAt(cx, cy, FIT_MS)
+    fg.zoom(k, FIT_MS)
+    fitStarted(FIT_MS)
+  }, [fitStarted])
+
+  const handleEngineTick = useCallback(() => {
+    tickCountRef.current += 1
+    if (!fittedRef.current && tickCountRef.current > EARLY_FIT_TICKS && maxTipSpeed() < EARLY_FIT_SPEED) runFit()
+  }, [maxTipSpeed, runFit])
+
+  const handleEngineStop = useCallback(() => runFit(), [runFit])
 
   return (
-    <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave}>
+    <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave} onPointerMove={onPointerMove}>
       {ready && (
         <ForceGraph2D<GraphNode, GardenLinkFields>
           ref={fgRef}
@@ -497,8 +543,13 @@ export default function Garden({ graph, viewMode, onNodeClick, onBackgroundClick
           onNodeHover={handleHover}
           onNodeClick={handleNodeClick}
           onBackgroundClick={handleBackgroundClick}
+          onLinkClick={handleLinkClick}
+          onNodeDrag={handleNodeDrag}
           onNodeDragEnd={handleDragEnd}
+          onEngineTick={handleEngineTick}
           onEngineStop={handleEngineStop}
+          onRenderFramePost={paintLabels}
+          autoPauseRedraw={!labelsBusy}
           enableNodeDrag
         />
       )}
