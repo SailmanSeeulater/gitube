@@ -4,6 +4,8 @@ import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
 import type { ContributorFocus } from '../graph/contributors'
 import { clockAt, growth, stemGrowth, type Timeline } from '../graph/timeline'
 import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
+import { DROOP, bloomOf, hash01, leafSpots, stemWidthPx } from './gardenLook'
+import { BLOOM_SCALE, drawLeaf, drawMergeFlower, drawRoots, drawTip, gardenInk, leafColour } from './gardenPaint'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
 import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
@@ -14,9 +16,11 @@ import {
   MAX_PINNED_SEARCH_HITS,
   MONO_FONT,
   assignLinkCurvature,
+  bodyRadius,
   buildBranchReach,
   buildLinkColours,
   buildNeighbourIndex,
+  createCentringForce,
   createTimeForce,
   fitTransform,
   isDimmed,
@@ -86,6 +90,11 @@ export interface GardenProps {
   timelapse?: GardenTimelapse | null
   /** branch name -> thorn level (1..3) for branches far apart from the default one (see graph/weeds) */
   thorns?: ReadonlyMap<string, number> | null
+  /**
+   * The garden layout: organic physics with time running up the canvas instead of across, drawn as
+   * plants (gardenLook / gardenPaint). Ignored while metro is set.
+   */
+  garden?: boolean
 }
 
 export interface GardenTimelapse {
@@ -132,6 +141,15 @@ const NODE_MODE_REPLACE = () => 'replace' as const
 const FIT_MS = 400
 /** metro mode: a search brings its hits into view once typing has paused this long */
 const SEARCH_REVEAL_MS = 300
+/** Root tendrils under cut-off history reach this far (graph units), plus a little per node size. */
+const ROOT_LENGTH = 16
+/** Leaves along a garden stem, in graph units. */
+const LEAF_LENGTH = 7
+const LEAF_WIDTH = 2.4
+/** The garden layout draws '+N' run counts only from this zoom up (its leaves stand for them below). */
+const GARDEN_BADGE_MIN_ZOOM = 1.6
+/** The garden layout spreads time over this share of the canvas height. */
+const GARDEN_HEIGHT_SHARE = 0.85
 // time-lapse in metro mode: the camera pans when the growing edge leaves [MIN, MAX] of the view's
 // width, putting it at FOLLOW_AT, in a glide of FOLLOW_MS
 const FOLLOW_MIN = 0.1
@@ -263,7 +281,9 @@ export default function Garden({
   focus = null,
   timelapse = null,
   thorns = null,
+  garden: gardenProp = false,
 }: GardenProps) {
+  const garden = gardenProp && metro === null
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
   const sizeRef = useRef({ width: 0, height: 0 })
@@ -279,9 +299,12 @@ export default function Garden({
   const [hoverVersion, setHoverVersion] = useState(0)
 
   const fittedRef = useRef(false)
+  /** after a switch between organic and garden: fit when the physics stops, not early (the layout is still turning) */
+  const lateFitRef = useRef(false)
   const tickCountRef = useRef(0)
   const prevNodesRef = useRef<Map<string, GardenNode>>(new Map())
   const timeForceRef = useRef<TimeForce | null>(null)
+  const timeAxisRef = useRef<'x' | 'y'>('x')
   const scaleCache = useRef<ScaleCache>({ scale: -1, px: 1, shaFont: '', badgeFont: '', dash: [3, 2] })
   const metroOn = metro !== null
   const metroRef = useRef<MetroView | null>(metro)
@@ -383,7 +406,7 @@ export default function Garden({
 
   const ready = size.width > 0 && size.height > 0
 
-  // ---- forces (organic mode; metro mode pins every node, see the tween below) ----
+  // ---- forces (organic and garden; metro mode pins every node, see the tween below) ----
   useEffect(() => {
     if (!ready) return
     const fg = fgRef.current
@@ -402,14 +425,29 @@ export default function Garden({
       fittedRef.current = false
       tickCountRef.current = 0
     }
+    // organic spreads time across (older left); the garden grows it upward (older at the bottom).
+    // Switching between them re-fits once the physics has turned the layout.
+    const axis = garden ? 'y' : 'x'
+    if (!timeForceRef.current || timeAxisRef.current !== axis) {
+      if (timeForceRef.current) {
+        fittedRef.current = false
+        tickCountRef.current = 0
+        lateFitRef.current = true
+      }
+      timeForceRef.current = garden
+        ? createTimeForce(() => sizeRef.current.height * GARDEN_HEIGHT_SHARE, 0.05, 'y')
+        : createTimeForce(() => sizeRef.current.width, 0.03)
+      timeAxisRef.current = axis
+    }
     const charge = fg.d3Force('charge')
     if (charge && typeof charge.strength === 'function') charge.strength(viewMode === 'skeleton' ? -40 : -15)
     const link = fg.d3Force('link')
     if (link && typeof link.distance === 'function') link.distance(30)
-    if (!timeForceRef.current) timeForceRef.current = createTimeForce(() => sizeRef.current.width, 0.03)
     fg.d3Force('time', timeForceRef.current)
+    // the garden grows up, not wide: a weak pull towards the centre line
+    fg.d3Force('upright', garden ? createCentringForce(0.02) : null)
     fg.d3ReheatSimulation()
-  }, [index, viewMode, ready, metroOn])
+  }, [index, viewMode, ready, metroOn, garden])
 
   // ---- paint ----
   // null = nothing to isolate: no selection, or the selected branch has no tip in this graph
@@ -423,11 +461,50 @@ export default function Garden({
   const query = search.trim().toLowerCase()
 
   const bumpHover = useCallback(() => setHoverVersion((v) => v + 1), [])
-  // labels keep clear of the station glyphs in metro mode, which are not reach-sized
-  const labelRadius = useMemo(
-    () => (metro ? (node: GraphNode) => labelStationRadius(metro.stations.get(node.id), node.isTip) : undefined),
-    [metro],
-  )
+
+  // ---- the garden layout's look ----
+  // One clock per graph, so a tip never blooms or wilts while it is on screen; during a time-lapse
+  // the clock is the date it has reached, so flowers open while their branch is busy and wilt as
+  // the replay moves on. Read per paint, worked out once per progress value.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadedAt = useMemo(() => Date.now(), [index])
+  const bloomClockRef = useRef({ progress: Number.NaN, time: 0 })
+  const gardenNow = useCallback((): number => {
+    if (!timelapse) return loadedAt
+    const memo = bloomClockRef.current
+    const progress = timelapse.progress.current
+    if (memo.progress !== progress) {
+      const { time } = clockAt(timelapse.timeline, progress)
+      memo.progress = progress
+      memo.time = Number.isFinite(time) ? time : loadedAt
+    }
+    return memo.time
+  }, [timelapse, loadedAt])
+  const ink = useMemo(() => gardenInk(theme), [theme])
+  // leaves are a branch colour turned green; blended once per colour and theme
+  const leafOf = useMemo(() => {
+    const cache = new Map<string, string>()
+    return (colour: string): string => {
+      let leaf = cache.get(colour)
+      if (leaf === undefined) {
+        try {
+          leaf = leafColour(colour, ink)
+        } catch {
+          leaf = colour // not a hex colour: leave it as it is
+        }
+        cache.set(colour, leaf)
+      }
+      return leaf
+    }
+  }, [ink])
+
+  // labels keep clear of the station glyphs in metro mode, which are not reach-sized, and of a
+  // garden tip's petals
+  const labelRadius = useMemo(() => {
+    if (metro) return (node: GraphNode) => labelStationRadius(metro.stations.get(node.id), node.isTip)
+    if (garden) return (node: GraphNode) => (node.isTip ? bodyRadius(node) * BLOOM_SCALE : bodyRadius(node))
+    return undefined
+  }, [metro, garden])
   // thorns: the highest level among the branches whose tip a node is (0 for none)
   const thornOf = useCallback(
     (node: GraphNode): number => {
@@ -438,14 +515,15 @@ export default function Garden({
     },
     [thorns],
   )
-  // labels keep clear of bead rings in metro mode, and of thorns in both
+  // labels keep clear of bead rings in metro mode, and of thorns in every layout
   const labelRing = useMemo(() => {
     const thornPx = (node: GraphNode) => thornLengthPx(thornOf(node))
     if (metro) return (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) + thornPx(node)
     if (!thorns || thorns.size === 0) return undefined
-    // organic: the placer's default tip ring, plus thorns
+    // garden: petals are in labelRadius already, so only thorns; organic: the default tip ring too
+    if (garden) return thornPx
     return (node: GraphNode) => (node.isTip ? TIP_RING_PX : 0) + thornPx(node)
-  }, [metro, thorns, thornOf])
+  }, [metro, garden, thorns, thornOf])
   // ... and off the station rings (plain commit dots stay coverable) and the lines: the routes as
   // drawn once the tween has ended (during it, links are drawn straight)
   const labelHard = useMemo(() => (metro ? (node: GraphNode) => metro.stations.get(node.id) !== 'commit' : undefined), [metro])
@@ -535,13 +613,16 @@ export default function Garden({
       const isLabelled = index.tipLabel.has(id)
       const matches = query !== '' && isLabelled && (index.tipLabelLower.get(id) ?? '').includes(query)
       const outer = metro ? r : r + (node.isTip ? 2 : 0)
+      // how far the drawn node reaches: a garden tip's petals spread past its body
+      const reach = garden && node.isTip ? outer * BLOOM_SCALE : outer
 
       // a growing node fades in over the first half of its pop
-      ctx.globalAlpha = (dim ? th.dimAlpha : 1) * Math.min(1, grown * 2)
+      const alpha = (dim ? th.dimAlpha : 1) * Math.min(1, grown * 2)
+      ctx.globalAlpha = alpha
 
       if (matches) {
         ctx.beginPath()
-        ctx.arc(x, y, outer + 7 * px, 0, TWO_PI)
+        ctx.arc(x, y, reach + 7 * px, 0, TWO_PI)
         ctx.fillStyle = th.derived.searchHaloFill
         ctx.fill()
         ctx.strokeStyle = th.derived.searchHaloRing
@@ -550,17 +631,36 @@ export default function Garden({
       }
       if (isInspected || isHovered) {
         ctx.beginPath()
-        ctx.arc(x, y, outer + 4.5 * px, 0, TWO_PI)
+        ctx.arc(x, y, reach + 4.5 * px, 0, TWO_PI)
         ctx.strokeStyle = isInspected ? th.derived.inspectedRing : th.derived.hoverRing
         ctx.lineWidth = 1.2 * px
         ctx.stroke()
       }
 
-      // a tip far apart from the default branch grows thorns, from just outside its ring
-      const thorn = thornOf(node)
-      if (thorn > 0) drawThorns(ctx, x, y, metro ? r + px : outer + 2.5 * px, thorn, px, colour)
+      // the garden: history cut off here grows roots, under everything else
+      if (garden && node.isRoot) {
+        ctx.globalAlpha = alpha * 0.8
+        drawRoots(ctx, x, y, ROOT_LENGTH + r * 1.5, hash01(id), 1.3 * px, ink.root)
+        ctx.globalAlpha = alpha
+      }
 
-      if (metro) {
+      // a tip far apart from the default branch grows thorns, from just outside its ring (or petals)
+      const thorn = thornOf(node)
+      if (thorn > 0) drawThorns(ctx, x, y, metro ? r + px : garden ? reach : outer + 2.5 * px, thorn, px, colour)
+
+      if (garden) {
+        // tips bloom, bud or wilt by age; merges flower; forks are knots on the stem; a root
+        // without a tip is a seed; plain commits (full view) are leaves on the stem
+        const turn = hash01(id)
+        if (node.isTip) drawTip(ctx, x, y, outer, bloomOf(node.commit.date, gardenNow()), turn, colour, ink)
+        else if (node.isMerge) drawMergeFlower(ctx, x, y, r * 1.2, turn, colour, ink)
+        else if (node.isFork || node.isRoot) {
+          ctx.beginPath()
+          ctx.arc(x, y, r * 0.9, 0, TWO_PI)
+          ctx.fillStyle = node.isRoot ? ink.root : colour
+          ctx.fill()
+        } else drawLeaf(ctx, x, y, turn * TWO_PI, r * 3, r * 1.1, leafOf(colour))
+      } else if (metro) {
         // station glyphs: tips in branch colour outlined in the station colour, interchanges as
         // station-colour rings, origins hollow (their dashed stub is drawn with the lines), plain
         // commits as beads (a ring in the line's colour, wider than the line, around a
@@ -634,7 +734,7 @@ export default function Garden({
         ctx.fill()
       }
 
-      if (node.isRoot && !metro) {
+      if (node.isRoot && !metro && !garden) {
         ctx.setLineDash(c.dash)
         ctx.beginPath()
         ctx.arc(x, y, outer + (node.isTip ? 5 : 2.5) * px, 0, TWO_PI)
@@ -659,7 +759,7 @@ export default function Garden({
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf, garden, gardenNow, ink, leafOf],
   )
 
   const paintPointerArea = useCallback(
@@ -670,13 +770,15 @@ export default function Garden({
       // nothing to hover or click before it has grown
       if (nodeGrowth(node.id) <= 0) return
       const px = 1 / globalScale
-      const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip, px) : nodeRadius(node.reach) + (node.isTip ? 2 : 0)
+      const body = nodeRadius(node.reach) + (node.isTip ? 2 : 0)
+      // a garden tip is hit across its petals
+      const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip, px) : garden && node.isTip ? body * BLOOM_SCALE : body
       ctx.fillStyle = colour
       ctx.beginPath()
       ctx.arc(x, y, outer + (node.isTip ? 3.25 : 1) * px, 0, TWO_PI)
       ctx.fill()
     },
-    [metro, nodeGrowth],
+    [metro, nodeGrowth, garden],
   )
 
   const linkColor = useCallback(
@@ -699,7 +801,8 @@ export default function Garden({
   const paintLink = useCallback(
     (link: GardenLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
       // '+N' badges are screen-sized, so only hide them when zoomed far out and they would pile up.
-      if (globalScale < 0.7 || link.collapsedCount <= 0) return
+      // in the garden the leaves stand for hidden commits, so the counts wait until zoomed in
+      if (globalScale < (garden ? GARDEN_BADGE_MIN_ZOOM : 0.7) || link.collapsedCount <= 0) return
       const s = link.source
       const t = link.target
       if (typeof s !== 'object' || typeof t !== 'object') return
@@ -725,7 +828,7 @@ export default function Garden({
       drawBadge(ctx, link.badge, mx, my, px, c.badgeFont, ring, dim ? th.dimAlpha : 1, th)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colours, reachSet, litLinks, hoverVersion],
+    [colours, reachSet, litLinks, hoverVersion, garden],
   )
 
   /**
@@ -756,6 +859,68 @@ export default function Garden({
       if (f >= 1) paintLink(link, ctx, globalScale)
     },
     [stemShown, linkColor, linkWidth, paintLink],
+  )
+  /**
+   * Garden links are stems, drawn here in place of force-graph's line: a gentle per-link bend so no
+   * stem is ruler-straight, a sag into a wilted tip, thicker where more branches share the stem, and
+   * a leaf for each commit a skeleton stem hides. Grows with the time-lapse like paintStem.
+   */
+  const paintGardenStem = useCallback(
+    (link: GardenLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
+      const s = link.source
+      const t = link.target
+      if (typeof s !== 'object' || typeof t !== 'object') return
+      if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return
+      const sid = linkEndId(s)
+      const tid = linkEndId(t)
+      const f = stemShown(sid, tid)
+      if (f <= 0) return
+      const dx = s.x - t.x
+      const dy = s.y - t.y
+      const len = Math.hypot(dx, dy)
+      if (!(len > 0)) return
+      const cp = (link as { __controlPoints?: number[] | null }).__controlPoints
+      let cx = cp && cp.length === 2 ? cp[0] : (s.x + t.x) / 2
+      let cy = cp && cp.length === 2 ? cp[1] : (s.y + t.y) / 2
+      const bend = (hash01(sid + tid) - 0.5) * 0.25 * len
+      cx += (-dy / len) * bend
+      cy += (dx / len) * bend
+      if (s.isTip && bloomOf(s.commit.date, gardenNow()) === 'wilted') cy += DROOP * len
+
+      ctx.strokeStyle = linkColor(link)
+      ctx.lineWidth = stemWidthPx(s.reach) / globalScale
+      ctx.lineCap = 'round'
+      ctx.beginPath()
+      ctx.moveTo(t.x, t.y)
+      const [qx, qy, ex, ey] = partialQuad(t.x, t.y, cx, cy, s.x, s.y, f)
+      ctx.quadraticCurveTo(qx, qy, ex, ey)
+      ctx.stroke()
+
+      if (link.collapsedCount > 0) {
+        const hovered = hoverRef.current ?? labelHoverRef.current
+        const th = colours.theme
+        ctx.globalAlpha = isLinkDimmed(sid, tid, hovered, reachSet, litLinks) ? th.dimAlpha : 0.9
+        const leaf = leafOf(colours.palette[link.owner] ?? th.fallback)
+        for (const spot of leafSpots(link.collapsedCount)) {
+          const u = spot.t
+          if (u > f) break
+          // the point and direction of the curve at u (parent t -> control -> child s)
+          const a = (1 - u) * (1 - u)
+          const b = 2 * (1 - u) * u
+          const c = u * u
+          const px = a * t.x + b * cx + c * s.x
+          const py = a * t.y + b * cy + c * s.y
+          const tx = 2 * (1 - u) * (cx - t.x) + 2 * u * (s.x - cx)
+          const ty = 2 * (1 - u) * (cy - t.y) + 2 * u * (s.y - cy)
+          drawLeaf(ctx, px, py, Math.atan2(ty, tx) + spot.side * 0.95, LEAF_LENGTH, LEAF_WIDTH, leaf)
+        }
+        ctx.globalAlpha = 1
+      }
+      if (f >= 1) paintLink(link, ctx, globalScale)
+    },
+    // hoverVersion: leaves dim with the hover like the stem's colour does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [stemShown, linkColor, paintLink, gardenNow, leafOf, colours, reachSet, litLinks, hoverVersion],
   )
   const stemMode = useCallback(() => 'replace' as const, [])
   // ungrown links are left out of force-graph's hit canvas too, so they cannot be clicked
@@ -994,10 +1159,13 @@ export default function Garden({
 
   const handleEngineTick = useCallback(() => {
     tickCountRef.current += 1
-    if (!fittedRef.current && tickCountRef.current > EARLY_FIT_TICKS && maxTipSpeed() < EARLY_FIT_SPEED) runFit()
+    if (!fittedRef.current && !lateFitRef.current && tickCountRef.current > EARLY_FIT_TICKS && maxTipSpeed() < EARLY_FIT_SPEED) runFit()
   }, [maxTipSpeed, runFit])
 
-  const handleEngineStop = useCallback(() => runFit(), [runFit])
+  const handleEngineStop = useCallback(() => {
+    lateFitRef.current = false
+    runFit()
+  }, [runFit])
 
   // ---- metro mode: pin every node to its station, tweening from where it is now ----
   useEffect(() => {
@@ -1190,8 +1358,8 @@ export default function Garden({
           linkWidth={linkWidth}
           linkCurvature={linkCurvature}
           linkDirectionalArrowLength={0}
-          linkCanvasObjectMode={timelapse ? stemMode : linkMode}
-          linkCanvasObject={timelapse ? paintStem : paintLink}
+          linkCanvasObjectMode={timelapse || garden ? stemMode : linkMode}
+          linkCanvasObject={garden ? paintGardenStem : timelapse ? paintStem : paintLink}
           cooldownTicks={metroOn ? 0 : 200}
           onNodeHover={handleHover}
           onNodeClick={handleNodeClick}

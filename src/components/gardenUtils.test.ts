@@ -12,6 +12,7 @@ import {
   buildLabelSpecs,
   buildLinkColours,
   buildNeighbourIndex,
+  createCentringForce,
   createTimeForce,
   ellipsizeAround,
   endEllipsis,
@@ -246,7 +247,35 @@ describe('shortSha', () => {
   })
 })
 
+describe('createCentringForce', () => {
+  it('pulls nodes towards the vertical centre line and leaves y alone', () => {
+    const force = createCentringForce(0.1)
+    const nodes = [
+      { x: 100, y: 5, vx: 0, vy: 0, commit: { date: '' } },
+      { x: -50, y: 5, vx: 0, vy: 0, commit: { date: '' } },
+    ]
+    force.initialize(nodes)
+    force(1)
+    expect(nodes[0].vx).toBeCloseTo(-10)
+    expect(nodes[1].vx).toBeCloseTo(5)
+    expect(nodes[0].vy).toBe(0)
+  })
+})
+
 describe('createTimeForce', () => {
+  it("on the 'y' axis, sends older commits down and newer ones up (the garden grows upward)", () => {
+    const force = createTimeForce(() => 1000, 1, 'y')
+    const nodes = [
+      { x: 5, y: 0, vx: 0, vy: 0, commit: { date: '2026-01-01T00:00:00Z' } },
+      { x: 5, y: 0, vx: 0, vy: 0, commit: { date: '2026-06-01T00:00:00Z' } },
+    ]
+    force.initialize(nodes)
+    force(1)
+    expect(nodes[0].vy).toBeCloseTo(500) // canvas y grows downward
+    expect(nodes[1].vy).toBeCloseTo(-500)
+    expect(nodes[0].vx).toBe(0)
+  })
+
   it('pushes older commits left and newer commits right', () => {
     const force = createTimeForce(() => 1000, 0.03)
     const nodes = [
