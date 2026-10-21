@@ -7,7 +7,7 @@ import { isThemeId, type ThemeId } from '../theme/themes'
 export type LayoutMode = 'organic' | 'metro'
 
 /** Which list the side panel shows. */
-export type PanelTab = 'branches' | 'contributors'
+export type PanelTab = 'branches' | 'contributors' | 'weeds'
 
 /** localStorage key for the GitHub personal access token. */
 export const TOKEN_STORAGE_KEY = 'repo-garden:token'

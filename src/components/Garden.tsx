@@ -27,7 +27,7 @@ import {
   type LinkColours,
   type TimeForce,
 } from './gardenUtils'
-import { useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
+import { TIP_RING_PX, useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
 import {
   METRO_BADGE_MIN_PX,
   METRO_BEAD_RING_PX,
@@ -84,6 +84,8 @@ export interface GardenProps {
   focus?: ContributorFocus | null
   /** The time-lapse: only what has grown by its progress is drawn. null when it is off. */
   timelapse?: GardenTimelapse | null
+  /** branch name -> thorn level (1..3) for branches far apart from the default one (see graph/weeds) */
+  thorns?: ReadonlyMap<string, number> | null
 }
 
 export interface GardenTimelapse {
@@ -183,6 +185,34 @@ function drawBadge(
   ctx.globalAlpha = 1
 }
 
+/** Spikes around a thorny tip. */
+const THORN_SPIKES = 9
+
+/** How far a tip's thorns reach beyond its ring, in screen px; 0 for no thorns. */
+function thornLengthPx(level: number): number {
+  return level > 0 ? 2.5 + 2.5 * level : 0
+}
+
+/**
+ * Thorns around a tip far apart from the default branch: THORN_SPIKES triangles in the branch's
+ * colour, based on a circle of radius base (graph units) and reaching thornLengthPx(level) further.
+ */
+function drawThorns(ctx: CanvasRenderingContext2D, x: number, y: number, base: number, level: number, px: number, colour: string): void {
+  const reach = base + thornLengthPx(level) * px
+  const half = (Math.PI / THORN_SPIKES) * 0.55
+  ctx.beginPath()
+  for (let i = 0; i < THORN_SPIKES; i++) {
+    // turned off the axes so no spike points straight at a label or a lane
+    const a = (i / THORN_SPIKES) * TWO_PI + 0.3
+    ctx.moveTo(x + Math.cos(a - half) * base, y + Math.sin(a - half) * base)
+    ctx.lineTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach)
+    ctx.lineTo(x + Math.cos(a + half) * base, y + Math.sin(a + half) * base)
+    ctx.closePath()
+  }
+  ctx.fillStyle = colour
+  ctx.fill()
+}
+
 /**
  * The time-lapse caption, drawn on the canvas so recordings carry it: the date the clock has reached
  * and the commits so far (top right), the repo (bottom right), and the progress along the bottom edge.
@@ -232,6 +262,7 @@ export default function Garden({
   metro = null,
   focus = null,
   timelapse = null,
+  thorns = null,
 }: GardenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
@@ -397,10 +428,24 @@ export default function Garden({
     () => (metro ? (node: GraphNode) => labelStationRadius(metro.stations.get(node.id), node.isTip) : undefined),
     [metro],
   )
-  const labelRing = useMemo(
-    () => (metro ? (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) : undefined),
-    [metro],
+  // thorns: the highest level among the branches whose tip a node is (0 for none)
+  const thornOf = useCallback(
+    (node: GraphNode): number => {
+      if (!thorns || !node.isTip) return 0
+      let level = 0
+      for (const tip of node.tips) level = Math.max(level, thorns.get(tip) ?? 0)
+      return level
+    },
+    [thorns],
   )
+  // labels keep clear of bead rings in metro mode, and of thorns in both
+  const labelRing = useMemo(() => {
+    const thornPx = (node: GraphNode) => thornLengthPx(thornOf(node))
+    if (metro) return (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) + thornPx(node)
+    if (!thorns || thorns.size === 0) return undefined
+    // organic: the placer's default tip ring, plus thorns
+    return (node: GraphNode) => (node.isTip ? TIP_RING_PX : 0) + thornPx(node)
+  }, [metro, thorns, thornOf])
   // ... and off the station rings (plain commit dots stay coverable) and the lines: the routes as
   // drawn once the tween has ended (during it, links are drawn straight)
   const labelHard = useMemo(() => (metro ? (node: GraphNode) => metro.stations.get(node.id) !== 'commit' : undefined), [metro])
@@ -511,6 +556,10 @@ export default function Garden({
         ctx.stroke()
       }
 
+      // a tip far apart from the default branch grows thorns, from just outside its ring
+      const thorn = thornOf(node)
+      if (thorn > 0) drawThorns(ctx, x, y, metro ? r + px : outer + 2.5 * px, thorn, px, colour)
+
       if (metro) {
         // station glyphs: tips in branch colour outlined in the station colour, interchanges as
         // station-colour rings, origins hollow (their dashed stub is drawn with the lines), plain
@@ -610,7 +659,7 @@ export default function Garden({
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf],
   )
 
   const paintPointerArea = useCallback(

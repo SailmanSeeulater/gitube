@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Branch, RepoData, ViewMode } from '../types'
 import type { ContributorIndex } from '../graph/contributors'
+import type { WeedReport } from '../graph/weeds'
 import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
 import { useTheme } from '../theme/useTheme'
 import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import ContributorsTab from './ContributorsTab'
 import Legend from './Legend'
+import WeedsTab from './WeedsTab'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon } from './icons'
 
 export interface PanelProps {
@@ -13,6 +15,7 @@ export interface PanelProps {
   /** branch name -> colour in the active theme (App's palette, not graph.palette) */
   palette: Record<string, string>
   contributors: ContributorIndex
+  weeds: WeedReport
 }
 
 /** Copies the page address, which App keeps naming the repo and its selection (see share/shareUrl). */
@@ -55,12 +58,14 @@ interface TabsProps {
   onChange: (tab: PanelTab) => void
   branchCount: number
   peopleCount: number
+  weedCount: number
 }
 
-function Tabs({ value, onChange, branchCount, peopleCount }: TabsProps) {
+function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProps) {
   const tabs: ReadonlyArray<{ id: PanelTab; label: string; count: number }> = [
     { id: 'branches', label: 'branches', count: branchCount },
     { id: 'contributors', label: 'people', count: peopleCount },
+    { id: 'weeds', label: 'weeds', count: weedCount },
   ]
   return (
     <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-garden-border px-2">
@@ -193,7 +198,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
   )
 }
 
-export default function Panel({ data, palette, contributors }: PanelProps) {
+export default function Panel({ data, palette, contributors, weeds }: PanelProps) {
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
@@ -294,10 +299,20 @@ export default function Panel({ data, palette, contributors }: PanelProps) {
         onChange={setPanelTab}
         branchCount={data.branches.length}
         peopleCount={peopleCount}
+        weedCount={weeds.weeds.length}
       />
 
       {panelTab === 'contributors' ? (
         <ContributorsTab contributors={contributors} palette={palette} now={now} />
+      ) : panelTab === 'weeds' ? (
+        <WeedsTab
+          report={weeds}
+          owner={data.owner}
+          repo={data.repo}
+          defaultBranch={data.defaultBranch}
+          palette={palette}
+          now={now}
+        />
       ) : (
         <>
           <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">

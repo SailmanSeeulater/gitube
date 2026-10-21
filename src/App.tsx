@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
+import { findWeeds, type WeedReport } from './graph/weeds'
 import TimelapseBar from './components/TimelapseBar'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
@@ -109,6 +110,8 @@ export default function App() {
 
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
+  // merged branches to clear away, and thorny ones drifting far from the default branch
+  const weeds = useMemo<WeedReport | null>(() => (data ? findWeeds(data) : null), [data])
 
   // ---- share links ----
   // The link's selection, once its repo has loaded (a link to another repo's data is dropped).
@@ -347,6 +350,7 @@ export default function App() {
             metro={metro}
             focus={focus}
             timelapse={gardenTimelapse}
+            thorns={weeds?.thorns ?? null}
           />
         )}
       </div>
@@ -384,7 +388,7 @@ export default function App() {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && contributors && <Panel data={data} palette={palette} contributors={contributors} />}
+      {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} />}
 
       {timelapseOpen && graph ? (
         <TimelapseBar
