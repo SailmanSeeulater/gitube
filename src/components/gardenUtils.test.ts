@@ -211,6 +211,7 @@ describe('relativeTime', () => {
   const ago = (ms: number) => new Date(now - ms).toISOString()
   it('formats buckets', () => {
     expect(relativeTime(ago(10_000), now)).toBe('just now')
+    expect(relativeTime(ago(50_000), now)).toBe('1m ago')
     expect(relativeTime(ago(5 * 60_000), now)).toBe('5m ago')
     expect(relativeTime(ago(3 * 3_600_000), now)).toBe('3h ago')
     expect(relativeTime(ago(3 * DAY), now)).toBe('3d ago')

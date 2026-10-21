@@ -1,4 +1,4 @@
-import { useMemo, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Branch, RepoData, ViewMode } from '../types'
 import type { ContributorIndex } from '../graph/contributors'
 import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
@@ -6,13 +6,48 @@ import { useTheme } from '../theme/useTheme'
 import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import ContributorsTab from './ContributorsTab'
 import Legend from './Legend'
-import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, SearchIcon } from './icons'
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon } from './icons'
 
 export interface PanelProps {
   data: RepoData
   /** branch name -> colour in the active theme (App's palette, not graph.palette) */
   palette: Record<string, string>
   contributors: ContributorIndex
+}
+
+/** Copies the page address, which App keeps naming the repo and its selection (see share/shareUrl). */
+function CopyLinkButton() {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  useEffect(() => {
+    if (state === 'idle') return
+    const timer = setTimeout(() => setState('idle'), 1600)
+    return () => clearTimeout(timer)
+  }, [state])
+  const copy = () => {
+    const done = navigator.clipboard?.writeText(window.location.href)
+    if (!done) {
+      setState('failed')
+      return
+    }
+    done.then(
+      () => setState('copied'),
+      () => setState('failed'),
+    )
+  }
+  const label = state === 'copied' ? 'link copied' : state === 'failed' ? 'copy the address bar instead' : 'Copy a link to this view'
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={label}
+      aria-label={label}
+      className={`flex items-center gap-1 rounded p-1 text-[11px] hover:bg-garden-hover ${
+        state === 'copied' ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'
+      }`}
+    >
+      {state === 'idle' ? <LinkIcon /> : state === 'copied' ? <CheckIcon /> : <span>copy failed</span>}
+    </button>
+  )
 }
 
 interface TabsProps {
@@ -233,6 +268,7 @@ export default function Panel({ data, palette, contributors }: PanelProps) {
             <span className="rounded bg-garden-hover px-1 font-mono text-garden-text-dim">{data.defaultBranch}</span>
           </div>
         </div>
+        <CopyLinkButton />
         <button
           type="button"
           onClick={togglePanel}

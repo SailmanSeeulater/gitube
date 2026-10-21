@@ -5,6 +5,7 @@ import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
 import { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from './export/gardenFile'
 import { canvasToPng, composeGraphImage, downloadBlob } from './export/image'
+import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { useRepoData } from './hooks/useRepoData'
 import { useGardenStore } from './store/useGardenStore'
 import { applyTheme } from './theme/applyTheme'
@@ -30,8 +31,12 @@ function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
 }
 
 export default function App() {
-  const [input, setInput] = useState('')
-  const [repoRef, setRepoRef] = useState<RepoRef | null>(null)
+  // A share link (?repo=...&branch=... or &by=...) grows its repo straight away; its selection is
+  // applied once that repo's data is in (see the share link effects below).
+  const [initialShare] = useState<ShareState>(() => readShareState(typeof window === 'undefined' ? '' : window.location.search))
+  const pendingShare = useRef<ShareState | null>(initialShare.repo ? initialShare : null)
+  const [input, setInput] = useState(() => (initialShare.repo ? `${initialShare.repo.owner}/${initialShare.repo.repo}` : ''))
+  const [repoRef, setRepoRef] = useState<RepoRef | null>(initialShare.repo)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
   /** A garden opened from a saved file; it stands in for fetched data until the next Grow. */
@@ -74,6 +79,7 @@ export default function App() {
   const fetched = useRepoData(repoRef)
   const { error, isFetching, refetch } = fetched
   const data = opened?.data ?? fetched.data
+  const cachedAt = opened ? null : fetched.cachedAt
 
   // eye-toggled branches plus anything the stale filter removes
   const effectiveHidden = useMemo<ReadonlySet<string>>(() => {
@@ -100,6 +106,35 @@ export default function App() {
 
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
+
+  // ---- share links ----
+  // The link's selection, once its repo has loaded (a link to another repo's data is dropped).
+  useEffect(() => {
+    const pending = pendingShare.current
+    if (pending === null || !data || !contributors) return
+    pendingShare.current = null
+    if (!pending.repo || !sameRepo(pending.repo, data)) return
+    if (pending.branch !== null && data.branches.some((b) => b.name === pending.branch)) {
+      setSelectedBranch(pending.branch)
+    } else if (pending.person !== null && contributors.list.some((c) => c.key === pending.person)) {
+      setSelectedContributor(pending.person)
+      setPanelTab('contributors')
+    }
+  }, [data, contributors, setSelectedBranch, setSelectedContributor, setPanelTab])
+
+  // The address bar follows the repo on show and its selection, so copying it shares this view.
+  // replaceState: Back leaves the app rather than stepping through every click.
+  const shownOwner = data?.owner ?? repoRef?.owner ?? null
+  const shownRepo = data?.repo ?? repoRef?.repo ?? null
+  useEffect(() => {
+    // leave an incoming link alone until its selection has been applied
+    if (pendingShare.current !== null) return
+    const repo = shownOwner !== null && shownRepo !== null ? { owner: shownOwner, repo: shownRepo } : null
+    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor }, window.location.search)
+    if (search !== window.location.search) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
+    }
+  }, [shownOwner, shownRepo, selectedBranch, selectedContributor])
 
   // The selected person's commits to keep lit. Skeleton links stand for runs of hidden commits, so
   // the full graph (same hidden branches) is walked to see whose commits each run holds.
@@ -321,7 +356,14 @@ export default function App() {
 
       {data && graph && contributors && <Panel data={data} palette={palette} contributors={contributors} />}
 
-      <StatusStrip data={data} graph={graph} isFetching={isFetching} fileSavedAt={opened ? opened.savedAt : null} />
+      <StatusStrip
+        data={data}
+        graph={graph}
+        isFetching={isFetching}
+        fileSavedAt={opened ? opened.savedAt : null}
+        cachedAt={cachedAt}
+        onRefresh={refetch}
+      />
 
       {inspectorNode && graph && (
         <NodeInspector
