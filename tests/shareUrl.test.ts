@@ -27,6 +27,16 @@ describe('share links', () => {
     }
   })
 
+  it('carries a garden battle as &vs, and reads it back', () => {
+    const vite = { owner: 'vitejs', repo: 'vite' }
+    expect(writeShareState({ repo: express, branch: null, person: null, vs: vite })).toBe('?repo=expressjs/express&vs=vitejs/vite')
+    expect(readShareState('?repo=expressjs/express&vs=vitejs/vite')).toEqual({ repo: express, branch: null, person: null, vs: vite })
+    expect(readShareState('?repo=expressjs/express&vs=not a repo')).toEqual({ repo: express, branch: null, person: null })
+    // no battle without a repo to fight
+    expect(writeShareState({ repo: null, branch: null, person: null, vs: vite })).toBe('')
+    expect(writeShareState({ repo: express, branch: null, person: null }, '?vs=a/b')).toBe('?repo=expressjs/express')
+  })
+
   it('keeps unrelated parameters and replaces its own', () => {
     expect(writeShareState({ repo: express, branch: null, person: null }, '?utm=x&repo=a/b&by=z')).toBe(
       '?utm=x&repo=expressjs/express',

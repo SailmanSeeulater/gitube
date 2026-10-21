@@ -8,7 +8,7 @@ import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import ContributorsTab from './ContributorsTab'
 import Legend from './Legend'
 import WeedsTab from './WeedsTab'
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon } from './icons'
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon, SwordsIcon } from './icons'
 
 export interface PanelProps {
   data: RepoData
@@ -16,6 +16,52 @@ export interface PanelProps {
   palette: Record<string, string>
   contributors: ContributorIndex
   weeds: WeedReport
+  /** starts a garden battle against the repo typed in; false when that is not a repo */
+  onBattle: (value: string) => boolean
+}
+
+/** The ⚔ form under the panel header: which repo to battle. */
+function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean; onDone: () => void }) {
+  const [value, setValue] = useState('')
+  const [bad, setBad] = useState(false)
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (onBattle(value)) onDone()
+        else setBad(true)
+      }}
+      className="flex flex-col gap-1 border-b border-garden-border px-3 py-2"
+    >
+      <div className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value)
+            setBad(false)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              onDone()
+            }
+          }}
+          placeholder="vs owner/repo"
+          aria-label="Repo to battle"
+          spellCheck={false}
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded-lg bg-garden-field px-2 py-1 text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
+        />
+        <button type="submit" className="shrink-0 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25">
+          fight
+        </button>
+      </div>
+      <p className={`text-[11px] leading-snug ${bad ? 'text-garden-danger' : 'text-garden-muted'}`}>
+        {bad ? "that doesn't look like a GitHub repo." : 'grows both side by side and scores them, measure by measure.'}
+      </p>
+    </form>
+  )
 }
 
 /** Copies the page address, which App keeps naming the repo and its selection (see share/shareUrl). */
@@ -199,7 +245,8 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
   )
 }
 
-export default function Panel({ data, palette, contributors, weeds }: PanelProps) {
+export default function Panel({ data, palette, contributors, weeds, onBattle }: PanelProps) {
+  const [battleOpen, setBattleOpen] = useState(false)
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
@@ -274,6 +321,16 @@ export default function Panel({ data, palette, contributors, weeds }: PanelProps
             <span className="rounded bg-garden-hover px-1 font-mono text-garden-text-dim">{data.defaultBranch}</span>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setBattleOpen((open) => !open)}
+          aria-expanded={battleOpen}
+          title="Garden battle: grow another repo beside this one and score them"
+          aria-label="Garden battle"
+          className={`rounded p-1 hover:bg-garden-hover ${battleOpen ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'}`}
+        >
+          <SwordsIcon />
+        </button>
         <CopyLinkButton />
         <button
           type="button"
@@ -285,6 +342,8 @@ export default function Panel({ data, palette, contributors, weeds }: PanelProps
           <ChevronRightIcon />
         </button>
       </header>
+
+      {battleOpen && <BattleForm onBattle={onBattle} onDone={() => setBattleOpen(false)} />}
 
       <div className="flex gap-2 px-3 py-2.5">
         <div className="flex-1">

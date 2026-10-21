@@ -1,7 +1,7 @@
 /**
  * Share links: the page URL names the repo on show and what is selected in it, so a copied link
  * opens the same garden. ?repo=owner/repo, plus &branch=<name> or &by=<login> (a contributor
- * without a GitHub account: &by=name:<author name>).
+ * without a GitHub account: &by=name:<author name>), and &vs=owner/repo for a garden battle.
  *
  * Pure: reads and writes query strings only.
  */
@@ -12,6 +12,8 @@ export interface ShareState {
   branch: string | null
   /** Contributor.key ('login:<login>' or 'name:<name>') */
   person: string | null
+  /** the other repo of a garden battle; absent (or null) when there is none */
+  vs?: RepoRef | null
 }
 
 const NAME_PREFIX = 'name:'
@@ -27,8 +29,10 @@ export function readShareState(search: string): ShareState {
   const by = params.get('by')?.trim() || null
   let person: string | null = null
   if (by !== null) person = by.toLowerCase().startsWith(NAME_PREFIX) ? by.toLowerCase() : `${LOGIN_PREFIX}${by.toLowerCase()}`
+  const vsParam = params.get('vs')
+  const vs = vsParam ? parseRepoUrl(vsParam) : null
   // one selection at a time, as in the app
-  return { repo, branch, person: branch !== null ? null : person }
+  return { repo, branch, person: branch !== null ? null : person, ...(vs ? { vs } : {}) }
 }
 
 /**
@@ -40,12 +44,14 @@ export function writeShareState(state: ShareState, current = ''): string {
   params.delete('repo')
   params.delete('branch')
   params.delete('by')
+  params.delete('vs')
   if (state.repo) {
     params.set('repo', `${state.repo.owner}/${state.repo.repo}`)
     if (state.branch !== null) params.set('branch', state.branch)
     else if (state.person !== null) {
       params.set('by', state.person.startsWith(LOGIN_PREFIX) ? state.person.slice(LOGIN_PREFIX.length) : state.person)
     }
+    if (state.vs) params.set('vs', `${state.vs.owner}/${state.vs.repo}`)
   }
   // owner/repo and branch names read better with their slashes left alone
   const query = params.toString().replace(/%2F/gi, '/').replace(/%3A/gi, ':')

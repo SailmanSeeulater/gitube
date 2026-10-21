@@ -5,6 +5,7 @@ import { buildTimeline } from './graph/timeline'
 import { buildScore } from './graph/score'
 import { findWeeds, type WeedReport } from './graph/weeds'
 import TimelapseBar from './components/TimelapseBar'
+import GardenBattle from './components/GardenBattle'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
@@ -82,6 +83,9 @@ export default function App() {
   }, [])
 
   const fetched = useRepoData(repoRef)
+  // a garden battle: the challenger grows beside the repo on show (a share link may name one)
+  const [battleRef, setBattleRef] = useState<RepoRef | null>(initialShare.vs ?? null)
+  const challenger = useRepoData(battleRef)
   const { error, isFetching, refetch } = fetched
   const data = opened?.data ?? fetched.data
   const cachedAt = opened ? null : fetched.cachedAt
@@ -137,11 +141,11 @@ export default function App() {
     // leave an incoming link alone until its selection has been applied
     if (pendingShare.current !== null) return
     const repo = shownOwner !== null && shownRepo !== null ? { owner: shownOwner, repo: shownRepo } : null
-    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor }, window.location.search)
+    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor, vs: battleRef }, window.location.search)
     if (search !== window.location.search) {
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
     }
-  }, [shownOwner, shownRepo, selectedBranch, selectedContributor])
+  }, [shownOwner, shownRepo, selectedBranch, selectedContributor, battleRef])
 
   // The selected person's commits to keep lit. Skeleton links stand for runs of hidden commits, so
   // the full graph (same hidden branches) is walked to see whose commits each run holds.
@@ -244,6 +248,19 @@ export default function App() {
   const handleBackgroundClick = useCallback(() => clearSelection(), [clearSelection])
   const closeInspector = useCallback(() => setInspectorNodeId(null), [setInspectorNodeId])
   // the inspector's author link: highlight that person and show them in the leaderboard
+  const startBattle = useCallback(
+    (value: string): boolean => {
+      const ref = parseRepoUrl(value)
+      if (!ref) return false
+      // a selection made for one repo means nothing to the other
+      clearSelection()
+      setBattleRef(ref)
+      return true
+    },
+    [clearSelection],
+  )
+  const endBattle = useCallback(() => setBattleRef(null), [])
+
   const showContributor = useCallback(
     (key: string) => {
       setSelectedContributor(key)
@@ -332,6 +349,7 @@ export default function App() {
       setFileError(null)
       setExportError(null)
       setTokenOpen(false)
+      setBattleRef(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -395,7 +413,7 @@ export default function App() {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} />}
+      {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} onBattle={startBattle} />}
 
       {timelapseOpen && graph ? (
         <TimelapseBar
@@ -426,6 +444,19 @@ export default function App() {
           onClose={closeInspector}
           authorKey={contributors?.keyBySha.get(inspectorNode.id) ?? null}
           onShowAuthor={showContributor}
+        />
+      )}
+
+      {battleRef && data && (
+        <GardenBattle
+          a={data}
+          b={challenger.data}
+          bRef={battleRef}
+          bFetching={challenger.isFetching}
+          bError={challenger.error}
+          theme={theme}
+          onRetry={challenger.refetch}
+          onClose={endBattle}
         />
       )}
     </div>

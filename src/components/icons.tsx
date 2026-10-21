@@ -117,6 +117,26 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+/** Two crossed blades: the garden battle. */
+export function SwordsIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 4l9.5 9.5M4 4h3.5L15 11.5M4 4v3.5L11.5 15" />
+      <path d="M20 4 10.5 13.5M20 4h-3.5L13 7.5M20 4v3.5L16.5 11" />
+      <path d="m12 15.5 3.5 3.5M15 13l3.5 3.5M17 19.5l2.5-2.5M8.5 15.5 5 19M9 13l-3.5 3.5M7 19.5 4.5 17" />
+    </svg>
+  )
+}
+
+/** A small crown for the winning side. */
+export function CrownIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 17.5 3 8l5 4 4-6.5 4 6.5 5-4-1 9.5Z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export function SproutIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
