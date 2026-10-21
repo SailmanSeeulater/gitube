@@ -2,14 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { buildGraph } from '../graph'
 import { metroLayout } from '../graph/metro'
 import { fixtures } from '../../tests/fixtures/repos'
+import { loadReplay } from '../../tests/fixtures/replay'
+import type { RepoData, ViewMode } from '../types'
+import { FIT_MAX_ZOOM, FIT_PAD, buildLabelSpecs, rankLabels } from './gardenUtils'
+import { LabelPlacer } from './labelPlacement'
 import {
+  METRO_BADGE_MAX_PX,
+  METRO_BADGE_MIN_PX,
+  METRO_LINE_WIDTH,
+  METRO_MIN_LINE_PX,
+  METRO_MIN_ZOOM,
   METRO_SCALE,
   buildMetroView,
   easeInOutCubic,
   isLinkDimmed,
   mergeLaneHints,
+  metroBadgeFontPx,
+  metroCommitGlyph,
   metroFitTransform,
   metroOptionsFor,
+  metroRevealTransform,
+  metroRunMarker,
   metroStationRadius,
   routeLayer,
 } from './metroView'
@@ -61,6 +74,14 @@ describe('buildMetroView', () => {
           expect(p.y).toBeGreaterThanOrEqual(view.bbox.y[0] - 1e-9)
           expect(p.y).toBeLessThanOrEqual(view.bbox.y[1] + 1e-9)
         }
+        // every plain commit knows how close its lane neighbours are
+        for (const [id, kind] of view.stations) {
+          if (kind !== 'commit') continue
+          const p = view.targets.get(id)!
+          let nearest = Infinity
+          for (const [other, q] of view.targets) if (other !== id && Math.abs(q.y - p.y) < 1e-6) nearest = Math.min(nearest, Math.abs(q.x - p.x))
+          if (Number.isFinite(nearest)) expect(view.commitGap.get(id)).toBeCloseTo(nearest)
+        }
         // run markers only in skeleton view, one per collapsed link
         const collapsed = graph.links.filter((l) => l.collapsedCount > 0).length
         expect(view.badges.length).toBe(mode === 'skeleton' ? collapsed : 0)
@@ -93,6 +114,8 @@ describe('metro helpers', () => {
     expect(metroOptionsFor('skeleton').prevLanes).toBeUndefined()
     const hints = new Map([['a', 1]])
     expect(metroOptionsFor('full', hints).prevLanes).toBe(hints)
+    // the names are placed on screen, not by the layout
+    expect(metroOptionsFor('skeleton').labels).toBe(false)
   })
 
   it('mergeLaneHints keeps old lanes and lets the newest layout win', () => {
@@ -135,6 +158,31 @@ describe('metro helpers', () => {
     expect(metroStationRadius('stop', false)).toBe(3.5)
     expect(metroStationRadius(undefined, false)).toBe(3.5)
     expect(metroStationRadius('commit', false)).toBe(2)
+  })
+
+  it('a plain commit is a bead that reaches past its line on both sides at every zoom', () => {
+    for (const k of [0.2, 12 / 28, METRO_MIN_ZOOM, 1, FIT_MAX_ZOOM]) {
+      const px = 1 / k
+      const linePx = Math.max(METRO_LINE_WIDTH, METRO_MIN_LINE_PX * px) * k
+      const { r, core } = metroCommitGlyph(px)
+      // >= 1 px of the bead's ring on each side of the line, and a dark core inside it
+      expect(2 * r * k - linePx, `k=${k}`).toBeGreaterThanOrEqual(2 - 1e-9)
+      expect(core).toBeGreaterThan(0)
+      expect(core).toBeLessThan(r)
+      expect(metroStationRadius('commit', false, px)).toBe(r)
+    }
+  })
+
+  it('beads closer than their size shrink apart once that leaves 2 px; denser runs keep their size', () => {
+    const gap = 2.5 // graph units, as dense as recorded repos get
+    // zoomed in: 0.45 gap is 2.8 px, so neighbours (2r <= 0.9 gap) never touch
+    const zin = metroCommitGlyph(1 / FIT_MAX_ZOOM, gap)
+    expect(2 * zin.r).toBeLessThanOrEqual(0.9 * gap + 1e-9)
+    expect(zin.r * FIT_MAX_ZOOM).toBeGreaterThanOrEqual(2 - 1e-9)
+    // the default camera: too dense to separate, the bead keeps its full size (a beaded band)
+    expect(metroCommitGlyph(1 / METRO_MIN_ZOOM, gap)).toEqual(metroCommitGlyph(1 / METRO_MIN_ZOOM))
+    // a lone commit is not shrunk
+    expect(metroCommitGlyph(1, 100)).toEqual(metroCommitGlyph(1))
   })
 
   it('easeInOutCubic runs 0 to 1, symmetric, clamped', () => {
@@ -181,5 +229,312 @@ describe('metroFitTransform', () => {
   it('a map too tall for minZoom is fitted to its height', () => {
     const { k } = metroFitTransform({ x: [-5000, 5000], y: [-1000, 1000] }, size, PAD, 2.5, 0.4)
     expect(k).toBeCloseTo(300 / 2000)
+  })
+})
+
+describe('the default metro camera (Garden: FIT_PAD, METRO_MIN_ZOOM)', () => {
+  // 1366x768 window with the side panel open
+  const canvas = { width: 1042, height: 768 }
+  const expectReadable = (bbox: { x: [number, number]; y: [number, number] }) => {
+    const { k, cx } = metroFitTransform(bbox, canvas, FIT_PAD, FIT_MAX_ZOOM, METRO_MIN_ZOOM)
+    // lanes stay far enough apart for the 12 px names between them
+    expect(k * METRO_SCALE).toBeGreaterThanOrEqual(24 - 1e-9)
+    // the newest (right) end sits at the right padding
+    expect((bbox.x[1] - cx) * k + canvas.width / 2).toBeCloseTo(canvas.width - FIT_PAD.right)
+  }
+
+  it('keeps a long 14:1 map at 24 px between lanes, newest end in view', () => {
+    expectReadable({ x: [-980, 980], y: [-70, 70] })
+  })
+
+  const mordi = loadReplay('SailmanSeeulater', 'Mordi')
+  it.skipIf(!mordi)('the recorded Mordi map opens at 24 px between lanes (replay cache)', () => {
+    const data = mordi!
+    const graph = buildGraph(data, 'skeleton')
+    expectReadable(buildMetroView(metroLayout(graph, data, metroOptionsFor('skeleton'))).bbox)
+  })
+})
+
+// ---------------- labels on a settled metro map: off other lines and station rings ----------------
+
+/** Length of the segment inside the box (Liang-Barsky), 0 when it misses. */
+function clippedLength(ax: number, ay: number, bx: number, by: number, x0: number, y0: number, x1: number, y1: number): number {
+  const dx = bx - ax
+  const dy = by - ay
+  let t0 = 0
+  let t1 = 1
+  const p = [-dx, dx, -dy, dy]
+  const q = [ax - x0, x1 - ax, ay - y0, y1 - ay]
+  for (let s = 0; s < 4; s++) {
+    if (p[s] === 0) {
+      if (q[s] < 0) return 0
+      continue
+    }
+    const t = q[s] / p[s]
+    if (p[s] < 0) t0 = Math.max(t0, t)
+    else t1 = Math.min(t1, t)
+    if (t0 >= t1) return 0
+  }
+  return (t1 - t0) * Math.hypot(dx, dy)
+}
+
+/**
+ * Garden's metro label pipeline without the canvas: the default camera at a 1366x768 window with
+ * the panel open, nodes projected as useLabelPlacer does, 400 still frames of the real placer.
+ */
+function settleMetroLabels(data: RepoData, mode: ViewMode) {
+  const W = 1042
+  const H = 768
+  const measure = (t: string) => t.length * 6.6 // ~12 px UI font
+  const graph = buildGraph(data, mode)
+  const view = buildMetroView(metroLayout(graph, data, metroOptionsFor(mode)), graph.nodes)
+  const cam = metroFitTransform(view.bbox, { width: W, height: H }, FIT_PAD, FIT_MAX_ZOOM, METRO_MIN_ZOOM)
+  const k = cam.k
+  const tx = W / 2 - cam.cx * k
+  const ty = H / 2 - cam.cy * k
+  const nodes = graph.nodes
+  const N = nodes.length
+  const sx = new Float32Array(N)
+  const sy = new Float32Array(N)
+  const sr = new Float32Array(N)
+  const hardNode = new Uint8Array(N)
+  nodes.forEach((node, j) => {
+    const p = view.targets.get(node.id)!
+    sx[j] = p.x * k + tx
+    sy[j] = p.y * k + ty
+    const kind = view.stations.get(node.id)
+    sr[j] = metroStationRadius(kind, node.isTip, 1 / k) * k
+    hardNode[j] = kind !== 'commit' ? 1 : 0
+  })
+  const lineSegs = Float32Array.from(view.segs, (v, q) => v * k + (q % 2 === 0 ? tx : ty))
+  const halfPx = Math.max(METRO_MIN_LINE_PX / 2, (METRO_LINE_WIDTH / 2) * k)
+  const { specs, meta } = buildLabelSpecs(nodes, data.defaultBranch, measure)
+  const placer = new LabelPlacer(specs, { measure })
+  const rank = rankLabels(meta, { reach: null, searchHits: new Set(), selectedTip: -1 })
+  placer.setOrder(rank.order, rank.pinned, rank.softPinned)
+  const frame = {
+    sx,
+    sy,
+    sr,
+    speed: new Float32Array(N),
+    nodeCount: N,
+    width: W,
+    height: H,
+    dtMs: 1000 / 60,
+    cameraMoving: false,
+    lineSegs,
+    lineSrc: view.segSrc,
+    lineTgt: view.segTgt,
+    lineCount: view.segSrc.length,
+    lineHalfPx: halfPx,
+    hardNode,
+  }
+  for (let f = 0; f < 400; f++) placer.update(frame)
+
+  const pinned = new Set(rank.pinned)
+  const offenders: string[] = []
+  let shown = 0
+  for (let i = 0; i < placer.n; i++) {
+    if (!placer.shown[i] || placer.alpha[i] < 0.5) continue
+    shown++
+    if (pinned.has(i)) continue
+    const j = specs[i].node
+    // the text's ink, not the padded box, grown by half the line width
+    const x0 = placer.x0[i] + 2 - halfPx
+    const y0 = placer.y0[i] + 3 - halfPx
+    const x1 = placer.x0[i] + placer.w[i] - 2 + halfPx
+    const y1 = placer.y0[i] + placer.h[i] - 3 + halfPx
+    let other = 0
+    for (let s = 0; s < view.segSrc.length; s++) {
+      if (view.segSrc[s] === j || view.segTgt[s] === j) continue
+      other += clippedLength(lineSegs[4 * s], lineSegs[4 * s + 1], lineSegs[4 * s + 2], lineSegs[4 * s + 3], x0, y0, x1, y1)
+    }
+    let rings = 0
+    for (let m = 0; m < N; m++) {
+      if (m === j || !hardNode[m]) continue
+      const cx = Math.min(Math.max(sx[m], placer.x0[i]), placer.x0[i] + placer.w[i])
+      const cy = Math.min(Math.max(sy[m], placer.y0[i]), placer.y0[i] + placer.h[i])
+      if (Math.hypot(cx - sx[m], cy - sy[m]) < sr[m] - 0.25) rings++
+    }
+    if (other > 4 || rings > 0) offenders.push(`${placer.textOf(i)}: ${other.toFixed(0)} px of other lines, ${rings} station(s)`)
+  }
+  return { shown, labels: placer.n, offenders }
+}
+
+describe('metro labels keep off other lines and station rings', () => {
+  const biggest = Object.entries(fixtures)
+    .map(([name, make]) => [name, make()] as const)
+    .sort((a, b) => b[1].branches.length - a[1].branches.length)[0]
+  for (const mode of ['skeleton', 'full'] as const) {
+    it(`fixture ${biggest[0]} (${mode})`, () => {
+      const r = settleMetroLabels(biggest[1], mode)
+      expect(r.shown).toBeGreaterThan(0)
+      expect(r.offenders).toEqual([])
+    })
+  }
+  for (const [owner, repo] of [
+    ['SailmanSeeulater', 'Mordi'],
+    ['expressjs', 'express'],
+  ] as const) {
+    const data = loadReplay(owner, repo)
+    for (const mode of ['skeleton', 'full'] as const) {
+      it.skipIf(!data)(`${owner}/${repo} (${mode}, replay cache)`, () => {
+        const r = settleMetroLabels(data!, mode)
+        expect(r.shown).toBeGreaterThan(0)
+        expect(r.offenders).toEqual([])
+      })
+    }
+  }
+})
+
+// ---------------- run markers ('+N' hidden commits) ----------------
+
+/** Distance from (x, y) to a flat x, y polyline. */
+function distToPolyline(pts: Float64Array, x: number, y: number): number {
+  let best = Infinity
+  for (let k = 2; k + 1 < pts.length; k += 2) {
+    const ax = pts[k - 2]
+    const ay = pts[k - 1]
+    const dx = pts[k] - ax
+    const dy = pts[k + 1] - ay
+    const len2 = dx * dx + dy * dy
+    const t = len2 > 0 ? Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / len2)) : 0
+    best = Math.min(best, Math.hypot(ax + t * dx - x, ay + t * dy - y))
+  }
+  return best
+}
+
+describe('metro run markers', () => {
+  const cases: [string, RepoData][] = Object.entries(fixtures).map(([name, make]) => [name, make()])
+  for (const [owner, repo] of [
+    ['SailmanSeeulater', 'Mordi'],
+    ['expressjs', 'express'],
+    ['vitejs', 'vite'],
+  ] as const) {
+    const data = loadReplay(owner, repo)
+    if (data) cases.push([`${owner}/${repo}`, data])
+  }
+
+  for (const [name, data] of cases) {
+    it(`sit on their line, with the text in the layout's free spot: ${name}`, () => {
+      const graph = buildGraph(data, 'skeleton')
+      const layout = metroLayout(graph, data, metroOptionsFor('skeleton'))
+      const view = buildMetroView(layout, graph.nodes)
+      const b = layout.bounds
+      const cy = (b.minY + b.maxY) / 2
+      const runs = new Map(layout.runs.map((r) => [r.linkIndex, r]))
+      const routes = new Map(view.routes.map((r) => [r.linkIndex, r]))
+      expect(view.badges.length).toBe(layout.runs.filter((r) => r.hidden > 0).length)
+      for (const badge of view.badges) {
+        const run = runs.get(badge.linkIndex)!
+        // the bars cross the drawn line
+        expect(distToPolyline(routes.get(badge.linkIndex)!.pts, badge.x, badge.y)).toBeLessThan(1e-6)
+        expect(Math.hypot(badge.dx, badge.dy)).toBeCloseTo(1)
+        // the text goes where the layout reserved room for it, or nowhere
+        if (run.markerY === null) expect(badge.textY).toBeNull()
+        else expect(badge.textY).toBeCloseTo((run.markerY - cy) * METRO_SCALE)
+        expect(badge.room).toBeCloseTo(run.room * METRO_SCALE)
+        expect(badge.hidden).toBe(run.hidden)
+      }
+
+      // at the default camera and when zoomed in, every run is marked (bars at least), and the
+      // '+N' texts cover no station and no other text
+      const fit = metroFitTransform(view.bbox, { width: 1042, height: 768 }, FIT_PAD, FIT_MAX_ZOOM, METRO_MIN_ZOOM).k
+      for (const k of [fit, 1, FIT_MAX_ZOOM]) {
+        const font = metroBadgeFontPx(k)
+        const boxes: number[][] = []
+        for (const badge of view.badges) {
+          const mark = metroRunMarker(badge, k)
+          expect(['badge', 'tick']).toContain(mark)
+          if (mark !== 'badge') continue
+          // screen px: ~0.57 em per glyph of '+' and digits
+          const hw = (badge.text.length * 0.57 * font) / 2
+          const hh = font / 2
+          boxes.push([badge.x * k - hw, badge.textY! * k - hh, badge.x * k + hw, badge.textY! * k + hh])
+        }
+        for (const [id, p] of view.targets) {
+          const node = graph.nodes.find((n) => n.id === id)!
+          const r = metroStationRadius(view.stations.get(id), node.isTip) * k
+          for (const [x0, y0, x1, y1] of boxes) {
+            const nx = Math.min(Math.max(p.x * k, x0), x1)
+            const ny = Math.min(Math.max(p.y * k, y0), y1)
+            expect(Math.hypot(nx - p.x * k, ny - p.y * k), `'+N' text over station ${id} at k=${k}`).toBeGreaterThanOrEqual(r - 0.25)
+          }
+        }
+        for (let a = 0; a < boxes.length; a++)
+          for (let c = a + 1; c < boxes.length; c++) {
+            const A = boxes[a]
+            const B = boxes[c]
+            expect(Math.min(A[2], B[2]) - Math.max(A[0], B[0]) > 0.5 && Math.min(A[3], B[3]) - Math.max(A[1], B[1]) > 0.5).toBe(false)
+          }
+      }
+    })
+  }
+
+  it('the text shows at the default camera of a long map; below a readable size only the bars do', () => {
+    expect(metroRunMarker({ textY: 3 }, METRO_MIN_ZOOM)).toBe('badge')
+    expect(metroRunMarker({ textY: null }, METRO_MIN_ZOOM)).toBe('tick')
+    expect(metroRunMarker({ textY: 3 }, 0.2)).toBe('tick')
+    expect(metroBadgeFontPx(METRO_MIN_ZOOM)).toBeGreaterThanOrEqual(METRO_BADGE_MIN_PX)
+    expect(metroBadgeFontPx(FIT_MAX_ZOOM)).toBe(METRO_BADGE_MAX_PX)
+  })
+})
+
+// ---------------- bringing a selection or search hits into view ----------------
+
+describe('metroRevealTransform', () => {
+  const canvas = { width: 1042, height: 768 }
+  // a vite-like map: 30 lanes high, far wider than the view at the readable zoom
+  const bbox = { x: [-2200, 2200] as [number, number], y: [-70, 70] as [number, number] }
+  const cam = metroFitTransform(bbox, canvas, FIT_PAD, FIT_MAX_ZOOM, METRO_MIN_ZOOM)
+  const onScreen = (t: { k: number; cx: number; cy: number }, p: { x: number; y: number }) => {
+    const sx = (p.x - t.cx) * t.k + canvas.width / 2
+    const sy = (p.y - t.cy) * t.k + canvas.height / 2
+    return sx >= FIT_PAD.left - 1e-6 && sx <= canvas.width - FIT_PAD.right + 1e-6 && sy >= FIT_PAD.top - 1e-6 && sy <= canvas.height - FIT_PAD.bottom + 1e-6
+  }
+
+  it('the fit leaves the oldest end off-screen (the case this is for)', () => {
+    expect(onScreen(cam, { x: bbox.x[0], y: 0 })).toBe(false)
+  })
+
+  it('does nothing for points already in view', () => {
+    expect(metroRevealTransform([{ x: bbox.x[1], y: 0 }], [], cam, canvas, FIT_PAD, METRO_MIN_ZOOM)).toBeNull()
+    expect(metroRevealTransform([], [], cam, canvas, FIT_PAD, METRO_MIN_ZOOM)).toBeNull()
+  })
+
+  it('pans to an off-screen tip without zooming in or out', () => {
+    const tip = { x: bbox.x[0], y: 40 }
+    const t = metroRevealTransform([tip], [], cam, canvas, FIT_PAD, METRO_MIN_ZOOM)!
+    expect(t.k).toBeCloseTo(cam.k)
+    expect(onScreen(t, tip)).toBe(true)
+  })
+
+  it('brings in the whole selected line when it fits, never zooming in', () => {
+    const tip = { x: bbox.x[0] + 300, y: 40 }
+    const line = [{ x: bbox.x[0], y: 40 }, { x: bbox.x[0] + 150, y: 40 }]
+    const t = metroRevealTransform([tip], line, cam, canvas, FIT_PAD, METRO_MIN_ZOOM)!
+    expect(t.k).toBeLessThanOrEqual(cam.k + 1e-9)
+    for (const p of [tip, ...line]) expect(onScreen(t, p)).toBe(true)
+  })
+
+  it('does not zoom out below the readable floor for a long line, but still shows the tip', () => {
+    const tip = { x: bbox.x[0], y: 40 }
+    const line = [{ x: bbox.x[1], y: 40 }]
+    const t = metroRevealTransform([tip], line, cam, canvas, FIT_PAD, METRO_MIN_ZOOM)!
+    expect(t.k).toBeCloseTo(cam.k)
+    expect(onScreen(t, tip)).toBe(true)
+    // a tip already in view with its long line running off-screen: no move at all
+    expect(metroRevealTransform([{ x: bbox.x[1], y: 40 }], [{ x: bbox.x[0], y: 40 }], cam, canvas, FIT_PAD, METRO_MIN_ZOOM)).toBeNull()
+  })
+
+  it('zooms out just enough to show search hits at both ends', () => {
+    const hits = [
+      { x: bbox.x[0], y: -40 },
+      { x: bbox.x[1], y: 40 },
+    ]
+    const t = metroRevealTransform(hits, [], cam, canvas, FIT_PAD, METRO_MIN_ZOOM)!
+    expect(t.k).toBeLessThan(cam.k)
+    expect(t.k).toBeCloseTo((canvas.width - FIT_PAD.left - FIT_PAD.right) / (bbox.x[1] - bbox.x[0]))
+    for (const p of hits) expect(onScreen(t, p)).toBe(true)
   })
 })

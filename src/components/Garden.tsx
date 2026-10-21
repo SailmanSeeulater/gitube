@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
 import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
+import type { MetroStationKind as MetroStation } from '../graph/metro'
 import { useGardenStore } from '../store/useGardenStore'
 import {
   ACCENT,
   CANVAS_BG,
   DIM_ALPHA,
   FALLBACK_COLOUR,
+  FIT_MAX_ZOOM,
+  FIT_PAD,
   LABEL_FONT,
+  MAX_PINNED_SEARCH_HITS,
   MONO_FONT,
   MUTED_COLOUR,
   ROOT_FILL,
@@ -23,19 +27,23 @@ import {
   nodeRadius,
   selectedReach,
   shortSha,
-  type FitPadding,
   type TimeForce,
 } from './gardenUtils'
-import { useLabelPlacer } from './useLabelPlacer'
+import { useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
 import {
+  METRO_BADGE_MIN_PX,
+  METRO_BEAD_RING_PX,
   METRO_LINE_WIDTH,
-  METRO_MIN_LANE_PX,
   METRO_MIN_LINE_PX,
-  METRO_SCALE,
+  METRO_MIN_ZOOM,
   METRO_TWEEN_MS,
   easeInOutCubic,
   isLinkDimmed,
+  metroBadgeFontPx,
+  metroCommitGlyph,
   metroFitTransform,
+  metroRevealTransform,
+  metroRunMarker,
   metroStationRadius,
   type MetroView,
 } from './metroView'
@@ -97,10 +105,9 @@ interface ScaleCache {
 const NO_DASH: number[] = []
 // force-graph treats a string here as a node attribute name, so the mode must be a function.
 const NODE_MODE_REPLACE = () => 'replace' as const
-// fit-to-view padding in screen px; symmetric because labels flip to the left near the right edge
-const FIT_PAD: FitPadding = { left: 96, right: 96, top: 72, bottom: 72 }
-const FIT_MAX_ZOOM = 2.5
 const FIT_MS = 400
+/** metro mode: a search brings its hits into view once typing has paused this long */
+const SEARCH_REVEAL_MS = 300
 // fit early, once the layout has roughly settled (every tip slower than 1 px per frame after 20
 // ticks), instead of after all 200 cooldown ticks; onEngineStop stays as the fallback
 const EARLY_FIT_TICKS = 20
@@ -118,7 +125,17 @@ const STATION_WHITE = '#e8e8e8'
 const METRO_ALPHA = 0.9
 const METRO_MUTED_ALPHA = 0.45
 const METRO_DIM_ALPHA = 0.1
-const METRO_MIN_ZOOM = METRO_MIN_LANE_PX / METRO_SCALE
+/** run marker bars: half their length across the line, and the gap between the two, in screen px */
+const RUN_BAR_HALF_PX = 3.5
+const RUN_BAR_GAP_PX = 3.5
+
+/**
+ * A station's radius for the label placer in graph units: the glyph's, except a plain commit's bead,
+ * whose size follows the zoom: half its line's width here, plus METRO_BEAD_RING_PX screen px.
+ */
+function labelStationRadius(kind: MetroStation | undefined, isTip: boolean): number {
+  return kind === 'commit' && !isTip ? METRO_LINE_WIDTH / 2 : metroStationRadius(kind, isTip)
+}
 
 /** A '+N' run badge centred on (mx, my); px = 1 / globalScale. Leaves globalAlpha at 1. */
 function drawBadge(
@@ -173,9 +190,15 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
   const metroOn = metro !== null
   const metroRef = useRef<MetroView | null>(metro)
   metroRef.current = metro
+  /** '+N' run text drawn in this frame (graph units), for the label placer; see paintMetro */
+  const markBoxesRef = useRef<LabelMarks>({ rects: new Float32Array(64), count: 0 })
   /** true while nodes tween between layouts: links are drawn straight, and every frame is redrawn */
   const tweenRef = useRef(false)
   const [tweening, setTweening] = useState(false)
+  /**
+   * The index whose freshIds are used up: by its first metro tween, or at once when it was built in
+   * organic mode (the physics places its new nodes, so a later switch to metro tweens them all).
+   */
   const lastTweenIndexRef = useRef<GardenIndex | null>(null)
   const wasMetroRef = useRef(metroOn)
 
@@ -261,6 +284,10 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
     prevNodesRef.current = index.nodeById
     fittedRef.current = false
     tickCountRef.current = 0
+    // built in organic mode: the physics places every node, so a later switch to metro tweens them
+    // all from where they are (read from the ref: metroOn as a dependency would reset the fit on
+    // every toggle). Declared before the metro effect, so it runs first in the same commit.
+    if (!metroRef.current) lastTweenIndexRef.current = index
   }, [index])
 
   const ready = size.width > 0 && size.height > 0
@@ -302,8 +329,22 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
   const bumpHover = useCallback(() => setHoverVersion((v) => v + 1), [])
   // labels keep clear of the station glyphs in metro mode, which are not reach-sized
   const labelRadius = useMemo(
-    () => (metro ? (node: GraphNode) => metroStationRadius(metro.stations.get(node.id), node.isTip) : undefined),
+    () => (metro ? (node: GraphNode) => labelStationRadius(metro.stations.get(node.id), node.isTip) : undefined),
     [metro],
+  )
+  const labelRing = useMemo(
+    () => (metro ? (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) : undefined),
+    [metro],
+  )
+  // ... and off the station rings (plain commit dots stay coverable) and the lines: the routes as
+  // drawn once the tween has ended (during it, links are drawn straight)
+  const labelHard = useMemo(() => (metro ? (node: GraphNode) => metro.stations.get(node.id) !== 'commit' : undefined), [metro])
+  const labelLines = useMemo<LabelLines | undefined>(
+    () =>
+      metro && !tweening
+        ? { segs: metro.segs, segSrc: metro.segSrc, segTgt: metro.segTgt, halfWidth: METRO_LINE_WIDTH / 2, minHalfPx: METRO_MIN_LINE_PX / 2 }
+        : undefined,
+    [metro, tweening],
   )
   const { paintLabels, onPointerMove, onPointerLeave, clickTest, labelsBusy, maxTipSpeed, setDragNode, fitStarted } = useLabelPlacer({
     index,
@@ -316,6 +357,11 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
     labelHoverRef,
     onLabelHoverChange: bumpHover,
     radiusOf: labelRadius,
+    ringPxOf: labelRing,
+    isHardNode: labelHard,
+    lines: labelLines,
+    marks: metroOn ? markBoxesRef : undefined,
+    halo: metroOn,
   })
 
   const syncScale = (globalScale: number): ScaleCache => {
@@ -343,7 +389,9 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       const dim = isDimmed(id, hovered, index.neighbours, reachSet)
 
       const kind = metro ? metro.stations.get(id) : undefined
-      const r = metro ? metroStationRadius(kind, node.isTip) : nodeRadius(node.reach)
+      // a plain commit in metro full view is a bead sized to its line and its neighbours
+      const bead = metro && kind === 'commit' && !node.isTip ? metroCommitGlyph(px, metro.commitGap.get(id)) : null
+      const r = bead ? bead.r : metro ? metroStationRadius(kind, node.isTip) : nodeRadius(node.reach)
       const colour = index.palette[node.owner] ?? FALLBACK_COLOUR
       const fill = node.isRoot && !node.isTip ? ROOT_FILL : colour
       const isHovered = hovered === id
@@ -373,7 +421,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
 
       if (metro) {
         // station glyphs: tips in branch colour with a white outline, interchanges as white rings,
-        // origins hollow (their dashed stub is drawn with the lines), stops and commits as dots
+        // origins hollow (their dashed stub is drawn with the lines), plain commits as beads (a
+        // ring in the line's colour, wider than the line, around a dark core), stops as dots
         const ring = Math.max(1.5, 1.2 * px)
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
@@ -396,6 +445,13 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
           ctx.strokeStyle = colour
           ctx.lineWidth = ring
           ctx.stroke()
+        } else if (bead) {
+          ctx.fillStyle = colour
+          ctx.fill()
+          ctx.beginPath()
+          ctx.arc(x, y, bead.core, 0, TWO_PI)
+          ctx.fillStyle = CANVAS_BG
+          ctx.fill()
         } else {
           ctx.fillStyle = colour
           ctx.fill()
@@ -468,7 +524,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       const y = node.y
       if (x === undefined || y === undefined) return
       const px = 1 / globalScale
-      const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip) : nodeRadius(node.reach) + (node.isTip ? 2 : 0)
+      const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip, px) : nodeRadius(node.reach) + (node.isTip ? 2 : 0)
       ctx.fillStyle = colour
       ctx.beginPath()
       ctx.arc(x, y, outer + (node.isTip ? 3.25 : 1) * px, 0, TWO_PI)
@@ -537,6 +593,7 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
    */
   const paintMetro = useCallback(
     (ctx: CanvasRenderingContext2D, globalScale: number) => {
+      markBoxesRef.current.count = 0
       if (!metro) return
       const c = syncScale(globalScale)
       const px = c.px
@@ -593,12 +650,54 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
         ctx.stroke()
       }
       ctx.setLineDash(NO_DASH)
-      // run markers (+N hidden commits), screen-sized like organic mode's, hidden when zoomed far out
-      if (globalScale >= 0.7) {
+      // run markers (hidden commits): a break on the line at every zoom, two short bars across
+      // it, and the '+N' in the spot beside the line the layout kept free, once it is readable
+      // (metroRunMarker). The text boxes go to the label placer, which keeps names off them.
+      const marks = markBoxesRef.current
+      if (metro.badges.length > 0) {
+        ctx.lineCap = 'butt'
+        ctx.lineWidth = 1.5 * px
+        ctx.strokeStyle = BADGE_TEXT
+        const half = RUN_BAR_HALF_PX * px
+        const gap = RUN_BAR_GAP_PX * px
         for (const b of metro.badges) {
-          const dim = isLinkDimmed(b.source, b.target, hovered, reachSet)
-          const owner = index.nodeById.get(b.source)?.owner ?? ''
-          drawBadge(ctx, b.text, b.x, b.y, px, c.badgeFont, index.linkColour.get(owner) ?? FALLBACK_LINK, dim ? DIM_ALPHA : 1)
+          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? METRO_DIM_ALPHA : 1
+          ctx.beginPath()
+          for (const side of [-0.5, 0.5]) {
+            const cx = b.x + b.dx * gap * side
+            const cy = b.y + b.dy * gap * side
+            ctx.moveTo(cx + b.dy * half, cy - b.dx * half)
+            ctx.lineTo(cx - b.dy * half, cy + b.dx * half)
+          }
+          ctx.stroke()
+        }
+        const fontPx = metroBadgeFontPx(globalScale)
+        if (fontPx >= METRO_BADGE_MIN_PX) {
+          ctx.font = `${fontPx * px}px ${LABEL_FONT}`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.lineJoin = 'round'
+          const halfH = (fontPx / 2 + 1) * px
+          for (const b of metro.badges) {
+            if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge') continue
+            ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? DIM_ALPHA : 1
+            ctx.strokeStyle = CANVAS_BG
+            ctx.lineWidth = 2.5 * px
+            ctx.strokeText(b.text, b.x, b.textY)
+            ctx.fillStyle = BADGE_TEXT
+            ctx.fillText(b.text, b.x, b.textY)
+            const halfW = ctx.measureText(b.text).width / 2 + px
+            if (marks.rects.length < 4 * (marks.count + 1)) {
+              const grown = new Float32Array(Math.max(64, marks.rects.length * 2))
+              grown.set(marks.rects)
+              marks.rects = grown
+            }
+            const q = 4 * marks.count++
+            marks.rects[q] = b.x - halfW
+            marks.rects[q + 1] = b.textY - halfH
+            marks.rects[q + 2] = b.x + halfW
+            marks.rects[q + 3] = b.textY + halfH
+          }
         }
       }
       ctx.restore()
@@ -704,7 +803,8 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
     const fg = fgRef.current
     const nodes = index.graphData.nodes
     const n = nodes.length
-    // a node new to this graph (a branch just shown, a fresh repo) starts at its station
+    // a node new to a graph built in metro mode (a branch just shown, a fresh repo) starts at its
+    // station; one the physics placed (an index built in organic mode) tweens from there
     const firstForIndex = lastTweenIndexRef.current !== index
     lastTweenIndexRef.current = index
     const sx = new Float64Array(n)
@@ -769,6 +869,49 @@ export default function Garden({ graph, viewMode, defaultBranch, onNodeClick, on
       }
     }
   }, [index, metro, ready, fitStarted])
+
+  // ---- metro mode: bring a selected branch, or the search hits, into view ----
+  // A long map opens right-aligned at a readable zoom, so its older lines start off-screen; a
+  // selection or a search there would only dim or halo things nobody can see. Runs on selection and
+  // search changes only, so it never fights the layout fit above; a search waits for typing to pause
+  // and moves only for as many hits as get pinned labels.
+  useEffect(() => {
+    if (!ready || !metroRef.current || (selectedBranch === null && query === '')) return
+    const reveal = () => {
+      const fg = fgRef.current
+      const m = metroRef.current
+      if (!fg || !m || tweenRef.current) return
+      // the stations' final positions, not where a tween has them now
+      const primary: { x: number; y: number }[] = []
+      const context: { x: number; y: number }[] = []
+      if (selectedBranch !== null) {
+        for (const node of index.graphData.nodes) {
+          const t = m.targets.get(node.id)
+          if (!t) continue
+          if (node.tips.includes(selectedBranch)) primary.push(t)
+          else if (node.owner === selectedBranch) context.push(t)
+        }
+      } else {
+        for (const [id, label] of index.tipLabelLower) {
+          const t = label.includes(query) ? m.targets.get(id) : undefined
+          if (t) primary.push(t)
+        }
+        if (primary.length > MAX_PINNED_SEARCH_HITS) return
+      }
+      const centre = fg.centerAt()
+      const t = metroRevealTransform(primary, context, { k: fg.zoom(), cx: centre.x, cy: centre.y }, sizeRef.current, FIT_PAD, METRO_MIN_ZOOM)
+      if (!t) return
+      fg.centerAt(t.cx, t.cy, FIT_MS)
+      fg.zoom(t.k, FIT_MS)
+    }
+    if (selectedBranch !== null) {
+      reveal()
+      return
+    }
+    const timer = setTimeout(reveal, SEARCH_REVEAL_MS)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch, query])
 
   return (
     <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave} onPointerMove={onPointerMove}>

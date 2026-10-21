@@ -1,7 +1,7 @@
 import { useGardenStore } from '../store/useGardenStore'
 import { ACCENT, CANVAS_BG, ROOT_FILL, ROOT_RING } from './gardenUtils'
 
-type GlyphKind = 'tip' | 'fork' | 'merge' | 'root' | 'station' | 'interchange' | 'origin' | 'run'
+type GlyphKind = 'tip' | 'fork' | 'merge' | 'root' | 'station' | 'interchange' | 'origin' | 'muted' | 'run'
 
 function Glyph({ kind }: { kind: GlyphKind }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
@@ -30,11 +30,23 @@ function Glyph({ kind }: { kind: GlyphKind }) {
           <circle cx="9" cy="9" r="3.5" fill={CANVAS_BG} stroke={ACCENT} strokeWidth="1.5" />
         </svg>
       )
-    case 'run':
+    case 'muted':
       return (
         <svg {...common}>
           <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" strokeOpacity="0.45" />
           <line x1="0" y1="14" x2="18" y2="4" stroke={ACCENT} strokeWidth="1.6" strokeDasharray="3 2" />
+        </svg>
+      )
+    // the break Garden draws across a line where skeleton view hides commits (see paintMetro)
+    case 'run':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="11" x2="18" y2="11" stroke={ACCENT} strokeWidth="2.5" />
+          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke="#b8b8b8" strokeWidth="1.5" />
+          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke="#b8b8b8" strokeWidth="1.5" />
+          <text x="9" y="5" fill="#b8b8b8" fontSize="6" textAnchor="middle">
+            +N
+          </text>
         </svg>
       )
     case 'tip':
@@ -78,7 +90,8 @@ const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string 
   { kind: 'station', label: 'tip', hint: 'branch head, labelled' },
   { kind: 'interchange', label: 'interchange', hint: 'a fork or merge: lines meet here' },
   { kind: 'origin', label: 'root', hint: 'history cut off here (dashed lead-in)' },
-  { kind: 'run', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
+  { kind: 'muted', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
+  { kind: 'run', label: '+N hidden', hint: 'commits collapsed in skeleton view; the count shows beside the line when zoomed in enough' },
 ]
 
 export default function Legend() {

@@ -613,6 +613,23 @@ describe('labels', () => {
     expect(m.get(a)).not.toBe(m.get(b))
   })
 
+  it('labels: false skips the labels and changes nothing else that is drawn', () => {
+    for (const mode of ['skeleton', 'full'] as const) {
+      const data = stress(6, 300, 100)
+      const { L: on } = layout(data, mode)
+      const { L: off } = layout(data, mode, { labels: false })
+      expect(on.labels.length).toBeGreaterThan(0)
+      expect(off.labels).toEqual([])
+      expect([...off.positions]).toEqual([...on.positions])
+      expect(off.routes).toEqual(on.routes)
+      expect([...off.stations]).toEqual([...on.stations])
+      expect(off.bounds).toEqual(on.bounds)
+      expect(off.runs.map((r) => [r.linkIndex, r.hidden, r.x, r.y, r.room])).toEqual(on.runs.map((r) => [r.linkIndex, r.hidden, r.x, r.y, r.room]))
+      // the marker spots still keep clear of each other and are inside boundsWithLabels
+      for (const r of off.runs) if (r.markerY !== null) expect(r.markerY).toBeGreaterThanOrEqual(off.boundsWithLabels.minY - EPS)
+    }
+  })
+
   it('label length is capped at 30 characters with a middle ellipsis', () => {
     const long = 'feature/an-extremely-long-branch-name-that-goes-on-and-on'
     const data = makeRepo({

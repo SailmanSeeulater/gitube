@@ -192,6 +192,11 @@ export interface FitBbox {
   y: readonly [number, number] | readonly number[]
 }
 
+/** Garden's fit-to-view padding in screen px; symmetric because labels flip to the left near the right edge. */
+export const FIT_PAD: FitPadding = { left: 96, right: 96, top: 72, bottom: 72 }
+/** Fit-to-view never zooms in further than this. */
+export const FIT_MAX_ZOOM = 2.5
+
 /**
  * Camera (zoom k, graph-space centre cx/cy) that fits a graph bbox into the padded canvas, with the
  * zoom capped at maxZoom so a four-node repo does not become four giant discs. The centre is

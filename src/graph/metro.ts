@@ -123,6 +123,12 @@ export interface MetroOptions {
   charWidth?: number
   /** Width of a label text in lane units (e.g. from ctx.measureText). Default: charWidth per char. */
   labelWidth?: (text: string) => number
+  /**
+   * Place the branch-name labels (step 8b). Default true. false leaves `labels` empty and saves
+   * that work, for a caller that places names itself (the app does, in screen space); the run
+   * markers then only keep clear of stations and each other.
+   */
+  labels?: boolean
 }
 
 export interface MetroRoute {
@@ -1630,7 +1636,7 @@ export function metroLayout(graph: Graph, data: RepoData, opts: MetroOptions = {
       }
     }
   }
-  const labels = placeLabels()
+  const labels = opts.labels === false ? [] : placeLabels()
 
   function placeLabels(): MetroLabel[] {
     const f = fontSize
