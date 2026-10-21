@@ -29,3 +29,23 @@ export { buildFullGraph, ownershipOrder, visibleBranches } from './build'
 export type { GraphBody } from './build'
 export { collapseToSkeleton, isSkeletonNode } from './collapse'
 export { assignPalette, colorAt, rotateHue, shiftLightness, ACCENT_COLOR, BRANCH_COLORS } from './color'
+export {
+  metroLayout,
+  shortBranchName,
+  uniqueShortNames,
+  skeletonRunColumns,
+  laneRunColumns,
+} from './metro'
+export type {
+  MetroBounds,
+  MetroLabel,
+  MetroLayout,
+  MetroOptions,
+  MetroPoint,
+  MetroRoute,
+  MetroRouteKind,
+  MetroRun,
+  MetroSegment,
+  MetroStationKind,
+  MetroStub,
+} from './metro'

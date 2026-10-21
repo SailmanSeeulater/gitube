@@ -1,8 +1,42 @@
+import { useGardenStore } from '../store/useGardenStore'
 import { ACCENT, CANVAS_BG, ROOT_FILL, ROOT_RING } from './gardenUtils'
 
-function Glyph({ kind }: { kind: 'tip' | 'fork' | 'merge' | 'root' }) {
+type GlyphKind = 'tip' | 'fork' | 'merge' | 'root' | 'station' | 'interchange' | 'origin' | 'run'
+
+function Glyph({ kind }: { kind: GlyphKind }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
   switch (kind) {
+    // metro mode: the station glyphs Garden draws on the straight map
+    case 'station':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="4.5" fill={ACCENT} stroke="#e8e8e8" strokeWidth="1.3" />
+        </svg>
+      )
+    case 'interchange':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="4.5" fill="#e8e8e8" />
+          <circle cx="9" cy="9" r="2.2" fill={CANVAS_BG} />
+        </svg>
+      )
+    case 'origin':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="5" y2="9" stroke={ACCENT} strokeWidth="1.2" strokeDasharray="2 2" />
+          <line x1="12" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="3.5" fill={CANVAS_BG} stroke={ACCENT} strokeWidth="1.5" />
+        </svg>
+      )
+    case 'run':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="18" y2="9" stroke={ACCENT} strokeWidth="2.5" strokeOpacity="0.45" />
+          <line x1="0" y1="14" x2="18" y2="4" stroke={ACCENT} strokeWidth="1.6" strokeDasharray="3 2" />
+        </svg>
+      )
     case 'tip':
       return (
         <svg {...common}>
@@ -33,18 +67,26 @@ function Glyph({ kind }: { kind: 'tip' | 'fork' | 'merge' | 'root' }) {
   }
 }
 
-const ITEMS: ReadonlyArray<{ kind: 'tip' | 'fork' | 'merge' | 'root'; label: string; hint: string }> = [
+const ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
   { kind: 'tip', label: 'tip', hint: 'branch head, labelled' },
   { kind: 'fork', label: 'fork', hint: 'two or more children' },
   { kind: 'merge', label: 'merge', hint: 'two or more parents' },
   { kind: 'root', label: 'root', hint: 'history cut off here' },
 ]
 
+const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
+  { kind: 'station', label: 'tip', hint: 'branch head, labelled' },
+  { kind: 'interchange', label: 'interchange', hint: 'a fork or merge: lines meet here' },
+  { kind: 'origin', label: 'root', hint: 'history cut off here (dashed lead-in)' },
+  { kind: 'run', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
+]
+
 export default function Legend() {
+  const metro = useGardenStore((s) => s.layoutMode === 'metro')
   return (
     <div>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-        {ITEMS.map((item) => (
+        {(metro ? METRO_ITEMS : ITEMS).map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
             <Glyph kind={item.kind} />
             <span className="text-[12px] text-garden-text-dim">{item.label}</span>

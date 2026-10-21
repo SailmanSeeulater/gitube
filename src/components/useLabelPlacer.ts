@@ -42,6 +42,11 @@ export interface UseLabelPlacerArgs {
   labelHoverRef: RefObject<string | null>
   /** called when labelHoverRef changes, so Garden can redraw with the new dimming */
   onLabelHoverChange: () => void
+  /**
+   * Drawn radius of a node in graph units, when it is not the organic reach-based body (metro
+   * stations). Omit for organic mode. A new function identity rebuilds the label specs.
+   */
+  radiusOf?: (node: GraphNode) => number
 }
 
 export interface LabelPlacerApi {
@@ -199,7 +204,7 @@ const allocBuffers = (n: number): FrameBuffers => ({
  * redrawing only while labels still change.
  */
 export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
-  const { index, defaultBranch, reachSet, query, selectedBranch, inspectorNodeId, hoverRef, labelHoverRef, onLabelHoverChange } = args
+  const { index, defaultBranch, reachSet, query, selectedBranch, inspectorNodeId, hoverRef, labelHoverRef, onLabelHoverChange, radiusOf } = args
 
   // ---- specs, rebuilt per graph and when web fonts finish loading (widths change) ----
   const [fontVersion, setFontVersion] = useState(0)
@@ -225,13 +230,13 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
     const baseR = new Float32Array(nodes.length)
     const ringPx = new Float32Array(nodes.length)
     nodes.forEach((node, j) => {
-      baseR[j] = bodyRadius(node)
-      ringPx[j] = node.isTip ? TIP_RING_PX : 0
+      baseR[j] = radiusOf ? radiusOf(node) : bodyRadius(node)
+      ringPx[j] = !radiusOf && node.isTip ? TIP_RING_PX : 0
     })
     return { specs, meta, labelOfNode, baseR, ringPx }
     // fontVersion is a dependency on purpose: new widths after a font load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, defaultBranch, fontVersion])
+  }, [index, defaultBranch, fontVersion, radiusOf])
 
   // ---- the placer, inheriting from the previous graph's placer by tip node id ----
   const prevPlacerRef = useRef<PlacerState | null>(null)
