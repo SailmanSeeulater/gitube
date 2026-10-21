@@ -43,11 +43,14 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <line x1="0" y1="14" x2="18" y2="4" stroke={branch} strokeWidth="1.6" strokeDasharray="3 2" />
         </svg>
       )
-    // the break Garden draws across a line where skeleton view hides commits (see paintMetro)
+    // the break Garden draws across a line where skeleton view hides commits (see strokeRunBars):
+    // a cut in the background colour (here the panel's) under two bars
     case 'run':
       return (
         <svg {...common}>
           <line x1="0" y1="11" x2="18" y2="11" stroke={branch} strokeWidth="2.5" />
+          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke={theme.panel} strokeWidth="3.5" />
+          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke={theme.panel} strokeWidth="3.5" />
           <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke={theme.derived.runMark} strokeWidth="1.5" />
           <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke={theme.derived.runMark} strokeWidth="1.5" />
           <text x="9" y="5" fill={theme.derived.runMark} fontSize="6" textAnchor="middle">

@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { assignPalette, colorAt, rotateHue } from '../graph'
 import { applyTheme } from './applyTheme'
 import { defaultThemeCss, themeBootScript } from './boot'
-import { blendHex, contrastRatio, deltaE2000, deltaE2000Lab, hexToLab, hexToRgba, luminance, parseHex } from './colour'
+import { blendHex, contrastRatio, deltaE2000, deltaE2000Lab, hexToLab, hexToOklch, hexToRgba, luminance, parseHex } from './colour'
 import { readStoredThemeId, writeStoredThemeId } from './storage'
 import {
   DEFAULT_THEME,
   DEFAULT_THEME_ID,
   LABEL_PLATE_FILL_ALPHA,
   LABEL_PLATE_RING_ALPHA,
+  METRO_MIN_LINE_CONTRAST,
+  METRO_MIN_MUTED_CONTRAST,
+  METRO_MIN_STUB_CONTRAST,
   THEMES,
   THEME_IDS,
   THEME_STORAGE_KEY,
@@ -184,8 +187,16 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('theme %s', (_i
 // label halo, the metro legend); these keep them readable on every canvas.
 describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in %s', (_id, theme) => {
   const d = theme.derived
-  /** every colour a route is drawn in: the branch colours, the default branch's and the fallback */
-  const routeColours = [...theme.branchColors, d.defaultBranchColour, theme.fallback]
+  /**
+   * every colour a route is drawn in: the branch colours (on the 'oklch' themes the first 96,
+   * cycled ones included), the default branch's and the fallback. Obsidian's legacy HSL cycling
+   * fails these floors past the twelfth colour (worst #2422ee, 1.83:1 at full strength), so only
+   * its base palette is held to them.
+   */
+  const routeColours =
+    theme.cycle === 'oklch'
+      ? [...Array.from({ length: 96 }, (_, i) => colorAt(i, theme)), d.defaultBranchColour, theme.fallback]
+      : [...theme.branchColors, d.defaultBranchColour, theme.fallback]
   /** contrast on the canvas of a colour drawn at this alpha over it */
   const onCanvas = (colour: string, alpha: number) => contrastRatio(blendHex(colour, theme.canvas, alpha), theme.canvas)
 
@@ -211,12 +222,24 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in 
     expect(theme.metroLineAlpha).toBeLessThanOrEqual(1)
   })
 
+  // A full route at 3:1 on the canvas is also what makes a run marker's break show: the break is a
+  // canvas-coloured (textHalo) cut across the route (Garden's paintMetro, strokeRunBars).
   it('keeps full routes at 3:1, muted routes and lead-ins visible, and dimmed routes faint', () => {
+    expect([METRO_MIN_LINE_CONTRAST, METRO_MIN_STUB_CONTRAST, METRO_MIN_MUTED_CONTRAST]).toEqual([3, 2, 1.8])
     for (const colour of routeColours) {
-      expect(onCanvas(colour, theme.metroLineAlpha), colour).toBeGreaterThanOrEqual(3)
-      expect(onCanvas(colour, theme.metroStubAlpha), colour).toBeGreaterThanOrEqual(2)
-      expect(onCanvas(colour, theme.metroMutedAlpha), colour).toBeGreaterThanOrEqual(1.8)
+      expect(onCanvas(colour, theme.metroLineAlpha), colour).toBeGreaterThanOrEqual(METRO_MIN_LINE_CONTRAST)
+      expect(onCanvas(colour, theme.metroStubAlpha), colour).toBeGreaterThanOrEqual(METRO_MIN_STUB_CONTRAST)
+      expect(onCanvas(colour, theme.metroMutedAlpha), colour).toBeGreaterThanOrEqual(METRO_MIN_MUTED_CONTRAST)
       expect(onCanvas(colour, theme.metroDimAlpha), colour).toBeLessThan(1.4)
+    }
+  })
+
+  it.skipIf(theme.cycle !== 'oklch')('draws no live route fainter than the muted trunk', () => {
+    // a live branch must not read as a merged or deleted one (a muted route, the accent at metroMutedAlpha)
+    const mutedTrunk = onCanvas(theme.accent, theme.metroMutedAlpha)
+    for (let i = 0; i < 96; i++) {
+      const colour = colorAt(i, theme)
+      expect(onCanvas(colour, theme.metroLineAlpha), `${i} ${colour}`).toBeGreaterThan(mutedTrunk)
     }
   })
 })
@@ -350,6 +373,20 @@ describe('branch palettes per theme', () => {
       const others = Array.from({ length: 24 }, (_, i) => `topic-${String(i).padStart(2, '0')}`)
       const palette = assignPalette([...others, 'main'], 'main', theme)
       expect(minPairwiseDeltaE(others.map((name) => palette[name]))).toBeGreaterThanOrEqual(10)
+    },
+  )
+
+  it.each(THEMES.filter((t) => t.cycle === 'oklch').map((theme) => [theme.id, theme] as const))(
+    '%s: cycled colours stay out of the ink',
+    (_id, theme) => {
+      // no darker than the base palette's band (0.005 covers the hex rounding of the grid L), and on
+      // light themes clear of stationRing, the ink of station rings, interchanges and text
+      const floorL = Math.min(...theme.branchColors.map((h) => hexToOklch(h)[0])) - 0.05
+      for (let i = 12; i < 200; i++) {
+        const c = colorAt(i, theme)
+        expect(hexToOklch(c)[0], `${i} ${c}`).toBeGreaterThanOrEqual(floorL - 0.005)
+        if (theme.mode === 'light') expect(contrastRatio(c, theme.stationRing), `${i} ${c}`).toBeGreaterThanOrEqual(1.5)
+      }
     },
   )
 

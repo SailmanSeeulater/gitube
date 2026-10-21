@@ -32,6 +32,16 @@ export const LABEL_PLATE_FILL_ALPHA = 0.92
 /** ...ringed with the text colour at this alpha. */
 export const LABEL_PLATE_RING_ALPHA = 0.25
 
+/**
+ * Metro view floors: the contrast on the canvas of a route colour drawn at the theme's
+ * metroLineAlpha (a full route), metroStubAlpha (the dashed lead-in before a root) and
+ * metroMutedAlpha (a muted route). Every base colour, the accent and the fallback clear them
+ * (themes.test.ts), and graph/color.ts admits a cycled colour only if it does too.
+ */
+export const METRO_MIN_LINE_CONTRAST = 3
+export const METRO_MIN_STUB_CONTRAST = 2
+export const METRO_MIN_MUTED_CONTRAST = 1.8
+
 type Twelve<T> = readonly [T, T, T, T, T, T, T, T, T, T, T, T]
 
 /** The design tokens of one theme. Colours are '#rrggbb'; alphas are 0..1. */
@@ -88,7 +98,9 @@ export interface ThemeTokens {
   stationRing: string
   /**
    * Metro routes are their branch colour at metroLineAlpha. Light themes draw them at full
-   * strength, so every branch colour keeps the 3:1 on the canvas its palette was designed for.
+   * strength, so every base colour keeps the 3:1 on the canvas its palette was designed for. On
+   * the 'oklch' themes, dark ones included, colours cycled past the twelfth are filtered for
+   * contrast at the theme's metro alphas (METRO_MIN_*_CONTRAST), so the 3:1 holds for them too.
    */
   metroLineAlpha: number
   /** a muted route (a deleted branch merged into a line), and every link while the nodes tween */
@@ -108,10 +120,13 @@ export interface ThemeTokens {
   /**
    * How colours cycle past the twelfth branch. 'hsl': the original golden-angle HSL hue rotation
    * (Obsidian keeps it, so its colours stay bit for bit; distinct hues for small counts only).
-   * 'oklch': farthest-point picks from an OKLCH grid of colours that clear 3:1 on the canvas and
-   * keep dE 15 from the accent, each as far (CIEDE2000) as possible from the 12 base colours and
-   * every earlier cycled colour (see graph/color.ts colorAt); an HSL rotation would turn a light
-   * theme's dark blue into a pale, unreadable yellow.
+   * 'oklch': farthest-point picks from an OKLCH grid of colours that clear 3:1 on the canvas,
+   * clear the metro route, lead-in and muted floors (METRO_MIN_*_CONTRAST) at the theme's metro
+   * alphas, keep dE 15 from the accent, are no darker (OKLCH L) than the darkest base colour less
+   * 0.05 and, on light themes, keep 1.5:1 against stationRing (the ink of station rings and text);
+   * each is as far (CIEDE2000) as possible from the 12 base colours and every earlier cycled
+   * colour (see graph/color.ts colorAt). An HSL rotation would turn a light theme's dark blue into
+   * a pale, unreadable yellow.
    */
   cycle: 'hsl' | 'oklch'
 }
@@ -162,8 +177,14 @@ export interface Theme extends ThemeTokens {
   derived: ThemeDerived
 }
 
-/** What branch colour assignment needs from a theme. */
-export type PaletteScheme = Pick<ThemeTokens, 'accent' | 'branchColors' | 'canvas' | 'cycle'>
+/**
+ * What branch colour assignment needs from a theme: its colours, how it cycles, and what the
+ * 'oklch' cycling filters candidates against (the metro alphas, the mode and the station ink).
+ */
+export type PaletteScheme = Pick<
+  ThemeTokens,
+  'accent' | 'branchColors' | 'canvas' | 'cycle' | 'metroLineAlpha' | 'metroStubAlpha' | 'metroMutedAlpha' | 'mode' | 'stationRing'
+>
 
 /** Generated from the judge-corrected themes.json; `cycle` is the app's addition (see ThemeTokens). */
 const THEME_TOKENS = [

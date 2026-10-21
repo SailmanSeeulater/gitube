@@ -6,8 +6,14 @@
  * branch is toggled on and off. Switching theme maps every branch to the same slot of the new
  * theme's palette (slots depend on the names only).
  */
-import { contrastRatio, deltaE2000Lab, hexToLab, hexToRgb, oklchToHex, rgbToHex, type Lab, type Rgb } from '../theme/colour'
-import { DEFAULT_THEME, type PaletteScheme } from '../theme/themes'
+import { blendHex, contrastRatio, deltaE2000Lab, hexToLab, hexToOklch, hexToRgb, oklchToHex, rgbToHex, type Lab, type Rgb } from '../theme/colour'
+import {
+  DEFAULT_THEME,
+  METRO_MIN_LINE_CONTRAST,
+  METRO_MIN_MUTED_CONTRAST,
+  METRO_MIN_STUB_CONTRAST,
+  type PaletteScheme,
+} from '../theme/themes'
 
 /** The default theme's (Obsidian's) accent, the default branch's colour. */
 export const ACCENT_COLOR: string = DEFAULT_THEME.accent
@@ -24,6 +30,13 @@ const CYCLE_HUE_STEP = 137.508
 const CYCLE_MIN_CONTRAST = 3
 /** ...and keeps at least this CIEDE2000 distance from the accent (the default branch, the trunk). */
 const CYCLE_MIN_ACCENT_DE = 15
+/** ...and is no darker (OKLCH L) than the darkest base colour minus this, so cycled colours stay in the palette's band... */
+const CYCLE_L_MARGIN = 0.05
+/**
+ * ...and, on light themes only, keeps this contrast against stationRing: the ink of station rings,
+ * interchanges and text there, which a near-black branch would melt into.
+ */
+const CYCLE_MIN_RING_CONTRAST = 1.5
 /** The OKLCH grid the 'oklch' candidates are drawn from: L 0.25..0.92 by 0.05, four chromas, h by 10 degrees. */
 const POOL_L_MIN = 0.25
 const POOL_L_MAX = 0.92
@@ -41,7 +54,9 @@ function compareNames(a: string, b: string): number {
  * name is sorted and takes the next colour from the theme's branchColors. Past twelve names the
  * colours come from colorAt: on the 'oklch' themes each one is chosen greedily to be as far
  * (CIEDE2000) as possible from the 12 base colours and every earlier cycled colour, among
- * candidates that clear 3:1 on the canvas and keep dE 15 from the accent. Obsidian's legacy
+ * candidates that clear 3:1 on the canvas, clear the metro route, lead-in and muted floors at the
+ * theme's metro alphas, keep dE 15 from the accent, are no darker than the darkest base colour
+ * (less a small margin) and, on light themes, keep 1.5:1 against the station ink. Obsidian's legacy
  * 'hsl' cycling (a golden-angle hue rotation) only guarantees distinct hues for small counts.
  * The scheme defaults to Obsidian, the default theme.
  */
@@ -83,12 +98,16 @@ const cycleCache = new WeakMap<PaletteScheme, CycleState>()
  * scheme's branchColors. Past them, cycle 'hsl' rotates the HSL hue by the golden angle per cycle
  * (the original behaviour, kept bit for bit for Obsidian; distinct hues for small counts only).
  * Cycle 'oklch' extends the palette by farthest-point sampling over an OKLCH grid of candidates
- * that clear 3:1 on the canvas and keep dE 15 from the accent (so a cycled branch never
- * impersonates the trunk): each new colour is the candidate farthest (CIEDE2000) from the 12 base
- * colours and every earlier cycled colour, ties going to the first candidate. A pick depends only
- * on the earlier ones, so a colour is the same whatever order the indices are asked for in. Every
- * cycled colour is distinct until the pool (several hundred colours per theme) runs out; past
- * that the picks repeat in order.
+ * that clear 3:1 on the canvas; clear the metro floors (METRO_MIN_LINE/STUB/MUTED_CONTRAST) when
+ * drawn at the theme's metroLineAlpha, metroStubAlpha and metroMutedAlpha, so a cycled route,
+ * lead-in or muted route reads like a base colour's; keep dE 15 from the accent (so a cycled
+ * branch never impersonates the trunk); are no darker (OKLCH L) than the darkest base colour minus
+ * CYCLE_L_MARGIN; and, on light themes, keep CYCLE_MIN_RING_CONTRAST against stationRing (so no
+ * branch turns as dark as the station rings and text). Each new colour is the candidate farthest
+ * (CIEDE2000) from the 12 base colours and every earlier cycled colour, ties going to the first
+ * candidate. A pick depends only on the earlier ones, so a colour is the same whatever order the
+ * indices are asked for in. Every cycled colour is distinct until the pool (several hundred
+ * colours per theme) runs out; past that the picks repeat in order.
  */
 export function colorAt(index: number, scheme: PaletteScheme = DEFAULT_THEME): string {
   const palette = scheme.branchColors
@@ -145,12 +164,21 @@ function siftDown(heap: number[], i: number, minD: readonly number[]): void {
   }
 }
 
-/** The OKLCH candidate grid as distinct hex colours (with CIELAB values), in grid order. Theme independent: built once. */
-let candidateGrid: { hexes: string[]; labs: Lab[] } | null = null
+/**
+ * The OKLCH candidate grid as distinct hex colours, with their CIELAB values and the grid L each
+ * was made at, in grid order. Theme independent: built once.
+ */
+interface CandidateGrid {
+  hexes: string[]
+  labs: Lab[]
+  ls: number[]
+}
+let candidateGrid: CandidateGrid | null = null
 
-function grid(): { hexes: string[]; labs: Lab[] } {
+function grid(): CandidateGrid {
   if (candidateGrid !== null) return candidateGrid
   const hexes: string[] = []
+  const ls: number[] = []
   const seen = new Set<string>()
   for (let i = 0; POOL_L_MIN + i * POOL_L_STEP <= POOL_L_MAX + 1e-9; i++) {
     const L = POOL_L_MIN + i * POOL_L_STEP
@@ -160,16 +188,19 @@ function grid(): { hexes: string[]; labs: Lab[] } {
         if (seen.has(hex)) continue
         seen.add(hex)
         hexes.push(hex)
+        ls.push(L)
       }
     }
   }
-  candidateGrid = { hexes, labs: hexes.map(hexToLab) }
+  candidateGrid = { hexes, labs: hexes.map(hexToLab), ls }
   return candidateGrid
 }
 
 /**
  * The 'oklch' candidate pool for a scheme: the grid colours that are not base colours, clear 3:1
- * on the canvas and keep dE 15 from the accent, with each one's distance to the nearest base colour.
+ * on the canvas and the metro floors at the theme's metro alphas, keep dE 15 from the accent, are
+ * no darker than the darkest base colour minus CYCLE_L_MARGIN and (light themes) keep 1.5:1
+ * against stationRing, with each one's distance to the nearest base colour.
  */
 function cycleState(scheme: PaletteScheme): CycleState {
   const cached = cycleCache.get(scheme)
@@ -177,11 +208,22 @@ function cycleState(scheme: PaletteScheme): CycleState {
   const all = grid()
   const taken = new Set<string>(scheme.branchColors)
   const accent = hexToLab(scheme.accent)
+  const floorL = Math.min(...scheme.branchColors.map((h) => hexToOklch(h)[0])) - CYCLE_L_MARGIN
+  /** contrast on the canvas of the candidate drawn at this alpha over it, as a metro route is */
+  const onCanvas = (hex: string, a: number) => contrastRatio(blendHex(hex, scheme.canvas, a), scheme.canvas)
   const pool: string[] = []
   const labs: Lab[] = []
   all.hexes.forEach((hex, k) => {
     if (taken.has(hex)) return
+    if (all.ls[k] < floorL - 1e-9) return
     if (contrastRatio(hex, scheme.canvas) < CYCLE_MIN_CONTRAST) return
+    if (
+      onCanvas(hex, scheme.metroLineAlpha) < METRO_MIN_LINE_CONTRAST ||
+      onCanvas(hex, scheme.metroStubAlpha) < METRO_MIN_STUB_CONTRAST ||
+      onCanvas(hex, scheme.metroMutedAlpha) < METRO_MIN_MUTED_CONTRAST
+    )
+      return
+    if (scheme.mode === 'light' && contrastRatio(hex, scheme.stationRing) < CYCLE_MIN_RING_CONTRAST) return
     if (deltaE2000Lab(all.labs[k], accent) < CYCLE_MIN_ACCENT_DE) return
     pool.push(hex)
     labs.push(all.labs[k])

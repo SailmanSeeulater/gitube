@@ -40,6 +40,7 @@ import {
   metroRevealTransform,
   metroRunMarker,
   metroStationRadius,
+  strokeRunBars,
   type MetroView,
 } from './metroView'
 
@@ -118,10 +119,8 @@ const SEARCH_REVEAL_MS = 300
 const EARLY_FIT_TICKS = 20
 const EARLY_FIT_SPEED = 1
 const TWO_PI = Math.PI * 2
-// metro mode (its colours and line alphas come from the theme: stationRing, metro*Alpha, derived)
-/** run marker bars: half their length across the line, and the gap between the two, in screen px */
-const RUN_BAR_HALF_PX = 3.5
-const RUN_BAR_GAP_PX = 3.5
+// metro mode (its colours and line alphas come from the theme: stationRing, metro*Alpha, derived);
+// the run marker bars' sizes live with strokeRunBars in metroView.ts
 
 /**
  * A station's radius for the label placer in graph units: the glyph's, except a plain commit's bead,
@@ -648,26 +647,15 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
         ctx.stroke()
       }
       ctx.setLineDash(NO_DASH)
-      // run markers (hidden commits): a break on the line at every zoom, two short bars across
-      // it, and the '+N' in the spot beside the line the layout kept free, once it is readable
+      // run markers (hidden commits): a break on the line at every zoom, a canvas-coloured
+      // (textHalo) cut across the whole route under two short runMark bars (strokeRunBars), and
+      // the '+N' in the spot beside the line the layout kept free, once it is readable
       // (metroRunMarker). The text boxes go to the label placer, which keeps names off them.
       const marks = markBoxesRef.current
       if (metro.badges.length > 0) {
-        ctx.lineCap = 'butt'
-        ctx.lineWidth = 1.5 * px
-        ctx.strokeStyle = th.derived.runMark
-        const half = RUN_BAR_HALF_PX * px
-        const gap = RUN_BAR_GAP_PX * px
         for (const b of metro.badges) {
           ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.metroDimAlpha : 1
-          ctx.beginPath()
-          for (const side of [-0.5, 0.5]) {
-            const cx = b.x + b.dx * gap * side
-            const cy = b.y + b.dy * gap * side
-            ctx.moveTo(cx + b.dy * half, cy - b.dx * half)
-            ctx.lineTo(cx - b.dy * half, cy + b.dx * half)
-          }
-          ctx.stroke()
+          strokeRunBars(ctx, b, px, width, th)
         }
         const fontPx = metroBadgeFontPx(globalScale)
         if (fontPx >= METRO_BADGE_MIN_PX) {
