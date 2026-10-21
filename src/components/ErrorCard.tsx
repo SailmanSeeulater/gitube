@@ -2,7 +2,11 @@ import type { GitHubFetchError } from '../types'
 import { formatClock } from './gardenUtils'
 import { AlertIcon, CloseIcon } from './icons'
 
-export type ErrorCode = GitHubFetchError['code']
+/**
+ * A fetch failure, bad_file (a saved garden that could not be opened) or export_failed (the image
+ * could not be made); for the last two, message says why.
+ */
+export type ErrorCode = GitHubFetchError['code'] | 'bad_file' | 'export_failed'
 
 export interface ErrorCardProps {
   code: ErrorCode
@@ -63,6 +67,16 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
       return {
         title: 'something went wrong',
         hint: message ? `${message} press Grow to try again.` : 'press Grow to try again.',
+      }
+    case 'bad_file':
+      return {
+        title: "couldn't open that file",
+        hint: message ?? 'pick a .json file saved from repo-garden.',
+      }
+    case 'export_failed':
+      return {
+        title: "couldn't save the image",
+        hint: message ? `${message}. try again, or save the data as JSON instead.` : 'try again, or save the data as JSON instead.',
       }
   }
 }
