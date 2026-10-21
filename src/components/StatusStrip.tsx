@@ -1,6 +1,7 @@
 import type { Graph, RepoData } from '../types'
 import { useGardenStore } from '../store/useGardenStore'
 import { formatClock, formatDateTime, relativeTime, stageLabel } from './gardenUtils'
+import { PlayIcon } from './icons'
 
 export interface StatusStripProps {
   data: RepoData | undefined
@@ -12,12 +13,22 @@ export interface StatusStripProps {
   cachedAt?: string | null
   /** fetch the repo from GitHub again, skipping the cache */
   onRefresh?: () => void
+  /** opens the time-lapse (the strip gives way to its controls); omitted while there is no graph */
+  onTimelapse?: () => void
 }
 
 const shell =
   'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
 
-export default function StatusStrip({ data, graph, isFetching, fileSavedAt = null, cachedAt = null, onRefresh }: StatusStripProps) {
+export default function StatusStrip({
+  data,
+  graph,
+  isFetching,
+  fileSavedAt = null,
+  cachedAt = null,
+  onRefresh,
+  onTimelapse,
+}: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
   const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
 
@@ -66,6 +77,17 @@ export default function StatusStrip({ data, graph, isFetching, fileSavedAt = nul
 
   return (
     <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
+      {onTimelapse && (
+        <button
+          type="button"
+          onClick={onTimelapse}
+          title="Replay the garden growing from its first loaded commit, and record it as a video"
+          className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
+        >
+          <PlayIcon size={11} />
+          watch it grow
+        </button>
+      )}
       <span className="text-garden-text-dim">
         {data.branches.length} branch{data.branches.length === 1 ? '' : 'es'}
       </span>

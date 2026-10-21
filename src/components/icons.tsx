@@ -172,3 +172,35 @@ export function LinkIcon(props: IconProps) {
     </svg>
   )
 }
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M8 5.5v13l10.5-6.5Z" fill="currentColor" />
+    </svg>
+  )
+}
+
+export function PauseIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M8.5 5.5v13M15.5 5.5v13" strokeWidth={3} />
+    </svg>
+  )
+}
+
+export function RecordIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function StopIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
