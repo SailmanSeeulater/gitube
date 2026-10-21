@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
-import { assignPalette, buildGraph } from './graph'
+import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
+import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph } from './types'
 import { useRepoData } from './hooks/useRepoData'
 import { useGardenStore } from './store/useGardenStore'
@@ -41,6 +42,10 @@ export default function App() {
   const setInspectorNodeId = useGardenStore((s) => s.setInspectorNodeId)
   const selectedBranch = useGardenStore((s) => s.selectedBranch)
   const setSelectedBranch = useGardenStore((s) => s.setSelectedBranch)
+  const selectedContributor = useGardenStore((s) => s.selectedContributor)
+  const setSelectedContributor = useGardenStore((s) => s.setSelectedContributor)
+  const setPanelTab = useGardenStore((s) => s.setPanelTab)
+  const setPanelOpen = useGardenStore((s) => s.setPanelOpen)
   const clearSelection = useGardenStore((s) => s.clearSelection)
   const resetForNewRepo = useGardenStore((s) => s.resetForNewRepo)
   const panelOpen = useGardenStore((s) => s.panelOpen)
@@ -84,6 +89,19 @@ export default function App() {
     () => (data ? buildGraph(data, viewMode, { hiddenBranches: effectiveHidden }) : null),
     [data, viewMode, effectiveHidden],
   )
+
+  // the leaderboard covers every fetched commit, whatever is hidden
+  const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
+
+  // The selected person's commits to keep lit. Skeleton links stand for runs of hidden commits, so
+  // the full graph (same hidden branches) is walked to see whose commits each run holds.
+  const focus = useMemo<ContributorFocus | null>(() => {
+    if (!data || !graph || !contributors || selectedContributor === null) return null
+    const person = contributors.list.find((c) => c.key === selectedContributor)
+    const full = viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden)
+    const branches = person ? person.branches.map((b) => b.name) : []
+    return contributorFocus(graph, full, contributors.keyBySha, selectedContributor, branches)
+  }, [data, graph, contributors, selectedContributor, viewMode, effectiveHidden])
 
   // metro mode: the straight layout of exactly this graph (null in organic mode)
   const metro = useMetroView(graph, data ?? null, viewMode, layoutMode === 'metro')
@@ -142,6 +160,15 @@ export default function App() {
   const handleNodeClick = useCallback((id: string) => setInspectorNodeId(id), [setInspectorNodeId])
   const handleBackgroundClick = useCallback(() => clearSelection(), [clearSelection])
   const closeInspector = useCallback(() => setInspectorNodeId(null), [setInspectorNodeId])
+  // the inspector's author link: highlight that person and show them in the leaderboard
+  const showContributor = useCallback(
+    (key: string) => {
+      setSelectedContributor(key)
+      setPanelTab('contributors')
+      setPanelOpen(true)
+    },
+    [setSelectedContributor, setPanelTab, setPanelOpen],
+  )
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -171,6 +198,7 @@ export default function App() {
             onNodeClick={handleNodeClick}
             onBackgroundClick={handleBackgroundClick}
             metro={metro}
+            focus={focus}
           />
         )}
       </div>
@@ -199,11 +227,19 @@ export default function App() {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && <Panel data={data} palette={palette} />}
+      {data && graph && contributors && <Panel data={data} palette={palette} contributors={contributors} />}
 
       <StatusStrip data={data} graph={graph} isFetching={isFetching} />
 
-      {inspectorNode && graph && <NodeInspector node={inspectorNode} palette={palette} onClose={closeInspector} />}
+      {inspectorNode && graph && (
+        <NodeInspector
+          node={inspectorNode}
+          palette={palette}
+          onClose={closeInspector}
+          authorKey={contributors?.keyBySha.get(inspectorNode.id) ?? null}
+          onShowAuthor={showContributor}
+        />
+      )}
     </div>
   )
 }

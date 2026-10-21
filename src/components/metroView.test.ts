@@ -209,6 +209,14 @@ describe('metro helpers', () => {
     expect(isLinkDimmed('a', 'b', null, new Set(['a', 'b']))).toBe(false)
     expect(isLinkDimmed('a', 'b', null, new Set(['a']))).toBe(true)
   })
+
+  it('isLinkDimmed: a lit set (a selected contributor) replaces the reach rule, hover still applies', () => {
+    const lit = new Set(['a>b'])
+    expect(isLinkDimmed('a', 'b', null, new Set<string>(), lit)).toBe(false)
+    expect(isLinkDimmed('b', 'c', null, new Set(['b', 'c']), lit)).toBe(true)
+    expect(isLinkDimmed('a', 'b', 'z', null, lit)).toBe(true)
+    expect(isLinkDimmed('a', 'b', 'a', null, lit)).toBe(false)
+  })
 })
 
 describe('metroFitTransform', () => {

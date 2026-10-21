@@ -8,6 +8,8 @@ const reset = () =>
     layoutMode: 'organic',
     hiddenBranches: new Set<string>(),
     selectedBranch: null,
+    selectedContributor: null,
+    panelTab: 'branches',
     search: '',
     staleDays: 0,
     panelOpen: true,
@@ -113,6 +115,34 @@ describe('useGardenStore', () => {
     useGardenStore.getState().clearSelection()
     expect(useGardenStore.getState().selectedBranch).toBeNull()
     expect(useGardenStore.getState().inspectorNodeId).toBeNull()
+  })
+
+  it('keeps a branch and a contributor from being selected together', () => {
+    const s = useGardenStore.getState()
+    s.setSelectedBranch('main')
+    s.toggleSelectedContributor('login:ann')
+    expect(useGardenStore.getState().selectedContributor).toBe('login:ann')
+    expect(useGardenStore.getState().selectedBranch).toBeNull()
+    s.toggleSelectedBranch('dev')
+    expect(useGardenStore.getState().selectedBranch).toBe('dev')
+    expect(useGardenStore.getState().selectedContributor).toBeNull()
+    s.setSelectedContributor('login:bob')
+    s.setSelectedBranch(null) // clearing a branch leaves the contributor alone
+    expect(useGardenStore.getState().selectedContributor).toBe('login:bob')
+    s.toggleSelectedContributor('login:bob')
+    expect(useGardenStore.getState().selectedContributor).toBeNull()
+  })
+
+  it('clearSelection and resetForNewRepo drop the selected contributor but keep the panel tab', () => {
+    const s = useGardenStore.getState()
+    s.setPanelTab('contributors')
+    s.setSelectedContributor('login:ann')
+    s.clearSelection()
+    expect(useGardenStore.getState().selectedContributor).toBeNull()
+    s.setSelectedContributor('login:ann')
+    s.resetForNewRepo()
+    expect(useGardenStore.getState().selectedContributor).toBeNull()
+    expect(useGardenStore.getState().panelTab).toBe('contributors')
   })
 
   it('resetForNewRepo keeps token, view mode, panel and stale filter', () => {

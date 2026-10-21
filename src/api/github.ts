@@ -33,7 +33,7 @@ interface RawCommit {
     author?: { name?: string; date?: string } | null
     committer?: { name?: string; date?: string } | null
   }
-  author?: { login?: string } | null
+  author?: { login?: string; avatar_url?: string } | null
 }
 
 type HeaderBag = Record<string, string | number | undefined>
@@ -383,7 +383,7 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
 // ---------- helpers ----------
 
 function normaliseCommit(raw: RawCommit): Commit {
-  return {
+  const commit: Commit = {
     sha: raw.sha,
     parents: raw.parents.map((p) => p.sha),
     message: firstLine(raw.commit.message),
@@ -391,6 +391,13 @@ function normaliseCommit(raw: RawCommit): Commit {
     date: raw.commit.committer?.date ?? raw.commit.author?.date ?? '',
     url: raw.html_url,
   }
+  // raw.author is the linked GitHub account (null when the commit email matches none)
+  const login = raw.author?.login
+  if (login) {
+    commit.login = login
+    if (raw.author?.avatar_url) commit.avatarUrl = raw.author.avatar_url
+  }
+  return commit
 }
 
 function firstLine(message: string | null | undefined): string {

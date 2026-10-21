@@ -1,8 +1,10 @@
 import { useMemo, type KeyboardEvent } from 'react'
 import type { Branch, RepoData, ViewMode } from '../types'
-import { useGardenStore, type LayoutMode } from '../store/useGardenStore'
+import type { ContributorIndex } from '../graph/contributors'
+import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
 import { useTheme } from '../theme/useTheme'
 import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
+import ContributorsTab from './ContributorsTab'
 import Legend from './Legend'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, SearchIcon } from './icons'
 
@@ -10,6 +12,43 @@ export interface PanelProps {
   data: RepoData
   /** branch name -> colour in the active theme (App's palette, not graph.palette) */
   palette: Record<string, string>
+  contributors: ContributorIndex
+}
+
+interface TabsProps {
+  value: PanelTab
+  onChange: (tab: PanelTab) => void
+  branchCount: number
+  peopleCount: number
+}
+
+function Tabs({ value, onChange, branchCount, peopleCount }: TabsProps) {
+  const tabs: ReadonlyArray<{ id: PanelTab; label: string; count: number }> = [
+    { id: 'branches', label: 'branches', count: branchCount },
+    { id: 'contributors', label: 'people', count: peopleCount },
+  ]
+  return (
+    <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-garden-border px-2">
+      {tabs.map((tab) => {
+        const active = tab.id === value
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(tab.id)}
+            className={`-mb-px flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-[12px] transition-colors ${
+              active ? 'border-garden-accent text-garden-accent' : 'border-transparent text-garden-muted hover:text-garden-text'
+            }`}
+          >
+            {tab.label}
+            <span className="rounded bg-garden-hover px-1 font-mono text-[10px] tabular-nums text-garden-muted">{tab.count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 interface SegmentedProps<T extends string | number> {
@@ -97,7 +136,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
             +{branch.aheadBy} <span className="text-garden-border">/</span> -{branch.behindBy}
           </span>
         )}
-        <span className="w-12 shrink-0 text-right text-[11px] text-garden-muted" title={branch.tipDate}>
+        <span className="w-[3.25rem] shrink-0 whitespace-nowrap text-right text-[11px] text-garden-muted" title={branch.tipDate}>
           {relativeTime(branch.tipDate, now)}
         </span>
         <button
@@ -119,10 +158,12 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
   )
 }
 
-export default function Panel({ data, palette }: PanelProps) {
+export default function Panel({ data, palette, contributors }: PanelProps) {
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
+  const panelTab = useGardenStore((s) => s.panelTab)
+  const setPanelTab = useGardenStore((s) => s.setPanelTab)
   const viewMode = useGardenStore((s) => s.viewMode)
   const setViewMode = useGardenStore((s) => s.setViewMode)
   const layoutMode = useGardenStore((s) => s.layoutMode)
@@ -154,6 +195,9 @@ export default function Panel({ data, palette }: PanelProps) {
         return time(b) - time(a)
       })
   }, [data, search, staleDays, now])
+
+  // bots are left out, as the leaderboard leaves them out until asked
+  const peopleCount = useMemo(() => contributors.list.filter((c) => !c.isBot).length, [contributors])
 
   if (!panelOpen) {
     return (
@@ -200,68 +244,82 @@ export default function Panel({ data, palette }: PanelProps) {
         </button>
       </header>
 
-      <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
-          </div>
-          <div className="flex-1" title="organic: free physics. metro: straight lanes, like a tube map">
-            <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
-          </div>
+      <div className="flex gap-2 px-3 py-2.5">
+        <div className="flex-1">
+          <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
         </div>
-        <label className="flex items-center gap-2 rounded-lg bg-garden-field px-2 py-1 text-garden-muted focus-within:text-garden-text">
-          <SearchIcon />
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="find a branch"
-            aria-label="Find a branch"
-            spellCheck={false}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
-          />
-        </label>
-        <div className="flex items-center gap-2">
-          <span className="w-9 shrink-0 text-[11px] text-garden-muted">stale</span>
-          <div className="flex-1">
-            <Segmented ariaLabel="Hide branches older than" options={STALE_SEGMENTS} value={staleDays} onChange={setStaleDays} />
-          </div>
+        <div className="flex-1" title="organic: free physics. metro: straight lanes, like a tube map">
+          <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-3 pt-2 text-[11px] text-garden-muted">
-        <span>
-          {rows.length === data.branches.length ? `${rows.length} branches` : `${rows.length} of ${data.branches.length} branches`}
-        </span>
-        <span className="flex items-center gap-2">
-          {hiddenBranches.size > 0 && (
-            <button type="button" onClick={clearHiddenBranches} className="text-garden-accent hover:underline">
-              show {hiddenBranches.size} hidden
-            </button>
-          )}
-          {selectedBranch !== null && (
-            <button type="button" onClick={() => toggleSelectedBranch(selectedBranch)} className="text-garden-accent hover:underline">
-              clear selection
-            </button>
-          )}
-        </span>
-      </div>
+      <Tabs
+        value={panelTab}
+        onChange={setPanelTab}
+        branchCount={data.branches.length}
+        peopleCount={peopleCount}
+      />
 
-      <ul className="garden-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-garden-muted">no branches match</li>}
-        {rows.map((branch) => (
-          <BranchRow
-            key={branch.name}
-            branch={branch}
-            colour={palette[branch.name] ?? theme.fallback}
-            selected={selectedBranch === branch.name}
-            hidden={hiddenBranches.has(branch.name)}
-            now={now}
-            onSelect={() => toggleSelectedBranch(branch.name)}
-            onToggleHidden={() => toggleBranchHidden(branch.name)}
-          />
-        ))}
-      </ul>
+      {panelTab === 'contributors' ? (
+        <ContributorsTab contributors={contributors} palette={palette} now={now} />
+      ) : (
+        <>
+          <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
+            <label className="flex items-center gap-2 rounded-lg bg-garden-field px-2 py-1 text-garden-muted focus-within:text-garden-text">
+              <SearchIcon />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="find a branch"
+                aria-label="Find a branch"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
+              />
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="w-9 shrink-0 text-[11px] text-garden-muted">stale</span>
+              <div className="flex-1">
+                <Segmented ariaLabel="Hide branches older than" options={STALE_SEGMENTS} value={staleDays} onChange={setStaleDays} />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between px-3 pt-2 text-[11px] text-garden-muted">
+            <span>
+              {rows.length === data.branches.length ? `${rows.length} branches` : `${rows.length} of ${data.branches.length} branches`}
+            </span>
+            <span className="flex items-center gap-2">
+              {hiddenBranches.size > 0 && (
+                <button type="button" onClick={clearHiddenBranches} className="text-garden-accent hover:underline">
+                  show {hiddenBranches.size} hidden
+                </button>
+              )}
+              {selectedBranch !== null && (
+                <button type="button" onClick={() => toggleSelectedBranch(selectedBranch)} className="text-garden-accent hover:underline">
+                  clear selection
+                </button>
+              )}
+            </span>
+          </div>
+
+          <ul className="garden-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
+            {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-garden-muted">no branches match</li>}
+            {rows.map((branch) => (
+              <BranchRow
+                key={branch.name}
+                branch={branch}
+                colour={palette[branch.name] ?? theme.fallback}
+                selected={selectedBranch === branch.name}
+                hidden={hiddenBranches.has(branch.name)}
+                now={now}
+                onSelect={() => toggleSelectedBranch(branch.name)}
+                onToggleHidden={() => toggleBranchHidden(branch.name)}
+              />
+            ))}
+          </ul>
+        </>
+      )}
 
       <footer className="border-t border-garden-border px-3 py-2.5">
         <Legend />

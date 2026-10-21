@@ -6,6 +6,9 @@ import { isThemeId, type ThemeId } from '../theme/themes'
 /** How the garden is laid out: free force physics, or pinned to a straight metro map. */
 export type LayoutMode = 'organic' | 'metro'
 
+/** Which list the side panel shows. */
+export type PanelTab = 'branches' | 'contributors'
+
 /** localStorage key for the GitHub personal access token. */
 export const TOKEN_STORAGE_KEY = 'repo-garden:token'
 
@@ -57,8 +60,11 @@ export interface GardenState {
   layoutMode: LayoutMode
   /** Branch names hidden via the eye toggle. Replaced immutably on every change. */
   hiddenBranches: ReadonlySet<string>
-  /** Branch isolated from the panel; null when nothing is selected. */
+  /** Branch isolated from the panel; null when nothing is selected. Never set together with selectedContributor. */
   selectedBranch: string | null
+  /** Contributor.key whose commits the graph highlights; null when nobody is selected. */
+  selectedContributor: string | null
+  panelTab: PanelTab
   /** Branch-list filter / tip-node highlight query. */
   search: string
   /** Hide branches whose tip is older than this many days. 0 = show all. */
@@ -88,8 +94,12 @@ export interface GardenActions {
   toggleBranchHidden: (name: string) => void
   setHiddenBranches: (names: Iterable<string>) => void
   clearHiddenBranches: () => void
+  /** Selecting a branch drops any selected contributor, and the other way round. */
   setSelectedBranch: (name: string | null) => void
   toggleSelectedBranch: (name: string) => void
+  setSelectedContributor: (key: string | null) => void
+  toggleSelectedContributor: (key: string) => void
+  setPanelTab: (tab: PanelTab) => void
   setSearch: (query: string) => void
   setStaleDays: (days: number) => void
   setPanelOpen: (open: boolean) => void
@@ -99,9 +109,9 @@ export interface GardenActions {
   setHiddenLabels: (count: number) => void
   /** Switches the theme and saves the choice; unknown ids are ignored. */
   setThemeId: (id: ThemeId) => void
-  /** Clears branch selection and the inspector (Escape / background click). */
+  /** Clears the branch or contributor selection and the inspector (Escape / background click). */
   clearSelection: () => void
-  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel, stale filter, theme. */
+  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel and its tab, stale filter, theme. */
   resetForNewRepo: () => void
 }
 
@@ -113,6 +123,8 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   layoutMode: readStoredLayoutMode(),
   hiddenBranches: new Set<string>(),
   selectedBranch: null,
+  selectedContributor: null,
+  panelTab: 'branches',
   search: '',
   staleDays: 0,
   panelOpen: true,
@@ -158,8 +170,17 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   setHiddenBranches: (names) => set({ hiddenBranches: new Set(names) }),
   clearHiddenBranches: () => set((s) => (s.hiddenBranches.size === 0 ? s : { hiddenBranches: new Set<string>() })),
 
-  setSelectedBranch: (selectedBranch) => set({ selectedBranch }),
-  toggleSelectedBranch: (name) => set((s) => ({ selectedBranch: s.selectedBranch === name ? null : name })),
+  setSelectedBranch: (selectedBranch) =>
+    set(selectedBranch === null ? { selectedBranch } : { selectedBranch, selectedContributor: null }),
+  toggleSelectedBranch: (name) =>
+    set((s) => (s.selectedBranch === name ? { selectedBranch: null } : { selectedBranch: name, selectedContributor: null })),
+  setSelectedContributor: (selectedContributor) =>
+    set(selectedContributor === null ? { selectedContributor } : { selectedContributor, selectedBranch: null }),
+  toggleSelectedContributor: (key) =>
+    set((s) =>
+      s.selectedContributor === key ? { selectedContributor: null } : { selectedContributor: key, selectedBranch: null },
+    ),
+  setPanelTab: (panelTab) => set({ panelTab }),
 
   setSearch: (search) => set({ search }),
   setStaleDays: (days) => set({ staleDays: Number.isFinite(days) && days > 0 ? Math.floor(days) : 0 }),
@@ -182,11 +203,16 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   },
 
   clearSelection: () =>
-    set((s) => (s.selectedBranch === null && s.inspectorNodeId === null ? s : { selectedBranch: null, inspectorNodeId: null })),
+    set((s) =>
+      s.selectedBranch === null && s.selectedContributor === null && s.inspectorNodeId === null
+        ? s
+        : { selectedBranch: null, selectedContributor: null, inspectorNodeId: null },
+    ),
   resetForNewRepo: () =>
     set({
       hiddenBranches: new Set<string>(),
       selectedBranch: null,
+      selectedContributor: null,
       search: '',
       inspectorNodeId: null,
       progress: null,

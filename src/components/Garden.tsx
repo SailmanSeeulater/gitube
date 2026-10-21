@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
 import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
+import type { ContributorFocus } from '../graph/contributors'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
 import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
@@ -77,6 +78,8 @@ export interface GardenProps {
    * null = organic mode (free force physics).
    */
   metro?: MetroView | null
+  /** The selected contributor's commits, links and labels to keep lit; null when nobody is selected. */
+  focus?: ContributorFocus | null
 }
 
 interface GardenIndex {
@@ -161,7 +164,17 @@ function drawBadge(
   ctx.globalAlpha = 1
 }
 
-export default function Garden({ graph, palette, theme, viewMode, defaultBranch, onNodeClick, onBackgroundClick, metro = null }: GardenProps) {
+export default function Garden({
+  graph,
+  palette,
+  theme,
+  viewMode,
+  defaultBranch,
+  onNodeClick,
+  onBackgroundClick,
+  metro = null,
+  focus = null,
+}: GardenProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const fgRef = useRef<GardenMethods | undefined>(undefined)
   const sizeRef = useRef({ width: 0, height: 0 })
@@ -311,8 +324,13 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
 
   // ---- paint ----
   // null = nothing to isolate: no selection, or the selected branch has no tip in this graph
-  // (stale-filtered, or its tipSha is not among the fetched commits).
-  const reachSet = selectedReach(index.reach, selectedBranch)
+  // (stale-filtered, or its tipSha is not among the fetched commits). A selected contributor
+  // (never set together with a branch) isolates their commits instead; their links come from
+  // focus.links (see isLinkDimmed), and the tips of the branches they worked on keep their labels.
+  const branchReach = selectedReach(index.reach, selectedBranch)
+  const reachSet = focus ? focus.nodes : branchReach
+  const litLinks = focus ? focus.links : null
+  const labelReach = focus ? focus.labels : branchReach
   const query = search.trim().toLowerCase()
 
   const bumpHover = useCallback(() => setHoverVersion((v) => v + 1), [])
@@ -338,7 +356,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
   const { paintLabels, onPointerMove, onPointerLeave, clickTest, labelsBusy, maxTipSpeed, setDragNode, fitStarted } = useLabelPlacer({
     index,
     defaultBranch,
-    reachSet,
+    reachSet: labelReach,
     query,
     selectedBranch,
     inspectorNodeId,
@@ -532,15 +550,12 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       const s = linkEndId(link.source)
       const t = linkEndId(link.target)
       const hovered = hoverRef.current ?? labelHoverRef.current
-      let dim = false
-      if (hovered !== null && s !== hovered && t !== hovered) dim = true
-      if (!dim && reachSet !== null && !(reachSet.has(s) && reachSet.has(t))) dim = true
-      return dim
+      return isLinkDimmed(s, t, hovered, reachSet, litLinks)
         ? (colours.links.dim.get(link.owner) ?? colours.theme.derived.fallbackLinkDim)
         : (colours.links.full.get(link.owner) ?? colours.theme.derived.fallbackLink)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colours, reachSet, hoverVersion],
+    [colours, reachSet, litLinks, hoverVersion],
   )
 
   const linkWidth = useCallback((link: GardenLink) => (link.collapsedCount > 0 ? 2 : 1), [])
@@ -558,9 +573,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       const sid = linkEndId(s)
       const tid = linkEndId(t)
       const hovered = hoverRef.current ?? labelHoverRef.current
-      let dim = false
-      if (hovered !== null && sid !== hovered && tid !== hovered) dim = true
-      if (!dim && reachSet !== null && !(reachSet.has(sid) && reachSet.has(tid))) dim = true
+      const dim = isLinkDimmed(sid, tid, hovered, reachSet, litLinks)
 
       const c = syncScale(globalScale)
       const px = c.px
@@ -578,7 +591,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       drawBadge(ctx, link.badge, mx, my, px, c.badgeFont, ring, dim ? th.dimAlpha : 1, th)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colours, reachSet, hoverVersion],
+    [colours, reachSet, litLinks, hoverVersion],
   )
 
   /**
@@ -606,7 +619,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           const s = typeof link.source === 'object' ? link.source : index.nodeById.get(String(link.source))
           const t = typeof link.target === 'object' ? link.target : index.nodeById.get(String(link.target))
           if (!s || !t || s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue
-          const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet)
+          const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet, litLinks)
           ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroMutedAlpha
           ctx.strokeStyle = palette[link.owner] ?? th.fallback
           ctx.beginPath()
@@ -632,7 +645,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       ctx.setLineDash(NO_DASH)
       let dashed = false
       for (const r of metro.routes) {
-        const dim = isLinkDimmed(r.source, r.target, hovered, reachSet)
+        const dim = isLinkDimmed(r.source, r.target, hovered, reachSet, litLinks)
         ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
         ctx.strokeStyle = palette[r.colorBranch] ?? th.fallback
         ctx.lineWidth = r.muted || r.dashed ? width * 0.65 : width
@@ -654,7 +667,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       const marks = markBoxesRef.current
       if (metro.badges.length > 0) {
         for (const b of metro.badges) {
-          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.metroDimAlpha : 1
+          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.metroDimAlpha : 1
           strokeRunBars(ctx, b, px, width, th)
         }
         const fontPx = metroBadgeFontPx(globalScale)
@@ -666,7 +679,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           const halfH = (fontPx / 2 + 1) * px
           for (const b of metro.badges) {
             if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge') continue
-            ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.dimAlpha : 1
+            ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.dimAlpha : 1
             ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
             ctx.strokeText(b.text, b.x, b.textY)
@@ -689,7 +702,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, colours, reachSet, hoverVersion],
+    [metro, index, colours, reachSet, litLinks, hoverVersion],
   )
 
   // ---- interaction ----
@@ -856,13 +869,14 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
     }
   }, [index, metro, ready, fitStarted])
 
-  // ---- metro mode: bring a selected branch, or the search hits, into view ----
+  // ---- metro mode: bring a selected branch or contributor, or the search hits, into view ----
   // A long map opens right-aligned at a readable zoom, so its older lines start off-screen; a
   // selection or a search there would only dim or halo things nobody can see. Runs on selection and
   // search changes only, so it never fights the layout fit above; a search waits for typing to pause
   // and moves only for as many hits as get pinned labels.
   useEffect(() => {
-    if (!ready || !metroRef.current || (selectedBranch === null && query === '')) return
+    const selected = selectedBranch !== null || focus !== null
+    if (!ready || !metroRef.current || (!selected && query === '')) return
     const reveal = () => {
       const fg = fgRef.current
       const m = metroRef.current
@@ -877,6 +891,21 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           if (node.tips.includes(selectedBranch)) primary.push(t)
           else if (node.owner === selectedBranch) context.push(t)
         }
+      } else if (focus !== null) {
+        // their newest shown commit for sure, the rest while the zoom allows
+        let newest: { x: number; y: number } | null = null
+        let newestDate = ''
+        for (const node of index.graphData.nodes) {
+          const t = focus.nodes.has(node.id) ? m.targets.get(node.id) : undefined
+          if (!t) continue
+          context.push(t)
+          if (newest === null || node.commit.date > newestDate) {
+            newest = t
+            newestDate = node.commit.date
+          }
+        }
+        if (newest === null) return
+        primary.push(newest)
       } else {
         for (const [id, label] of index.tipLabelLower) {
           const t = label.includes(query) ? m.targets.get(id) : undefined
@@ -890,14 +919,14 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       fg.centerAt(t.cx, t.cy, FIT_MS)
       fg.zoom(t.k, FIT_MS)
     }
-    if (selectedBranch !== null) {
+    if (selected) {
       reveal()
       return
     }
     const timer = setTimeout(reveal, SEARCH_REVEAL_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBranch, query])
+  }, [selectedBranch, focus, query])
 
   return (
     <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave} onPointerMove={onPointerMove}>
