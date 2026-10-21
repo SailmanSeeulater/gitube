@@ -8,12 +8,16 @@ export interface StatusStripProps {
   isFetching: boolean
   /** the data came from a saved file: when it was saved (ISO, '' if unknown); null for live data */
   fileSavedAt?: string | null
+  /** the data came from this browser's cache: when it was fetched (ISO); null for a live fetch */
+  cachedAt?: string | null
+  /** fetch the repo from GitHub again, skipping the cache */
+  onRefresh?: () => void
 }
 
 const shell =
   'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
 
-export default function StatusStrip({ data, graph, isFetching, fileSavedAt = null }: StatusStripProps) {
+export default function StatusStrip({ data, graph, isFetching, fileSavedAt = null, cachedAt = null, onRefresh }: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
   const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
 
@@ -101,7 +105,20 @@ export default function StatusStrip({ data, graph, isFetching, fileSavedAt = nul
           from file{fileSavedAt && relativeTime(fileSavedAt) ? ` · saved ${relativeTime(fileSavedAt)}` : ''}
         </span>
       )}
-      {remaining !== null && fileSavedAt === null && (
+      {cachedAt !== null && fileSavedAt === null && (
+        <span
+          className="flex items-center gap-1.5 rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
+          title={`Shown from this browser's cache (fetched ${formatDateTime(cachedAt)}), so no GitHub requests were used.`}
+        >
+          cached {relativeTime(cachedAt)}
+          {onRefresh && (
+            <button type="button" onClick={onRefresh} className="text-garden-accent hover:underline">
+              refresh
+            </button>
+          )}
+        </span>
+      )}
+      {remaining !== null && fileSavedAt === null && cachedAt === null && (
         <span className="text-garden-muted" title="GitHub API requests remaining this hour">
           {remaining} requests left
         </span>

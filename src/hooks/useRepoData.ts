@@ -1,18 +1,27 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchRepoData } from '../api/github'
 import type { RepoRef } from '../api/parseRepoUrl'
+import { readFresh, remember, sharedRepoStore } from '../api/repoCache'
 import { GitHubFetchError, type FetchProgress, type RepoData } from '../types'
 import { useGardenStore } from '../store/useGardenStore'
 
 export interface UseRepoDataResult {
   data: RepoData | undefined
+  /** When data came from this browser's cache: the ISO time it was fetched. null for a live fetch. */
+  cachedAt: string | null
   /** Always a GitHubFetchError (unexpected errors are wrapped with code 'unknown'). */
   error: GitHubFetchError | null
   isFetching: boolean
   /** True while the first fetch for this key is in flight and no data exists yet. */
   isPending: boolean
+  /** Fetches from GitHub again, skipping the cache. */
   refetch: () => void
+}
+
+interface RepoResult {
+  repo: RepoData
+  cachedAt: string | null
 }
 
 /** ['repo', owner, repo, 'auth' | 'anon'] — token presence, never the token value, is part of the key. */
@@ -62,36 +71,50 @@ const INITIAL_PROGRESS: FetchProgress = {
 
 /**
  * Fetches RepoData for the given ref through TanStack Query, streaming FetchProgress into the store.
- * Disabled (idle) while ref is null.
+ * A copy fetched in this browser within CACHE_FRESH_MS is shown instead, at no API cost, until
+ * refetch asks for GitHub. Every live fetch refreshes the cache. Disabled (idle) while ref is null.
  */
 export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
   const token = useGardenStore((s) => s.token)
   const setProgress = useGardenStore((s) => s.setProgress)
+  /** set by refetch: the next run skips the cache */
+  const liveRef = useRef(false)
 
-  const query = useQuery<RepoData, Error>({
+  const query = useQuery<RepoResult, Error>({
     queryKey: repoQueryKey(ref, token),
     enabled: ref !== null,
     retry: shouldRetryRepoQuery,
     networkMode: REPO_QUERY_NETWORK_MODE,
     queryFn: async ({ signal }) => {
       if (ref === null) throw new GitHubFetchError('No repository selected', 'invalid_url')
+      const live = liveRef.current
+      liveRef.current = false
+      const repoStore = sharedRepoStore()
+      if (!live && repoStore) {
+        const hit = await readFresh(repoStore, ref, Date.now())
+        if (hit) return { repo: hit.data, cachedAt: hit.savedAt }
+      }
       setProgress({ ...INITIAL_PROGRESS })
-      return fetchRepoData(ref, {
+      const repo = await fetchRepoData(ref, {
         token: token || undefined,
         onProgress: setProgress,
         signal,
       })
+      if (repoStore) void remember(repoStore, repo, Date.now())
+      return { repo, cachedAt: null }
     },
   })
 
   const error = useMemo(() => toFetchError(query.error), [query.error])
   const queryRefetch = query.refetch
   const refetch = useCallback(() => {
+    liveRef.current = true
     void queryRefetch()
   }, [queryRefetch])
 
   return {
-    data: query.data,
+    data: query.data?.repo,
+    cachedAt: query.data?.cachedAt ?? null,
     error,
     isFetching: query.isFetching,
     isPending: query.isPending && ref !== null,
