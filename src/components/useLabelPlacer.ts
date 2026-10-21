@@ -62,7 +62,7 @@ export interface UseLabelPlacerArgs {
    * pre-paint before paintLabels runs: flat [x0, y0, x1, y1] per box in graph units.
    */
   marks?: RefObject<LabelMarks>
-  /** draw a background-coloured halo behind label text (metro mode: lines may still pass close) */
+  /** draw a halo in the theme's textHalo (the canvas colour) behind label text (metro mode: lines may still pass close) */
   halo?: boolean
 }
 
@@ -115,7 +115,7 @@ const DOT_RADIUS = 3
 const TIP_RING_PX = 2.5
 /** safety cap on the first-load admission hold (no fit ever started, or the layout never calms) */
 const MAX_HOLD_MS = 8000
-/** width of the background-coloured halo stroked behind label text (UseLabelPlacerArgs.halo) */
+/** width of the halo (the theme's textHalo, the canvas colour) stroked behind label text (UseLabelPlacerArgs.halo) */
 const HALO_PX = 3
 
 // ---- text measurement: one offscreen canvas, cached widths, cleared when fonts finish loading ----
@@ -556,7 +556,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
       // letters (set each time: drawLeader strokes its leader line in between)
       const text = (s: string, x: number, y: number) => {
         if (halo) {
-          ctx.strokeStyle = theme.canvas
+          ctx.strokeStyle = theme.derived.textHalo
           ctx.lineWidth = HALO_PX
           ctx.strokeText(s, x, y)
         }

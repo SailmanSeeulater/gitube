@@ -4,7 +4,10 @@ import { useTheme } from '../theme/useTheme'
 
 type GlyphKind = 'tip' | 'fork' | 'merge' | 'root' | 'station' | 'interchange' | 'origin' | 'muted' | 'run'
 
-/** The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them. */
+/**
+ * The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them, in the
+ * active theme (metro stations in its station colour, run markers in its runMark, and so on).
+ */
 function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
   const branch = theme.derived.defaultBranchColour
@@ -14,15 +17,15 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       return (
         <svg {...common}>
           <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
-          <circle cx="9" cy="9" r="4.5" fill={branch} stroke="#e8e8e8" strokeWidth="1.3" />
+          <circle cx="9" cy="9" r="4.5" fill={branch} stroke={theme.stationRing} strokeWidth="1.3" />
         </svg>
       )
     case 'interchange':
       return (
         <svg {...common}>
           <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
-          <circle cx="9" cy="9" r="4.5" fill="#e8e8e8" />
-          <circle cx="9" cy="9" r="2.2" fill={theme.canvas} />
+          <circle cx="9" cy="9" r="4.5" fill={theme.stationRing} />
+          <circle cx="9" cy="9" r="2.2" fill={theme.derived.stationCore} />
         </svg>
       )
     case 'origin':
@@ -30,13 +33,13 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
         <svg {...common}>
           <line x1="0" y1="9" x2="5" y2="9" stroke={branch} strokeWidth="1.2" strokeDasharray="2 2" />
           <line x1="12" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
-          <circle cx="9" cy="9" r="3.5" fill={theme.canvas} stroke={branch} strokeWidth="1.5" />
+          <circle cx="9" cy="9" r="3.5" fill={theme.derived.stationCore} stroke={branch} strokeWidth="1.5" />
         </svg>
       )
     case 'muted':
       return (
         <svg {...common}>
-          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" strokeOpacity="0.45" />
+          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" strokeOpacity={theme.metroMutedAlpha} />
           <line x1="0" y1="14" x2="18" y2="4" stroke={branch} strokeWidth="1.6" strokeDasharray="3 2" />
         </svg>
       )
@@ -45,9 +48,9 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       return (
         <svg {...common}>
           <line x1="0" y1="11" x2="18" y2="11" stroke={branch} strokeWidth="2.5" />
-          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke={theme.badgeText} strokeWidth="1.5" />
-          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke={theme.badgeText} strokeWidth="1.5" />
-          <text x="9" y="5" fill={theme.badgeText} fontSize="6" textAnchor="middle">
+          <line x1="7.25" y1="7.5" x2="7.25" y2="14.5" stroke={theme.derived.runMark} strokeWidth="1.5" />
+          <line x1="10.75" y1="7.5" x2="10.75" y2="14.5" stroke={theme.derived.runMark} strokeWidth="1.5" />
+          <text x="9" y="5" fill={theme.derived.runMark} fontSize="6" textAnchor="middle">
             +N
           </text>
         </svg>

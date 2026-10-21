@@ -118,11 +118,7 @@ const SEARCH_REVEAL_MS = 300
 const EARLY_FIT_TICKS = 20
 const EARLY_FIT_SPEED = 1
 const TWO_PI = Math.PI * 2
-// metro mode
-const STATION_WHITE = '#e8e8e8'
-const METRO_ALPHA = 0.9
-const METRO_MUTED_ALPHA = 0.45
-const METRO_DIM_ALPHA = 0.1
+// metro mode (its colours and line alphas come from the theme: stationRing, metro*Alpha, derived)
 /** run marker bars: half their length across the line, and the gap between the two, in screen px */
 const RUN_BAR_HALF_PX = 3.5
 const RUN_BAR_GAP_PX = 3.5
@@ -417,27 +413,29 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       }
 
       if (metro) {
-        // station glyphs: tips in branch colour with a white outline, interchanges as white rings,
-        // origins hollow (their dashed stub is drawn with the lines), plain commits as beads (a
-        // ring in the line's colour, wider than the line, around a dark core), stops as dots
+        // station glyphs: tips in branch colour outlined in the station colour, interchanges as
+        // station-colour rings, origins hollow (their dashed stub is drawn with the lines), plain
+        // commits as beads (a ring in the line's colour, wider than the line, around a
+        // canvas-coloured core), stops as dots. The station colour contrasts hard with the canvas:
+        // near-white on the dark themes, the text colour on the light ones.
         const ring = Math.max(1.5, 1.2 * px)
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
         if (node.isTip) {
           ctx.fillStyle = colour
           ctx.fill()
-          ctx.strokeStyle = STATION_WHITE
+          ctx.strokeStyle = th.stationRing
           ctx.lineWidth = ring
           ctx.stroke()
         } else if (kind === 'interchange') {
-          ctx.fillStyle = STATION_WHITE
+          ctx.fillStyle = th.stationRing
           ctx.fill()
           ctx.beginPath()
           ctx.arc(x, y, r * 0.5, 0, TWO_PI)
-          ctx.fillStyle = th.canvas
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
         } else if (kind === 'origin') {
-          ctx.fillStyle = th.canvas
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
           ctx.strokeStyle = colour
           ctx.lineWidth = ring
@@ -447,7 +445,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           ctx.fill()
           ctx.beginPath()
           ctx.arc(x, y, bead.core, 0, TWO_PI)
-          ctx.fillStyle = th.canvas
+          ctx.fillStyle = th.derived.stationCore
           ctx.fill()
         } else {
           ctx.fillStyle = colour
@@ -610,7 +608,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           const t = typeof link.target === 'object' ? link.target : index.nodeById.get(String(link.target))
           if (!s || !t || s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue
           const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet)
-          ctx.globalAlpha = dim ? METRO_DIM_ALPHA : METRO_MUTED_ALPHA
+          ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroMutedAlpha
           ctx.strokeStyle = palette[link.owner] ?? th.fallback
           ctx.beginPath()
           ctx.moveTo(t.x, t.y)
@@ -625,7 +623,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       ctx.lineWidth = Math.max(1.2, px)
       for (const stub of metro.stubs) {
         const dim = (hovered !== null && hovered !== stub.nodeId) || (reachSet !== null && !reachSet.has(stub.nodeId))
-        ctx.globalAlpha = dim ? METRO_DIM_ALPHA : 0.6
+        ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroStubAlpha
         ctx.strokeStyle = palette[stub.colorBranch] ?? th.fallback
         ctx.beginPath()
         ctx.moveTo(stub.x0, stub.y0)
@@ -636,7 +634,7 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       let dashed = false
       for (const r of metro.routes) {
         const dim = isLinkDimmed(r.source, r.target, hovered, reachSet)
-        ctx.globalAlpha = dim ? METRO_DIM_ALPHA : r.muted ? METRO_MUTED_ALPHA : METRO_ALPHA
+        ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
         ctx.strokeStyle = palette[r.colorBranch] ?? th.fallback
         ctx.lineWidth = r.muted || r.dashed ? width * 0.65 : width
         if (r.dashed !== dashed) {
@@ -657,11 +655,11 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
       if (metro.badges.length > 0) {
         ctx.lineCap = 'butt'
         ctx.lineWidth = 1.5 * px
-        ctx.strokeStyle = th.badgeText
+        ctx.strokeStyle = th.derived.runMark
         const half = RUN_BAR_HALF_PX * px
         const gap = RUN_BAR_GAP_PX * px
         for (const b of metro.badges) {
-          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? METRO_DIM_ALPHA : 1
+          ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.metroDimAlpha : 1
           ctx.beginPath()
           for (const side of [-0.5, 0.5]) {
             const cx = b.x + b.dx * gap * side
@@ -681,10 +679,10 @@ export default function Garden({ graph, palette, theme, viewMode, defaultBranch,
           for (const b of metro.badges) {
             if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge') continue
             ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet) ? th.dimAlpha : 1
-            ctx.strokeStyle = th.canvas
+            ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
             ctx.strokeText(b.text, b.x, b.textY)
-            ctx.fillStyle = th.badgeText
+            ctx.fillStyle = th.derived.runMark
             ctx.fillText(b.text, b.x, b.textY)
             const halfW = ctx.measureText(b.text).width / 2 + px
             if (marks.rects.length < 4 * (marks.count + 1)) {

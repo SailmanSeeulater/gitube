@@ -43,6 +43,7 @@ const COLOUR_TOKENS = [
   'badgeBg',
   'badgeText',
   'halo',
+  'stationRing',
   'warn',
   'danger',
 ] as const satisfies ReadonlyArray<keyof ThemeTokens>
@@ -53,6 +54,10 @@ const ALPHA_TOKENS = [
   'linkAlpha',
   'linkDimAlpha',
   'dimAlpha',
+  'metroLineAlpha',
+  'metroMutedAlpha',
+  'metroStubAlpha',
+  'metroDimAlpha',
 ] as const satisfies ReadonlyArray<keyof ThemeTokens>
 const TEXT_TOKENS = ['id', 'name', 'blurb', 'shadow'] as const satisfies ReadonlyArray<keyof ThemeTokens>
 
@@ -142,6 +147,9 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('theme %s', (_i
     expect(d.fallbackLinkDim).toBe(hexToRgba(theme.fallback, theme.linkDimAlpha))
     expect(d.labelPlateFill).toBe(hexToRgba(theme.canvas, LABEL_PLATE_FILL_ALPHA))
     expect(d.labelPlateRing).toBe(hexToRgba(theme.text, LABEL_PLATE_RING_ALPHA))
+    expect(d.textHalo).toBe(theme.canvas)
+    expect(d.stationCore).toBe(theme.canvas)
+    expect(d.runMark).toBe(theme.badgeText)
     expect(d.selectedRow).toBe(blendHex(theme.accent, theme.panel, 0.1))
     expect(d.accentChip).toBe(blendHex(theme.accent, theme.panel, 0.15))
     expect(d.accentChipHover).toBe(blendHex(theme.accent, theme.panel, 0.25))
@@ -169,6 +177,47 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('theme %s', (_i
     expect(contrastRatio(theme.fallback, theme.canvas)).toBeGreaterThanOrEqual(3)
     expect(contrastRatio(blendHex(theme.text, theme.canvas, theme.hoverRingAlpha), theme.canvas)).toBeGreaterThanOrEqual(3)
     for (const colour of theme.branchColors) expect(contrastRatio(colour, theme.canvas), colour).toBeGreaterThanOrEqual(3)
+  })
+})
+
+// The metro view paints its own stations, routes and run markers (Garden's paintNode/paintMetro, the
+// label halo, the metro legend); these keep them readable on every canvas.
+describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in %s', (_id, theme) => {
+  const d = theme.derived
+  /** every colour a route is drawn in: the branch colours, the default branch's and the fallback */
+  const routeColours = [...theme.branchColors, d.defaultBranchColour, theme.fallback]
+  /** contrast on the canvas of a colour drawn at this alpha over it */
+  const onCanvas = (colour: string, alpha: number) => contrastRatio(blendHex(colour, theme.canvas, alpha), theme.canvas)
+
+  it('rings stations in a colour that stands off the canvas, the station core and the panel', () => {
+    expect(contrastRatio(theme.stationRing, theme.canvas)).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(theme.stationRing, d.stationCore)).toBeGreaterThanOrEqual(3) // an interchange's ring around its centre
+    expect(contrastRatio(theme.stationRing, theme.panel)).toBeGreaterThanOrEqual(3) // the legend's station glyphs
+    // light on the dark canvases, dark on the light ones
+    expect(luminance(theme.stationRing) > luminance(theme.canvas)).toBe(theme.mode === 'dark')
+  })
+
+  it('draws run markers and labels as readable text on a canvas-coloured halo', () => {
+    expect(contrastRatio(d.runMark, theme.canvas)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(d.runMark, d.textHalo)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(theme.text, d.textHalo)).toBeGreaterThanOrEqual(7)
+  })
+
+  it('orders its line alphas: dimmed below muted and lead-ins, those below full routes', () => {
+    for (const alpha of [theme.metroMutedAlpha, theme.metroStubAlpha]) {
+      expect(alpha).toBeGreaterThan(theme.metroDimAlpha)
+      expect(alpha).toBeLessThan(theme.metroLineAlpha)
+    }
+    expect(theme.metroLineAlpha).toBeLessThanOrEqual(1)
+  })
+
+  it('keeps full routes at 3:1, muted routes and lead-ins visible, and dimmed routes faint', () => {
+    for (const colour of routeColours) {
+      expect(onCanvas(colour, theme.metroLineAlpha), colour).toBeGreaterThanOrEqual(3)
+      expect(onCanvas(colour, theme.metroStubAlpha), colour).toBeGreaterThanOrEqual(2)
+      expect(onCanvas(colour, theme.metroMutedAlpha), colour).toBeGreaterThanOrEqual(1.8)
+      expect(onCanvas(colour, theme.metroDimAlpha), colour).toBeLessThan(1.4)
+    }
   })
 })
 
@@ -227,6 +276,15 @@ describe('Obsidian is the original look', () => {
     // useLabelPlacer.ts
     expect(o.derived.labelPlateFill).toBe('rgba(30, 30, 30, 0.92)')
     expect(o.derived.labelPlateRing).toBe('rgba(220, 221, 222, 0.25)')
+    // the metro view (Garden.tsx paintNode/paintMetro, useLabelPlacer's halo, Legend), before themes
+    expect(o.stationRing).toBe('#e8e8e8') // STATION_WHITE: tip outlines, interchange rings
+    expect(o.metroLineAlpha).toBe(0.9) // METRO_ALPHA
+    expect(o.metroMutedAlpha).toBe(0.45) // METRO_MUTED_ALPHA, and the tween's straight links
+    expect(o.metroStubAlpha).toBe(0.6) // the dashed lead-in before a root
+    expect(o.metroDimAlpha).toBe(0.1) // METRO_DIM_ALPHA: dimmed routes, lead-ins and run bars
+    expect(o.derived.stationCore).toBe('#1e1e1e') // CANVAS_BG: interchange centres, hollow origins, bead cores
+    expect(o.derived.textHalo).toBe('#1e1e1e') // CANVAS_BG: label and '+N' halos
+    expect(o.derived.runMark).toBe('#b8b8b8') // BADGE_TEXT: run bars and the '+N'
   })
 
   it('keeps the original twelve branch colours in order, and the HSL cycling past them', () => {

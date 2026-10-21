@@ -80,6 +80,23 @@ export interface ThemeTokens {
   linkDimAlpha: number
   /** globalAlpha of nodes, labels and badges outside the hovered neighbourhood or selected reach */
   dimAlpha: number
+  /**
+   * Metro view: the station colour, drawn around a tip station and as the ring of an interchange.
+   * It contrasts hard with the canvas (near-white on the dark themes, the text colour on the light
+   * ones), so stations stay visible on any canvas.
+   */
+  stationRing: string
+  /**
+   * Metro routes are their branch colour at metroLineAlpha. Light themes draw them at full
+   * strength, so every branch colour keeps the 3:1 on the canvas its palette was designed for.
+   */
+  metroLineAlpha: number
+  /** a muted route (a deleted branch merged into a line), and every link while the nodes tween */
+  metroMutedAlpha: number
+  /** the dashed lead-in before a root (history cut off) */
+  metroStubAlpha: number
+  /** routes, lead-ins and run bars outside the hovered neighbourhood or selected reach */
+  metroDimAlpha: number
   warn: string
   danger: string
   /** box-shadow of floating panels */
@@ -118,6 +135,15 @@ export interface ThemeDerived {
   /** plate behind hover/inspect/drag labels and pinned labels drawn over another tip */
   labelPlateFill: string
   labelPlateRing: string
+  /**
+   * halo stroked behind canvas text that lines may run close to (metro labels and '+N' run
+   * counts): canvas, so the text reads as cut out of the lines
+   */
+  textHalo: string
+  /** metro view: the centre of an interchange, the inside of a hollow origin, a commit bead's core: canvas */
+  stationCore: string
+  /** metro run markers (the two bars across a line where commits are hidden, and the '+N'): badgeText */
+  runMark: string
   /** selected panel row: accent at 0.10 over the panel, row text in accent */
   selectedRow: string
   /** accent chip (Grow): accent at 0.15 over the panel (0.25 on hover), text in accent */
@@ -168,6 +194,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.35,
     linkDimAlpha: 0.07,
     dimAlpha: 0.2,
+    stationRing: '#e8e8e8',
+    metroLineAlpha: 0.9,
+    metroMutedAlpha: 0.45,
+    metroStubAlpha: 0.6,
+    metroDimAlpha: 0.1,
     warn: '#d9b35b',
     danger: '#e06c75',
     shadow: '0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4)',
@@ -202,6 +233,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.38,
     linkDimAlpha: 0.08,
     dimAlpha: 0.2,
+    stationRing: '#ecf2fa',
+    metroLineAlpha: 0.9,
+    metroMutedAlpha: 0.45,
+    metroStubAlpha: 0.6,
+    metroDimAlpha: 0.1,
     warn: '#f08c3c',
     danger: '#f16f78',
     shadow: '0 10px 30px rgba(2, 6, 18, 0.5), 0 1px 2px rgba(2, 6, 18, 0.5)',
@@ -236,6 +272,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.45,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#1d1a17',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#915c08',
     danger: '#a3123f',
     shadow: '0 8px 24px rgba(40, 32, 20, 0.10), 0 1px 2px rgba(40, 32, 20, 0.10)',
@@ -270,6 +311,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.45,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#11161f',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#9a5b00',
     danger: '#c21725',
     shadow: '0 8px 24px rgba(20, 28, 45, 0.10), 0 1px 2px rgba(20, 28, 45, 0.10)',
@@ -304,6 +350,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.45,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#141d16',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#8a5f18',
     danger: '#a8372e',
     shadow: '0 8px 24px rgba(24, 36, 26, 0.10), 0 1px 2px rgba(24, 36, 26, 0.10)',
@@ -338,6 +389,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.5,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#2a1c10',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#8a5600',
     danger: '#af2b25',
     shadow: '0 8px 24px rgba(60, 40, 15, 0.10), 0 1px 2px rgba(60, 40, 15, 0.10)',
@@ -372,6 +428,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.45,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#2b1920',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#935a11',
     danger: '#b3241f',
     shadow: '0 8px 24px rgba(60, 20, 35, 0.10), 0 1px 2px rgba(60, 20, 35, 0.10)',
@@ -406,6 +467,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.45,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#0e1e2f',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#915c08',
     danger: '#be222a',
     shadow: '0 8px 24px rgba(15, 35, 70, 0.10), 0 1px 2px rgba(15, 35, 70, 0.10)',
@@ -440,6 +506,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.65,
     linkDimAlpha: 0.14,
     dimAlpha: 0.25,
+    stationRing: '#000000',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.15,
     warn: '#7a4702',
     danger: '#ac0311',
     shadow: '0 0 0 1px rgba(0, 0, 0, 0.9), 0 6px 16px rgba(0, 0, 0, 0.18)',
@@ -474,6 +545,11 @@ const THEME_TOKENS = [
     linkAlpha: 0.5,
     linkDimAlpha: 0.1,
     dimAlpha: 0.22,
+    stationRing: '#073642',
+    metroLineAlpha: 1,
+    metroMutedAlpha: 0.55,
+    metroStubAlpha: 0.7,
+    metroDimAlpha: 0.12,
     warn: '#9e3d00',
     danger: '#a8183a',
     shadow: '0 8px 24px rgba(7, 54, 66, 0.10), 0 1px 2px rgba(7, 54, 66, 0.10)',
@@ -498,6 +574,9 @@ export function buildTheme(t: ThemeTokens): Theme {
       forkNodeFill: t.canvas,
       labelPlateFill: hexToRgba(t.canvas, LABEL_PLATE_FILL_ALPHA),
       labelPlateRing: hexToRgba(t.text, LABEL_PLATE_RING_ALPHA),
+      textHalo: t.canvas,
+      stationCore: t.canvas,
+      runMark: t.badgeText,
       selectedRow: blendHex(t.accent, t.panel, 0.1),
       accentChip: blendHex(t.accent, t.panel, 0.15),
       accentChipHover: blendHex(t.accent, t.panel, 0.25),
