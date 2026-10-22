@@ -9,7 +9,7 @@ import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGard
 import { useTheme } from '../theme/useTheme'
 import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
 import Legend from './Legend'
-import { LazySlot, lazyPart } from './LazyPart'
+import { ChunkPlaceholder, LazySlot, lazyPart } from './LazyPart'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon, SwordsIcon } from './icons'
 
 // the people and weeds tabs load when first shown, or as the pointer or focus reaches their tab
@@ -295,6 +295,10 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
   const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
   // metro picked, its engine still on the way (App loads it and keeps the old layout until then)
   const metroLoading = useChunk(metroChunk, false).status === 'loading' && layoutMode === 'metro'
+  // The people tab mounts once its code is in, instead of suspending on the way: a share link's
+  // ?by= selects the tab as soon as the repo is in, which from the repo cache can be before its
+  // code, and Suspense would then hold the placeholder for its 300 ms fallback throttle as well.
+  const peopleCode = useChunk(contributorsTabChunk, panelOpen && panelTab === 'contributors')
 
   // one timestamp per loaded repo keeps relative dates consistent across rows
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -404,9 +408,19 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
       />
 
       {panelTab === 'contributors' ? (
-        <LazySlot key="contributors" frame={TAB_FRAME} label="loading people">
-          <ContributorsTab contributors={contributors} palette={palette} now={now} />
-        </LazySlot>
+        peopleCode.status === 'ready' ? (
+          <LazySlot key="contributors" frame={TAB_FRAME} label="loading people">
+            <ContributorsTab contributors={contributors} palette={palette} now={now} />
+          </LazySlot>
+        ) : (
+          // coming back to the tab, or the pointer reaching it, tries again
+          <ChunkPlaceholder
+            key="contributors"
+            frame={TAB_FRAME}
+            label="loading people"
+            failed={peopleCode.status === 'failed'}
+          />
+        )
       ) : panelTab === 'weeds' ? (
         <LazySlot key="weeds" frame={TAB_FRAME} label="loading weeds">
           <WeedsTab

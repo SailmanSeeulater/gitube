@@ -1,4 +1,4 @@
-import { useCallback, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
 import { preload } from '../lazy/chunk'
 import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
@@ -67,9 +67,11 @@ export default function TopBar({
   const setThemeId = useGardenStore((s) => s.setThemeId)
   const [themeOpen, setThemeOpen] = useState(false)
   const themeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const themeSlotRef = useRef<HTMLDivElement | null>(null)
   const themeListId = useId()
   const [exportOpen, setExportOpen] = useState(false)
   const exportButtonRef = useRef<HTMLButtonElement | null>(null)
+  const exportSlotRef = useRef<HTMLDivElement | null>(null)
   const exportMenuId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [seenTokenOpen, setSeenTokenOpen] = useState(tokenOpen)
@@ -100,6 +102,37 @@ export default function TopBar({
     if (refocus) exportButtonRef.current?.focus()
   }, [])
   const pickFile = useCallback(() => fileInputRef.current?.click(), [])
+
+  // Escape (wherever focus is) and pointer presses outside close the open drop-down. Handled here
+  // rather than in ThemePicker and ExportMenu, so they also close its placeholder while it loads
+  // and the notice when it could not be loaded. Capture phase on window: the drop-down takes this
+  // Escape, so App's Escape (clear the selection) does not also run.
+  const dropdown = themeOpen ? 'theme' : exportOpen ? 'export' : null
+  useEffect(() => {
+    if (dropdown === null) return
+    const slot = dropdown === 'theme' ? themeSlotRef : exportSlotRef
+    const button = dropdown === 'theme' ? themeButtonRef : exportButtonRef
+    const close = dropdown === 'theme' ? closeTheme : closeExport
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      // focus goes back to the button, unless it has moved on elsewhere
+      const focused = document.activeElement
+      const stayed = focused === null || focused === document.body || focused === button.current
+      close(stayed || slot.current?.contains(focused) === true)
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null
+      if (target !== null && (slot.current?.contains(target) || button.current?.contains(target))) return
+      close(false)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [dropdown, closeTheme, closeExport])
 
   const commitToken = () => {
     if (dirty) setToken(draft)
@@ -220,24 +253,29 @@ export default function TopBar({
         />
       </div>
 
+      {/* the drop-downs' wrappers draw no box (contents): they mark what counts as inside */}
       {themeOpen && (
-        <LazySlot frame={`w-[232px] ${DROPDOWN_FRAME}`} label="loading themes">
-          <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
-        </LazySlot>
+        <div ref={themeSlotRef} className="contents">
+          <LazySlot frame={`w-[232px] ${DROPDOWN_FRAME}`} label="loading themes">
+            <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+          </LazySlot>
+        </div>
       )}
 
       {exportOpen && (
-        <LazySlot frame={`w-[260px] ${DROPDOWN_FRAME}`}>
-          <ExportMenu
-            id={exportMenuId}
-            canExport={canExport}
-            onExportImage={onExportImage}
-            onExportData={onExportData}
-            onOpenFile={pickFile}
-            onClose={closeExport}
-            buttonRef={exportButtonRef}
-          />
-        </LazySlot>
+        <div ref={exportSlotRef} className="contents">
+          <LazySlot frame={`w-[260px] ${DROPDOWN_FRAME}`}>
+            <ExportMenu
+              id={exportMenuId}
+              canExport={canExport}
+              onExportImage={onExportImage}
+              onExportData={onExportData}
+              onOpenFile={pickFile}
+              onClose={closeExport}
+              buttonRef={exportButtonRef}
+            />
+          </LazySlot>
+        </div>
       )}
 
       {tokenOpen && (

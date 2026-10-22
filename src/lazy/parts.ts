@@ -4,17 +4,29 @@
  *
  * Everything else is eager on purpose: the graph and its canvas (react-force-graph), the GitHub
  * client, the branch list, the legend and the theme data (the boot script and the first paint
- * need it; only the picker is lazy). Every dynamic import() of the app is here, so this file is
- * the list of what is lazy.
+ * need it; only the picker is lazy). Every dynamic import() of an app module is here, so this file
+ * is the list of what is lazy (lazy/chunk.ts only imports these chunks' URLs again after a
+ * failure).
+ *
+ * Each import() here must resolve with the whole module, as the bundler emits it for a module that
+ * is a chunk of its own: a plain import of ./X-<hash>.js, with nothing picked out of a shared
+ * chunk. A try after a failure imports the chunk's URL directly (lazy/chunk.ts) and must get the
+ * same thing.
  */
 import { defineChunk } from './chunk'
 
 /** The image and data encoders and the saved-file reader, for the save menu, Open and file drops. */
 export const exportersChunk = defineChunk(() => import('../export/exporters'))
 
-/** The save menu; the encoders come with it, so a save runs at once from the click. */
+/** The save menu's own chunk, without the encoders (see exportMenuChunk). */
+const exportMenuOnlyChunk = defineChunk(() => import('../components/ExportMenu'))
+
+/**
+ * The save menu; the encoders come with it, so a save runs at once from the click. Each of the two
+ * has its own tries, so a try after a failure fetches again only the one that failed.
+ */
 export const exportMenuChunk = defineChunk(async () => {
-  const [menu] = await Promise.all([import('../components/ExportMenu'), exportersChunk.load()])
+  const [menu] = await Promise.all([exportMenuOnlyChunk.load(), exportersChunk.load()])
   return menu
 })
 

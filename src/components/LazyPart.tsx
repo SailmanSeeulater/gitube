@@ -20,7 +20,7 @@ const failedParts = new Set<() => void>()
 /**
  * A component that lives in a chunk (see lazy/parts.ts). Its first mount suspends while the chunk
  * loads, unless it has loaded already (a preload on hover, say), in which case it renders at once.
- * Opened again after a failure, it tries again.
+ * Opened again after a failure, it tries again, under a new URL (see lazy/chunk.ts).
  */
 export function lazyPart<P extends object>(chunk: Chunk<{ default: ComponentType<P> }>): ComponentType<P> {
   const renew = () => {
@@ -42,15 +42,39 @@ export function lazyPart<P extends object>(chunk: Chunk<{ default: ComponentType
   return LazyPart
 }
 
-/** Says a part could not be loaded and offers the reload that fixes it after a deploy. */
+/** Says a part could not be loaded, after its retry too, and offers the reload. */
 export function ReloadNotice() {
   return (
     <p role="status" className="text-[12px] leading-snug text-garden-muted">
-      couldn't load this part. repo-garden has probably been updated since this tab was opened.{' '}
+      couldn't load this part. the connection may have dropped, or repo-garden was updated since this tab was opened.{' '}
       <button type="button" onClick={reloadPage} className="font-medium text-garden-accent hover:underline">
         reload
       </button>
     </p>
+  )
+}
+
+export interface ChunkPlaceholderProps {
+  /** classes of the box that stands in for the part */
+  frame?: string
+  /** what is loading ('loading themes' shows as 'loading themes…') */
+  label?: string
+  /** the part could not be loaded: the reload notice instead of the label */
+  failed?: boolean
+}
+
+/** What stands in for a lazy part: a quiet "loading…" line, or the reload notice once it failed. */
+export function ChunkPlaceholder({ frame = '', label = 'loading', failed = false }: ChunkPlaceholderProps) {
+  return (
+    <div className={frame}>
+      {failed ? (
+        <ReloadNotice />
+      ) : (
+        <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+          {label}…
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -80,7 +104,7 @@ class ChunkBoundary extends Component<BoundaryProps, BoundaryState> {
 
   componentWillUnmount() {
     // the failure was shown and is going away (closed, or another tab picked): the next opening
-    // of a failed part loads it afresh
+    // of a failed part loads it afresh (a new React.lazy, whose load() tries a new URL)
     if (this.state.caught === null || !isChunkLoadError(this.state.caught.error)) return
     for (const renew of failedParts) renew()
     failedParts.clear()
@@ -116,18 +140,8 @@ export interface LazySlotProps {
  * slots swap in one place, so a failure in one does not stick to the next.
  */
 export function LazySlot({ children, frame = '', label = 'loading', fallback, onFailed }: LazySlotProps) {
-  const failure = onFailed ? null : (
-    <div className={frame}>
-      <ReloadNotice />
-    </div>
-  )
-  const loading = fallback ?? (
-    <div className={frame}>
-      <p role="status" className="animate-pulse text-[12px] text-garden-muted">
-        {label}…
-      </p>
-    </div>
-  )
+  const failure = onFailed ? null : <ChunkPlaceholder frame={frame} failed />
+  const loading = fallback ?? <ChunkPlaceholder frame={frame} label={label} />
   return (
     <ChunkBoundary failure={failure} onFailed={onFailed}>
       <Suspense fallback={loading}>{children}</Suspense>

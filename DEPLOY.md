@@ -124,6 +124,13 @@ and the security policy allows `api.github.com`. After that, every push to
 `master` redeploys. To redeploy without a new commit, use Run workflow on the
 Actions tab.
 
+The sync runs in two passes. The hashed files go into `assets/` first, with
+nothing deleted there; then `index.html` and the rest, with `--delete`. Last,
+hashed files that no deploy has shipped for 30 days are deleted on the VPS
+(`sudo find ... -mtime +30 -delete`). So a tab opened before a deploy can still
+load the optional parts of its own build: they load on first use
+(`src/lazy/parts.ts`) and import that build's `index-<hash>.js` by name.
+
 ## Updating headers or the vhost
 
 The pipeline only ships `dist/`. If you change a file in `deploy/nginx/`,
@@ -138,4 +145,5 @@ copy it up and reload nginx by hand, as in step 3.
 | `Host key verification failed` | The VPS was rebuilt. Update `VPS_HOST_KEY` in the workflow from `ssh-keyscan -t ed25519 146.235.217.254`. |
 | Smoke test fails on the first push | DNS or certbot (steps 1 and 3) not done yet. The files are already synced, so rerun the job afterwards. |
 | Graph never loads, console shows a CSP error | Something new is fetched from another host. Add it to `connect-src` in the headers snippet. |
-| "couldn't load that part of repo-garden" right after a deploy | Expected in a tab opened before the deploy. The optional parts (time-lapse, battle, metro, themes, export, people and weeds tabs) load on first use (`src/lazy/parts.ts`), and the rsync `--delete` removed the old build's files. Reloading fixes it, and the message offers the reload. |
+| "couldn't load that part of repo-garden" | An optional part (time-lapse, battle, metro, themes, export, people or weeds tab) could not be fetched, even on its retry under a new URL (`src/lazy/chunk.ts`). Usually the connection dropped. A deploy is not the cause unless the tab was left open across deploys for more than 30 days (step 5 keeps earlier builds' files that long). Reloading fixes it, and the message offers the reload. |
+| `assets/` keeps growing | It should not: each deploy deletes the hashed files that no build has shipped for 30 days. Every deploy refreshes the modification time of each file in the current build, so a vendor chunk that never changes is never pruned. If the prune step fails, check that the deploy user can run `sudo find` without a password. |

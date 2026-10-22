@@ -5,7 +5,8 @@ import { AlertIcon, CloseIcon } from './icons'
 /**
  * A fetch failure, bad_file (a saved garden that could not be opened), export_failed (the image
  * could not be made; for these two, message says why) or chunk_failed (a part of the app that loads
- * on demand could not be fetched, most likely because a deploy replaced it: a reload fixes it).
+ * on demand could not be fetched, even on its retry: the connection dropped, or the tab is older
+ * than the earlier builds the server keeps. A reload fetches it afresh; see lazy/chunk.ts).
  */
 export type ErrorCode = GitHubFetchError['code'] | 'bad_file' | 'export_failed' | 'chunk_failed'
 
@@ -85,7 +86,7 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
     case 'chunk_failed':
       return {
         title: "couldn't load that part of repo-garden",
-        hint: 'the site has probably been updated since this tab was opened. reload to get the new version.',
+        hint: 'the connection may have dropped, or the site was updated since this tab was opened. reload the page to fetch it again.',
         reloadAction: 'reload',
       }
   }

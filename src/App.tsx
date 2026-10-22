@@ -6,7 +6,9 @@ import { findWeeds, type WeedReport } from './graph/weeds'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
-import { battleChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
+import { releaseAudio, readSound, unlockAudio } from './audio/context'
+import { preload } from './lazy/chunk'
+import { battleChunk, contributorsTabChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
 import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { useRepoData } from './hooks/useRepoData'
@@ -23,7 +25,7 @@ import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
 import NodeInspector from './components/NodeInspector'
 import { staleBranchNames } from './components/gardenUtils'
-import { LazySlot, lazyPart, reloadPage } from './components/LazyPart'
+import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
 import { useMetroView } from './components/useMetroView'
 
 /** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
@@ -56,7 +58,7 @@ export default function App() {
   /** A garden opened from a saved file; it stands in for fetched data until the next Grow. */
   const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
-  /** a part of the app that loads on demand could not be fetched (a deploy replaced it): offer a reload */
+  /** a part of the app that loads on demand could not be fetched, even on its retry: offer a reload */
   const [chunkFailed, setChunkFailed] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
@@ -96,6 +98,10 @@ export default function App() {
   // a garden battle: the challenger grows beside the repo on show (a share link may name one)
   const [battleRef, setBattleRef] = useState<RepoRef | null>(initialShare.vs ?? null)
   const challenger = useRepoData(battleRef)
+  // The battle's code loads as soon as a battle is named, a share link's included, while the repo
+  // data is still on its way. Its overlay mounts once the code is in instead of suspending: a garden
+  // read from the repo cache would otherwise wait out Suspense's 300 ms fallback throttle as well.
+  const battleCode = useChunk(battleChunk, battleRef !== null)
   const { error, isFetching, refetch } = fetched
   const data = opened?.data ?? fetched.data
   const cachedAt = opened ? null : fetched.cachedAt
@@ -129,6 +135,12 @@ export default function App() {
   const weeds = useMemo<WeedReport | null>(() => (data ? findWeeds(data) : null), [data])
 
   // ---- share links ----
+  // A link to a person (?by=) opens the people tab once the repo is in: start on its code now, while
+  // the repo is fetched, not after (a battle's code, ?vs=, starts through battleCode above).
+  useEffect(() => {
+    if (initialShare.person !== null) preload(contributorsTabChunk)
+  }, [initialShare])
+
   // The link's selection, once its repo has loaded (a link to another repo's data is dropped).
   useEffect(() => {
     const pending = pendingShare.current
@@ -181,6 +193,9 @@ export default function App() {
     [timeline, data],
   )
   const openTimelapse = useCallback(() => {
+    // The music box was left on and its code is not in yet: start audio in this click, as WebKit
+    // allows only within a gesture, and the controls may mount after a fetch (see audio/context).
+    if (readSound() && !timelapseChunk.peek()) unlockAudio()
     // the garden goes back to its first commit at once, while the controls may still be loading
     timelapseProgress.current = 0
     setTimelapseOpen(true)
@@ -188,6 +203,8 @@ export default function App() {
   const closeTimelapse = useCallback(() => {
     setTimelapseOpen(false)
     timelapseProgress.current = 1
+    // closed before the controls loaded and took the audio openTimelapse started
+    releaseAudio()
   }, [])
   const timelapseFailed = useCallback(() => {
     closeTimelapse()
@@ -218,9 +235,12 @@ export default function App() {
   }, [showGarden])
   // The engine could not be loaded: the switch goes back to the layout on the canvas and the reload
   // card says why. Not saved, so the saved layout stays metro for the reload; picking metro again
-  // tries again.
+  // tries again, under a new URL (see lazy/chunk.ts). The state is read live, not as this render
+  // saw it: when metro is picked after a failure, useChunk's effect (declared above) has already
+  // started that new try, so this waits for its outcome. A failure changes the status again, and
+  // this runs again.
   useEffect(() => {
-    if (!metroWanted || metroEngine.status !== 'failed') return
+    if (!metroWanted || metroChunk.state().status !== 'failed') return
     const shown = drawnLayoutRef.current
     useGardenStore.setState({ layoutMode: shown === 'metro' ? 'organic' : shown })
     setChunkFailed(true)
@@ -303,6 +323,12 @@ export default function App() {
     setBattleRef(null)
     setChunkFailed(true)
   }, [])
+  // The battle's code could not be loaded: drop the battle, once it would have shown, and say why.
+  // Read live, as for metro: a battle named again after a failure has already started a new try.
+  useEffect(() => {
+    if (battleRef === null || !data || battleChunk.state().status !== 'failed') return
+    battleFailed()
+  }, [battleRef, data, battleCode.status, battleFailed])
 
   const showContributor = useCallback(
     (key: string) => {
@@ -413,10 +439,12 @@ export default function App() {
       setChunkFailed(false)
       setTokenOpen(false)
       setBattleRef(null)
+      // the time-lapse while its controls are still loading (once they are in, Escape leaves it on)
+      if (timelapseChunk.state().status !== 'ready') closeTimelapse()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [clearSelection])
+  }, [clearSelection, closeTimelapse])
 
   const showEmpty = !graph && !isFetching && !error && !invalidUrl && fileError === null
   // also while a first garden waits for the metro engine (see layouts)
@@ -483,7 +511,21 @@ export default function App() {
       {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} onBattle={startBattle} />}
 
       {timelapseOpen && graph && data ? (
-        <LazySlot frame={TIMELAPSE_FRAME} label="loading the time-lapse" onFailed={timelapseFailed}>
+        <LazySlot
+          frame={TIMELAPSE_FRAME}
+          onFailed={timelapseFailed}
+          fallback={
+            // the garden is back at its first commit and the status strip is gone: offer a way out
+            <div className={`${TIMELAPSE_FRAME} flex items-center gap-3`}>
+              <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+                loading the time-lapse…
+              </p>
+              <button type="button" onClick={closeTimelapse} className="text-[12px] font-medium text-garden-accent hover:underline">
+                cancel
+              </button>
+            </div>
+          }
+        >
           <TimelapseBar
             onClose={closeTimelapse}
             graph={graph}
@@ -516,20 +558,25 @@ export default function App() {
         />
       )}
 
-      {battleRef && data && (
-        <LazySlot frame={BATTLE_FRAME} label="setting up the battle" onFailed={battleFailed}>
-          <GardenBattle
-            a={data}
-            b={challenger.data}
-            bRef={battleRef}
-            bFetching={challenger.isFetching}
-            bError={challenger.error}
-            theme={theme}
-            onRetry={challenger.refetch}
-            onClose={endBattle}
-          />
-        </LazySlot>
-      )}
+      {battleRef &&
+        data &&
+        (battleCode.status === 'ready' ? (
+          <LazySlot frame={BATTLE_FRAME} label="setting up the battle" onFailed={battleFailed}>
+            <GardenBattle
+              a={data}
+              b={challenger.data}
+              bRef={battleRef}
+              bFetching={challenger.isFetching}
+              bError={challenger.error}
+              theme={theme}
+              onRetry={challenger.refetch}
+              onClose={endBattle}
+            />
+          </LazySlot>
+        ) : (
+          // its code is still on the way (a failure drops the battle: see battleFailed)
+          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up the battle" />
+        ))}
     </div>
   )
 }
