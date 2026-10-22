@@ -113,3 +113,11 @@ export function deleteCommand(names: ReadonlyArray<string>, remote = 'origin'): 
   if (names.length === 0) return ''
   return `git push ${remote} --delete ${names.map(shellQuote).join(' ')}`
 }
+
+/**
+ * The weeds ticked for the delete command at first: all of them but the ones that look kept on
+ * purpose (keep) and the ones with an open pull request, since deleting its branch closes it.
+ */
+export function defaultWeedPicks(weeds: ReadonlyArray<Pick<Weed, 'name' | 'keep'>>, hasOpenPr: (name: string) => boolean = () => false): Set<string> {
+  return new Set(weeds.filter((w) => !w.keep && !hasOpenPr(w.name)).map((w) => w.name))
+}

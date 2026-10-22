@@ -16,6 +16,7 @@ const reset = () =>
     inspectorNodeId: null,
     progress: null,
     themeId: 'obsidian',
+    rate: null,
   })
 
 describe('useGardenStore', () => {
@@ -210,6 +211,38 @@ describe('useGardenStore', () => {
     expect(useGardenStore.getState().layoutMode).toBe('metro')
     useGardenStore.getState().resetForNewRepo()
     expect(useGardenStore.getState().layoutMode).toBe('metro')
+  })
+})
+
+describe('the core request budget (noteRate)', () => {
+  beforeEach(reset)
+  const WINDOW = '2026-10-22T02:00:00.000Z'
+  const NEXT = '2026-10-22T03:00:00.000Z'
+
+  it('keeps the lowest count of a window (answers arrive out of order), and a later window replaces it', () => {
+    const { noteRate } = useGardenStore.getState()
+    noteRate({ remaining: 41, limit: 60, resetAt: WINDOW })
+    noteRate({ remaining: 39, limit: null, resetAt: WINDOW })
+    noteRate({ remaining: 40, limit: 60, resetAt: WINDOW })
+    expect(useGardenStore.getState().rate).toEqual({ remaining: 39, limit: 60, resetAt: WINDOW })
+    noteRate({ remaining: 59, limit: 60, resetAt: NEXT })
+    expect(useGardenStore.getState().rate).toEqual({ remaining: 59, limit: 60, resetAt: NEXT })
+    // an answer from the window before
+    noteRate({ remaining: 2, limit: 60, resetAt: WINDOW })
+    expect(useGardenStore.getState().rate?.remaining).toBe(59)
+    noteRate(null)
+    expect(useGardenStore.getState().rate?.remaining).toBe(59)
+  })
+
+  it('is the visitor’s: kept for a new repo, dropped with a new token (a token has its own budget)', () => {
+    const s = useGardenStore.getState()
+    s.noteRate({ remaining: 12, limit: 60, resetAt: WINDOW })
+    s.resetForNewRepo()
+    expect(useGardenStore.getState().rate?.remaining).toBe(12)
+    s.setToken('')
+    expect(useGardenStore.getState().rate?.remaining).toBe(12)
+    s.setToken('ghp_x')
+    expect(useGardenStore.getState().rate).toBeNull()
   })
 })
 

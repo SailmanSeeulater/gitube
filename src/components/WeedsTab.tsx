@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { deleteCommand, type WeedReport } from '../graph/weeds'
+import { defaultWeedPicks, deleteCommand, type WeedReport } from '../graph/weeds'
+import type { PullSummary } from '../types'
 import { useGardenStore } from '../store/useGardenStore'
 import { useTheme } from '../theme/useTheme'
 import { relativeTime } from './gardenUtils'
@@ -14,26 +15,43 @@ export interface WeedsTabProps {
   palette: Record<string, string>
   /** one timestamp per loaded repo, shared with the other tabs */
   now: number
+  /** open pull requests by head branch (the overlay's index), null when not known */
+  prs?: ReadonlyMap<string, readonly PullSummary[]> | null
 }
 
-const ticked = (report: WeedReport) => new Set(report.weeds.filter((w) => !w.keep).map((w) => w.name))
+/** The weeds with an open pull request, as one string that changes when the set does. */
+const prWeedKey = (report: WeedReport, prs: WeedsTabProps['prs']) =>
+  report.weeds
+    .filter((w) => (prs?.get(w.name)?.length ?? 0) > 0)
+    .map((w) => w.name)
+    .join('\n')
 
 /**
  * Garden upkeep: branches whose work is all in the default branch (with one command to delete the
  * ticked ones from the remote), and thorny branches far apart from it on both sides. Clicking a name
  * selects that branch on the graph.
  */
-export default function WeedsTab({ report, owner, repo, defaultBranch, palette, now }: WeedsTabProps) {
+export default function WeedsTab({ report, owner, repo, defaultBranch, palette, now, prs = null }: WeedsTabProps) {
   const fallback = useTheme().fallback
   const selectedBranch = useGardenStore((s) => s.selectedBranch)
   const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
 
-  // ticks start over for each repo: everything but the branches that look kept on purpose
-  const [picked, setPicked] = useState(() => ticked(report))
+  // ticks start over for each repo: everything but the branches that look kept on purpose and the
+  // ones with an open pull request (deleting the branch would close it)
+  const hasOpenPr = (name: string) => (prs?.get(name)?.length ?? 0) > 0
+  const prKey = prWeedKey(report, prs)
+  const [picked, setPicked] = useState(() => defaultWeedPicks(report.weeds, hasOpenPr))
   const [pickedFor, setPickedFor] = useState(report)
+  const [prKeyFor, setPrKeyFor] = useState(prKey)
   if (pickedFor !== report) {
     setPickedFor(report)
-    setPicked(ticked(report))
+    setPrKeyFor(prKey)
+    setPicked(defaultWeedPicks(report.weeds, hasOpenPr))
+  } else if (prKeyFor !== prKey) {
+    // pull requests read after the tab opened: their branches are unticked (once; a tick after this stays)
+    setPrKeyFor(prKey)
+    const withPr = new Set(prKey.split('\n'))
+    setPicked((prev) => new Set([...prev].filter((name) => !withPr.has(name))))
   }
   const toggle = (name: string) =>
     setPicked((prev) => {
@@ -98,7 +116,21 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
                     className="shrink-0 accent-garden-accent"
                   />
                   {nameButton(w.name)}
-                  {w.keep && (
+                  {(() => {
+                    const pr = prs?.get(w.name)?.[0]
+                    return pr ? (
+                      <a
+                        href={pr.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 rounded bg-garden-hover px-1 text-[10px] tabular-nums text-garden-text-dim hover:text-garden-accent"
+                        title={`deleting this branch closes PR #${pr.number}`}
+                      >
+                        #{pr.number} open
+                      </a>
+                    ) : null
+                  })()}
+                  {w.keep && !hasOpenPr(w.name) && (
                     <span
                       className="shrink-0 text-[10px] uppercase tracking-wide text-garden-muted"
                       title="looks like a release or long-lived branch, so it is not ticked"

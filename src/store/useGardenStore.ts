@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { FetchProgress, ViewMode } from '../types'
+import type { RateInfo } from '../api/http'
 import { readStoredThemeId, writeStoredThemeId } from '../theme/storage'
 import { isThemeId, type ThemeId } from '../theme/themes'
 
@@ -85,6 +86,12 @@ export interface GardenState {
   hiddenLabels: number
   /** Colour theme. Persisted under THEME_STORAGE_KEY; Obsidian on a first visit. */
   themeId: ThemeId
+  /**
+   * The core (REST) budget as the latest response reported it, from the graph fetch and the pull
+   * request overlay alike; null until a response arrives. GraphQL points never land here. Cleared
+   * by setToken (a token has its own budget), kept across repos (the budget is the visitor's).
+   */
+  rate: RateInfo | null
 }
 
 export interface GardenActions {
@@ -111,6 +118,11 @@ export interface GardenActions {
   setInspectorNodeId: (id: string | null) => void
   setProgress: (progress: FetchProgress | null) => void
   setHiddenLabels: (count: number) => void
+  /**
+   * Records the core budget a response reported. Within one window the lowest count wins (answers
+   * to concurrent requests can arrive out of order); a later window replaces it.
+   */
+  noteRate: (rate: RateInfo | null) => void
   /** Switches the theme and saves the choice; unknown ids are ignored. */
   setThemeId: (id: ThemeId) => void
   /** Clears the branch or contributor selection and the inspector (Escape / background click). */
@@ -136,11 +148,12 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
   progress: null,
   hiddenLabels: 0,
   themeId: readStoredThemeId(),
+  rate: null,
 
   setToken: (token) => {
     const trimmed = token.trim()
     writeStoredToken(trimmed)
-    set({ token: trimmed })
+    set((s) => (s.token === trimmed ? s : { token: trimmed, rate: null }))
   },
   setViewMode: (viewMode) => set({ viewMode }),
   toggleViewMode: () => set((s) => ({ viewMode: s.viewMode === 'skeleton' ? 'full' : 'skeleton' })),
@@ -198,6 +211,20 @@ export const useGardenStore = create<GardenStore>()((set, get) => ({
     set((s) => {
       const hiddenLabels = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
       return s.hiddenLabels === hiddenLabels ? s : { hiddenLabels }
+    }),
+
+  noteRate: (rate) =>
+    set((s) => {
+      if (!rate || !Number.isFinite(rate.remaining)) return s
+      const prev = s.rate
+      if (prev !== null && prev.resetAt !== null && rate.resetAt !== null) {
+        // an answer from the window before, or a stale count from this one
+        if (rate.resetAt < prev.resetAt) return s
+        if (rate.resetAt === prev.resetAt && rate.remaining >= prev.remaining) return s
+      }
+      return {
+        rate: { remaining: rate.remaining, limit: rate.limit ?? prev?.limit ?? null, resetAt: rate.resetAt ?? prev?.resetAt ?? null },
+      }
     }),
 
   setThemeId: (id) => {

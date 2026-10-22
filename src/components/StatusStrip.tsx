@@ -36,6 +36,8 @@ export default function StatusStrip({
 }: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
   const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
+  // the core budget as the latest response put it (the graph's, or the pull requests' after it)
+  const rate = useGardenStore((s) => s.rate)
 
   if (isFetching) {
     const stage = progress ? stageLabel(progress.stage) : 'starting'
@@ -78,7 +80,7 @@ export default function StatusStrip({
   if (!data) return null
 
   const commitCount = Object.keys(data.commits).length
-  const remaining = progress?.rateLimitRemaining ?? null
+  const remaining = rate?.remaining ?? progress?.rateLimitRemaining ?? null
 
   return (
     <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
@@ -137,7 +139,7 @@ export default function StatusStrip({
       {cachedAt !== null && fileSavedAt === null && (
         <span
           className="flex items-center gap-1.5 rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
-          title={`Shown from this browser's cache (fetched ${formatDateTime(cachedAt)}), so no GitHub requests were used.`}
+          title={`Shown from this browser's cache (fetched ${formatDateTime(cachedAt)}), so the graph used no GitHub requests; pull requests are checked live (1–3 requests, or GraphQL with a token).`}
         >
           cached {relativeTime(cachedAt)}
           {onRefresh && (

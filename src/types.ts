@@ -142,3 +142,82 @@ export interface Graph {
 }
 
 export type ViewMode = 'skeleton' | 'full'
+
+// ---------- Pull requests (the overlay; see api/pulls.ts and graph/pulls.ts) ----------
+
+/**
+ * Where a pull request's review stands. 'waiting': no decision yet (review required, or no review
+ * rule). 'unknown': not looked up yet (a visitor without a token pays 3 requests per pull request).
+ */
+export type ReviewState = 'approved' | 'changes' | 'waiting' | 'unknown'
+
+/** The rollup of a pull request head's check runs and commit statuses; 'unknown' = not looked up yet. */
+export type ChecksState = 'passing' | 'running' | 'failing' | 'none' | 'unknown'
+
+export interface CheckCounts {
+  failing: number
+  running: number
+  passing: number
+  skipped: number
+  total: number
+}
+
+/** One open pull request from a branch of the repo itself (fork pull requests have no branch here). */
+export interface PullSummary {
+  number: number
+  title: string
+  /** html_url on github.com */
+  url: string
+  /** head branch name, a branch of this repo */
+  head: string
+  /** the head commit GitHub has; differs from the branch's tipSha when the branch moved since the graph was fetched */
+  headSha: string
+  /** base branch name */
+  base: string
+  draft: boolean
+  /** author's login; null for a deleted account */
+  author: string | null
+  review: ReviewState
+  checks: ChecksState
+  /** per-state check counts, when known */
+  checkCounts: CheckCounts | null
+  /** reviewers (people and teams) asked for a review and not yet answered; null when unknown */
+  reviewersAsked: number | null
+  /** true: conflicts with its base; false: mergeable; null: not known (always null without a token) */
+  conflict: boolean | null
+  /** ISO 8601 */
+  updatedAt: string
+}
+
+/** The open pull requests of a repo, by head branch. Never stored (not in the cache or saved files). */
+export interface PullIndex {
+  /** head branch name -> its open pull requests, most recently updated first */
+  byBranch: Map<string, PullSummary[]>
+  /** open pull requests into the default branch (null when not known) */
+  intoBase: number | null
+  /** open pull requests in the repo, from forks too (an estimate when truncated) */
+  total: number | null
+  /** open pull requests whose head is in a fork (or, with GraphQL, not on any loaded branch) */
+  fromForks: number
+  /** same-repo pull requests whose head branch is not among the loaded branches */
+  notOnGraph: number
+  /** the REST listing stopped before the last page */
+  truncated: boolean
+  /** how many pull requests the REST listing read (the most recently updated); 0 for GraphQL */
+  listed: number
+  source: 'graphql' | 'rest'
+  /** ISO time of the fetch */
+  fetchedAt: string
+}
+
+/** What the canvas draws round one tip: its pull requests combined, worst first. */
+export interface PrMark {
+  review: ReviewState
+  checks: ChecksState
+  /** every pull request on the node is a draft */
+  draft: boolean
+  /** any of them conflicts with its base */
+  conflict: boolean
+  /** how many pull requests the mark stands for */
+  count: number
+}

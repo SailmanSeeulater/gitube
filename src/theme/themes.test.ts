@@ -49,6 +49,7 @@ const COLOUR_TOKENS = [
   'stationRing',
   'warn',
   'danger',
+  'success',
 ] as const satisfies ReadonlyArray<keyof ThemeTokens>
 const ALPHA_TOKENS = [
   'haloFillAlpha',
@@ -241,6 +242,29 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in 
       const colour = colorAt(i, theme)
       expect(onCanvas(colour, theme.metroLineAlpha), `${i} ${colour}`).toBeGreaterThan(mutedTrunk)
     }
+  })
+})
+
+// The pull request overlay (components/prMark.ts) splits a ring round a tip into a review half and a
+// checks half, each in success (approved / passing), warn (running), danger (changes / failing) or
+// muted (waiting / no checks / not looked up). The status words beside the glyphs use them as text.
+describe.each(THEMES.map((theme) => [theme.id, theme] as const))('pull request marks in %s', (_id, theme) => {
+  it('reads success as text on the panel and the canvas', () => {
+    expect(contrastRatio(theme.success, theme.panel)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(theme.success, theme.canvas)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('draws every arc colour at 3:1 on the canvas', () => {
+    for (const key of ['success', 'warn', 'danger', 'muted'] as const) {
+      expect(contrastRatio(theme[key], theme.canvas), key).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('keeps success apart from the other states, the accent and muted (CIEDE2000)', () => {
+    expect(deltaE2000(theme.success, theme.warn)).toBeGreaterThanOrEqual(25)
+    expect(deltaE2000(theme.success, theme.danger)).toBeGreaterThanOrEqual(30)
+    expect(deltaE2000(theme.success, theme.accent)).toBeGreaterThanOrEqual(15)
+    expect(deltaE2000(theme.success, theme.muted)).toBeGreaterThanOrEqual(15)
   })
 })
 

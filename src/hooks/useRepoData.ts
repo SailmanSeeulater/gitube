@@ -10,6 +10,8 @@ export interface UseRepoDataResult {
   data: RepoData | undefined
   /** When data came from this browser's cache: the ISO time it was fetched. null for a live fetch. */
   cachedAt: string | null
+  /** When the data on show was fetched from GitHub (ISO): cachedAt for a cached copy; null without data. */
+  fetchedAt: string | null
   /** Always a GitHubFetchError (unexpected errors are wrapped with code 'unknown'). */
   error: GitHubFetchError | null
   isFetching: boolean
@@ -77,6 +79,7 @@ const INITIAL_PROGRESS: FetchProgress = {
 export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
   const token = useGardenStore((s) => s.token)
   const setProgress = useGardenStore((s) => s.setProgress)
+  const noteRate = useGardenStore((s) => s.noteRate)
   /** set by refetch: the next run skips the cache */
   const liveRef = useRef(false)
 
@@ -97,7 +100,13 @@ export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
       setProgress({ ...INITIAL_PROGRESS })
       const repo = await fetchRepoData(ref, {
         token: token || undefined,
-        onProgress: setProgress,
+        onProgress: (progress) => {
+          setProgress(progress)
+          // the graph's requests are all core ones: the same budget the pull request overlay spends
+          if (progress.rateLimitRemaining !== null) {
+            noteRate({ remaining: progress.rateLimitRemaining, limit: null, resetAt: progress.rateLimitResetAt })
+          }
+        },
         signal,
       })
       if (repoStore) void remember(repoStore, repo, Date.now())
@@ -115,6 +124,7 @@ export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
   return {
     data: query.data?.repo,
     cachedAt: query.data?.cachedAt ?? null,
+    fetchedAt: query.data ? (query.data.cachedAt ?? new Date(query.dataUpdatedAt).toISOString()) : null,
     error,
     isFetching: query.isFetching,
     isPending: query.isPending && ref !== null,

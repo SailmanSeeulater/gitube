@@ -120,6 +120,11 @@ export interface ThemeTokens {
   metroDimAlpha: number
   warn: string
   danger: string
+  /**
+   * good news on the pull request overlay: an approved review and passing checks (the split ring
+   * round a tip, its glyphs and status lines). Readable as text on the panel and on the canvas.
+   */
+  success: string
   /** box-shadow of floating panels */
   shadow: string
   /** branch palette in assignment order (the default branch takes the accent instead) */
@@ -236,6 +241,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.1,
     warn: '#d9b35b',
     danger: '#e06c75',
+    success: '#63c55d',
     shadow: '0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4)',
     branchColors: ['#f472b6', '#fb923c', '#fbbf24', '#a3e635', '#34d399', '#22d3ee', '#60a5fa', '#818cf8', '#e879f9', '#f87171', '#2dd4bf', '#c084fc'],
     branchNames: ['pink', 'orange', 'amber', 'lime', 'emerald', 'cyan', 'blue', 'indigo', 'fuchsia', 'red', 'teal', 'purple'],
@@ -275,6 +281,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.1,
     warn: '#f08c3c',
     danger: '#f16f78',
+    success: '#00bc74',
     shadow: '0 10px 30px rgba(2, 6, 18, 0.5), 0 1px 2px rgba(2, 6, 18, 0.5)',
     branchColors: ['#f97770', '#6de8e7', '#d27de6', '#d9f0a5', '#4baeed', '#ff9b51', '#47c58c', '#c9c2fc', '#fab2cd', '#738aed', '#a4f2cf', '#b4defc'],
     branchNames: ['coral', 'aqua', 'orchid', 'lime', 'azure', 'tangerine', 'jade', 'lavender', 'rose', 'periwinkle', 'mint', 'ice'],
@@ -314,6 +321,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#915c08',
     danger: '#a3123f',
+    success: '#277d23',
     shadow: '0 8px 24px rgba(40, 32, 20, 0.10), 0 1px 2px rgba(40, 32, 20, 0.10)',
     branchColors: ['#005182', '#a97416', '#752f71', '#158561', '#505ac8', '#86262e', '#868b52', '#c32e85', '#006169', '#7d4e2c', '#9468c2', '#295a2c'],
     branchNames: ['prussian', 'ochre', 'plum', 'viridian', 'ultramarine', 'oxblood', 'olive', 'magenta', 'teal', 'sepia', 'violet', 'forest'],
@@ -353,6 +361,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#9a5b00',
     danger: '#c21725',
+    success: '#007c2d',
     shadow: '0 8px 24px rgba(20, 28, 45, 0.10), 0 1px 2px rgba(20, 28, 45, 0.10)',
     branchColors: ['#d42975', '#d16100', '#a97f00', '#378a21', '#006f4f', '#028a9b', '#0066c8', '#1f3c86', '#af27b9', '#ac1922', '#6e401e', '#9a6ec9'],
     branchNames: ['pink', 'orange', 'gold', 'green', 'emerald', 'cyan', 'blue', 'navy', 'fuchsia', 'red', 'umber', 'lilac'],
@@ -392,6 +401,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#8a5f18',
     danger: '#a8372e',
+    success: '#4d7800',
     shadow: '0 8px 24px rgba(24, 36, 26, 0.10), 0 1px 2px rgba(24, 36, 26, 0.10)',
     branchColors: ['#b25634', '#39659b', '#728431', '#763a64', '#a97e2c', '#368794', '#af3d60', '#8972b3', '#6b1d24', '#774826', '#42428c', '#5c571b'],
     branchNames: ['terracotta', 'slate blue', 'moss', 'plum', 'ochre', 'eucalyptus', 'berry', 'heather', 'beet', 'clay', 'iris', 'olive'],
@@ -431,6 +441,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#8a5600',
     danger: '#af2b25',
+    success: '#1f771c',
     shadow: '0 8px 24px rgba(60, 40, 15, 0.10), 0 1px 2px rgba(60, 40, 15, 0.10)',
     branchColors: ['#b8492e', '#3f7932', '#6b46a0', '#b17000', '#294793', '#86304a', '#7f7aa2', '#c74c8e', '#2176a8', '#6c411a', '#1c5434', '#817f24'],
     branchNames: ['adobe', 'cactus', 'dusk', 'saffron', 'indigo', 'rosewood', 'haze', 'sunset', 'denim', 'mesquite', 'juniper', 'yucca'],
@@ -470,6 +481,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#935a11',
     danger: '#b3241f',
+    success: '#167b26',
     shadow: '0 8px 24px rgba(60, 20, 35, 0.10), 0 1px 2px rgba(60, 20, 35, 0.10)',
     branchColors: ['#b97500', '#5849b2', '#3b8040', '#d45b3d', '#70306c', '#407bc5', '#778b20', '#9f55be', '#157171', '#933428', '#368ca7', '#255940'],
     branchNames: ['marigold', 'iris', 'fern', 'coral', 'plum', 'cornflower', 'leaf', 'orchid', 'teal', 'brick', 'lagoon', 'ivy'],
@@ -509,6 +521,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#915c08',
     danger: '#be222a',
+    success: '#007c2d',
     shadow: '0 8px 24px rgba(15, 35, 70, 0.10), 0 1px 2px rgba(15, 35, 70, 0.10)',
     branchColors: ['#dd5c00', '#1c882d', '#5403af', '#b08400', '#cc206f', '#008287', '#183060', '#719500', '#b71a18', '#b352ba', '#035e4d', '#806fcd'],
     branchNames: ['tangerine', 'kelly', 'violet', 'sun', 'cerise', 'lagoon', 'ink', 'lime', 'scarlet', 'orchid', 'spruce', 'heliotrope'],
@@ -548,6 +561,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.15,
     warn: '#7a4702',
     danger: '#ac0311',
+    success: '#03651a',
     shadow: '0 0 0 1px rgba(0, 0, 0, 0.9), 0 6px 16px rgba(0, 0, 0, 0.18)',
     branchColors: ['#bb0916', '#02721c', '#a70094', '#915b00', '#006c68', '#6c1bb9', '#062e6e', '#b84b00', '#5c6400', '#7b0f29', '#006e8c', '#024122'],
     branchNames: ['red', 'green', 'magenta', 'amber', 'teal', 'violet', 'navy', 'orange', 'olive', 'crimson', 'cyan', 'forest'],
@@ -587,6 +601,7 @@ const THEME_TOKENS = [
     metroDimAlpha: 0.12,
     warn: '#9e3d00',
     danger: '#a8183a',
+    success: '#006f1a',
     shadow: '0 8px 24px rgba(7, 54, 66, 0.10), 0 1px 2px rgba(7, 54, 66, 0.10)',
     branchColors: ['#268bd2', '#cb4b16', '#1f8a82', '#d33682', '#6f8000', '#6c71c4', '#742f22', '#1d4f7a', '#802651', '#2f6e4f', '#a66f6f', '#7a3d8f'],
     branchNames: ['blue', 'orange', 'cyan', 'magenta', 'green', 'violet', 'brick', 'navy', 'wine', 'pine', 'mauve', 'grape'],
@@ -674,6 +689,7 @@ export function themeCssVariables(theme: ThemeTokens): Record<string, string> {
     '--garden-raised': theme.badgeBg,
     '--garden-warn': theme.warn,
     '--garden-danger': theme.danger,
+    '--garden-success': theme.success,
     '--garden-shadow': theme.shadow,
   }
 }

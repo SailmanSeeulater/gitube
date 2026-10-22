@@ -12,6 +12,11 @@ Obsidian-style node graph.
   look and the default, and Midnight are dark; Paper, Slate, Sage, Sand, Rose,
   Sky, Contrast and Solar are light. Each has its own branch palette, checked
   for contrast on its canvas. The choice is saved in this browser.
+- Open pull requests show on the branch tips they come from: the tip's ring
+  splits into review (left) and checks (right), green, amber or red (broken),
+  dotted for a draft. Click a tip for the details; `is:pr`, `checks:failing`,
+  `review:approved` and the like narrow the branch list. A repo without pull
+  requests looks exactly as before.
 - Everything runs in the browser against the GitHub REST API. No clone, no
   server. Add a personal access token (key icon) for private repos and a much
   higher rate limit.
@@ -53,6 +58,14 @@ VPS through GitHub Actions. One-time setup (DNS, nginx, the deploy key) is in
    first branch that reaches it, and (in skeleton mode) collapses linear runs.
 
 Roughly one request per branch. Unauthenticated GitHub allows 60 per hour.
+
+Open pull requests come after the graph (`src/api/pulls.ts`). Without a token:
+`GET /repos/{o}/{r}/pulls` (1 request per 100 open pull requests, at most 3),
+skipped below 5 requests left; a pull request's review and checks cost 2 or 3
+more and are read when its tip is opened, while at least 15 are left. With a
+token: one GraphQL query per 40 branches, review and checks included, and no
+REST requests. Pull requests from forks have no branch here and are not drawn.
+They are never cached or saved.
 
 ## Stack
 

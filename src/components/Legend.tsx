@@ -3,6 +3,8 @@ import type { Theme } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 import { BUD_AFTER_DAYS, WILT_AFTER_DAYS, petalAngles } from './gardenLook'
 import { gardenInk, leafColour } from './gardenPaint'
+import { PrRingPaths } from './PrGlyph'
+import type { PrMark } from '../types'
 
 type GlyphKind =
   | 'tip'
@@ -20,6 +22,9 @@ type GlyphKind =
   | 'wilted'
   | 'flower'
   | 'roots'
+  | 'pr'
+  | 'pr-station'
+  | 'pr-bloom'
 
 /** Ellipse petals around (9, 9) for the garden glyphs, as gardenPaint draws them. */
 function Petals({ angles, reach, long, short, fill }: { angles: number[]; reach: number; long: number; short: number; fill: string }) {
@@ -47,6 +52,9 @@ const THORN_PATH = Array.from({ length: 9 }, (_, i) => {
   const p = (r: number, t: number) => `${(9 + Math.cos(t) * r).toFixed(2)} ${(9 + Math.sin(t) * r).toFixed(2)}`
   return `M${p(5.5, a - half)}L${p(8.8, a)}L${p(5.5, a + half)}Z`
 }).join('')
+
+/** The legend's pull request: review approved (left), checks failing (right, broken). */
+const LEGEND_PR: Pick<PrMark, 'review' | 'checks' | 'draft'> = { review: 'approved', checks: 'failing', draft: false }
 
 /**
  * The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them, in the
@@ -101,6 +109,30 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <text x="9" y="5" fill={theme.derived.runMark} fontSize="6" textAnchor="middle">
             +N
           </text>
+        </svg>
+      )
+    // a tip with an open pull request: the layout's tip glyph, its ring split in review | checks
+    case 'pr':
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="9" r="4" fill={branch} />
+          <PrRingPaths cx={9} cy={9} R={6.6} w={2} mark={LEGEND_PR} theme={theme} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
+        </svg>
+      )
+    case 'pr-station':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="9" y2="9" stroke={branch} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="4.5" fill={branch} />
+          <PrRingPaths cx={9} cy={9} R={5.9} w={1.9} mark={LEGEND_PR} theme={theme} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
+        </svg>
+      )
+    case 'pr-bloom':
+      return (
+        <svg {...common}>
+          <Petals angles={petalAngles('bloom', 0.1)} reach={3.6} long={3} short={1.7} fill={branch} />
+          <circle cx="9" cy="9" r="2.2" fill={ink.centre} />
+          <PrRingPaths cx={9} cy={9} R={5.8} w={1.8} mark={LEGEND_PR} theme={theme} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
         </svg>
       )
     case 'tip':
@@ -204,10 +236,27 @@ const GARDEN_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string
   { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
 ]
 
-export default function Legend() {
+const PR_HINT =
+  'an open pull request from this branch. left arc: review (green approved, red broken changes requested, grey waiting). ' +
+  'right arc: checks (green passing, amber running, red broken failing). dotted: draft. faint: not checked yet. click the tip for details'
+
+/** The pull request item for each layout, on its tip glyph (organic: the empty sixth cell; else a seventh). */
+const PR_ITEMS: Record<'organic' | 'metro' | 'garden', { kind: GlyphKind; label: string; hint: string }> = {
+  organic: { kind: 'pr', label: 'pull request', hint: PR_HINT },
+  metro: { kind: 'pr-station', label: 'pull request', hint: PR_HINT },
+  garden: { kind: 'pr-bloom', label: 'pull request', hint: PR_HINT },
+}
+
+export interface LegendProps {
+  /** some tip on the canvas carries a pull request mark: the legend explains it (one item, only then) */
+  hasPrs?: boolean
+}
+
+export default function Legend({ hasPrs = false }: LegendProps) {
   const theme = useTheme()
   const layout = useGardenStore((s) => s.layoutMode)
-  const items = layout === 'metro' ? METRO_ITEMS : layout === 'garden' ? GARDEN_ITEMS : ITEMS
+  const base = layout === 'metro' ? METRO_ITEMS : layout === 'garden' ? GARDEN_ITEMS : ITEMS
+  const items = hasPrs ? [...base, PR_ITEMS[layout]] : base
   return (
     <div>
       {layout === 'garden' && (

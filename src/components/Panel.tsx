@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import type { Branch, RepoData, ViewMode } from '../types'
+import type { Branch, PullSummary, RepoData, ViewMode } from '../types'
 import type { ContributorIndex } from '../graph/contributors'
+import { branchPrs, combineMarks, countPulls, lookupPlan } from '../graph/pulls'
 import type { WeedReport } from '../graph/weeds'
+import type { PullsView } from '../hooks/usePulls'
 import { preload, type Chunk } from '../lazy/chunk'
 import { battleChunk, contributorsTabChunk, metroChunk, weedsTabChunk } from '../lazy/parts'
 import { useChunk } from '../lazy/useChunk'
 import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
 import { useTheme } from '../theme/useTheme'
-import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
+import { STALE_OPTIONS, formatClock, isStale, relativeTime } from './gardenUtils'
+import { QUERY_HELP, hasIsPr, matchesBranchQuery, parseBranchQuery, toggleIsPr } from './branchQuery'
+import { PrStatusLine, PrSwatch } from './PrGlyph'
+import { prRowSuffix } from './prMark'
 import Legend from './Legend'
 import { ChunkPlaceholder, LazySlot, lazyPart } from './LazyPart'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon, SwordsIcon } from './icons'
@@ -27,6 +32,10 @@ export interface PanelProps {
   weeds: WeedReport
   /** starts a garden battle against the repo typed in; false when that is not a repo */
   onBattle: (value: string) => boolean
+  /** the repo's open pull requests (null for a saved file): row glyphs, the count line, search qualifiers */
+  pulls?: PullsView | null
+  /** some tip on the canvas carries a pull request mark (the legend then explains it) */
+  hasPrMarks?: boolean
 }
 
 /** The ⚔ form under the panel header: which repo to battle. */
@@ -217,9 +226,54 @@ interface BranchRowProps {
   now: number
   onSelect: () => void
   onToggleHidden: () => void
+  /** the branch's open pull requests (most recently updated first) */
+  prs: readonly PullSummary[]
+  /**
+   * The repo has a pull request on some branch: every row's dot sits in a 14 px box, ringed on the
+   * rows with one. Otherwise the rows are exactly as they were.
+   */
+  prSwatch: boolean
+  /** the pull request overlay, for the selected row's status line */
+  pulls: PullsView | null
 }
 
-function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHidden }: BranchRowProps) {
+/**
+ * The selected row's pull request, under it: its review and checks in words, and its number as a
+ * link. Without a token, showing it looks its review and checks up after a moment, as the inspector
+ * does (and only while the hourly budget allows).
+ */
+function SelectedPrLine({ pr, more, pulls }: { pr: PullSummary; more: number; pulls: PullsView }) {
+  const plan = lookupPlan(pr, pulls)
+  const { autoLookup } = pulls
+  useEffect(() => {
+    if (plan !== 'auto') return
+    return autoLookup(pr)
+    // pr.number and plan stand for pr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pr.number, plan, autoLookup])
+  return (
+    <div className={`flex items-center gap-2 pb-1 pl-[30px] pr-2 text-[11px] leading-[18px] ${plan === 'running' ? 'animate-pulse' : ''}`}>
+      <span className="min-w-0 flex-1">
+        <PrStatusLine pr={pr} compact />
+      </span>
+      {plan === 'ask' && (
+        <button
+          type="button"
+          onClick={() => pulls.lookup(pr)}
+          title="Look its review and checks up (2 or 3 of this hour's GitHub requests)"
+          className="shrink-0 text-garden-accent hover:underline"
+        >
+          load
+        </button>
+      )}
+      <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title} className="shrink-0 text-garden-accent hover:underline">
+        #{pr.number} ↗{more > 0 ? ` +${more}` : ''}
+      </a>
+    </div>
+  )
+}
+
+function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHidden, prs, prSwatch, pulls }: BranchRowProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -234,12 +288,17 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
         aria-pressed={selected}
         onClick={onSelect}
         onKeyDown={onKeyDown}
-        title={branch.name}
+        title={prs.length > 0 ? `${branch.name}${prRowSuffix(prs)}` : branch.name}
+        aria-label={prs.length > 0 ? `${branch.name}${branch.isDefault ? ' (default)' : ''}${prRowSuffix(prs)}` : undefined}
         className={`group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
           selected ? 'bg-garden-accent/10' : 'hover:bg-garden-hover'
         } ${hidden ? 'opacity-40' : ''}`}
       >
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />
+        {prSwatch ? (
+          <PrSwatch colour={colour} mark={combineMarks(prs)} />
+        ) : (
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />
+        )}
         <span className={`min-w-0 flex-1 truncate ${selected ? 'text-garden-accent' : 'text-garden-text'}`}>
           {branch.name}
           {branch.isDefault && (
@@ -269,11 +328,69 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
           {hidden ? <EyeOffIcon /> : <EyeIcon />}
         </button>
       </div>
+      {selected && pulls && prs.length > 0 && <SelectedPrLine pr={prs[0]} more={prs.length - 1} pulls={pulls} />}
     </li>
   )
 }
 
-export default function Panel({ data, palette, contributors, weeds, onBattle }: PanelProps) {
+/**
+ * The count line's one word on pull requests: reading them, how many branches have one (a link that
+ * toggles is:pr in the search), or that they could not be read (and why, in its title). Nothing when
+ * the repo has none, so such a repo's panel is as it always was.
+ */
+function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: string; onSearch: (value: string) => void }) {
+  const { status, index, error } = pulls
+  const dot = <span className="text-garden-border">·</span>
+  if (status === 'loading') {
+    return (
+      <span className="flex items-center gap-2">
+        {dot}
+        <span role="status" className="animate-pulse">
+          checking PRs…
+        </span>
+      </span>
+    )
+  }
+  if (status === 'error' && error) {
+    const when = error.resetAt ? formatClock(error.resetAt) : ''
+    const reason =
+      error.code === 'rate_limited'
+        ? `GitHub's hourly request limit is used up${when ? ` (rate limited until ${when})` : ''}; a token raises it.`
+        : error.message
+    const title = `Open pull requests could not be read: ${reason}`
+    return (
+      <span className="flex items-center gap-2">
+        {dot}
+        {error.retriable ? (
+          <button type="button" onClick={pulls.retry} title={`${title} Click to try again.`} className="hover:text-garden-text hover:underline">
+            PRs not checked
+          </button>
+        ) : (
+          <span title={title}>PRs not checked</span>
+        )}
+      </span>
+    )
+  }
+  const withPrs = index ? index.byBranch.size : 0
+  if (status !== 'ready' || withPrs === 0) return null
+  const on = hasIsPr(search)
+  return (
+    <span className="flex items-center gap-2">
+      {dot}
+      <button
+        type="button"
+        aria-pressed={on}
+        onClick={() => onSearch(toggleIsPr(search))}
+        title={on ? 'Show every branch again (takes is:pr out of the search)' : `List only the branches with an open pull request (${countPulls(index)} open from branches here)`}
+        className={`text-garden-accent hover:underline ${on ? 'font-medium' : ''}`}
+      >
+        {withPrs} with PRs
+      </button>
+    </span>
+  )
+}
+
+export default function Panel({ data, palette, contributors, weeds, onBattle, pulls = null, hasPrMarks = false }: PanelProps) {
   const [battleOpen, setBattleOpen] = useState(false)
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
@@ -304,19 +421,24 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => Date.now(), [data])
 
+  const prIndex = pulls?.index ?? null
+  /** some branch has an open pull request: the rows switch to their pull request swatches */
+  const hasPrs = prIndex !== null && prIndex.byBranch.size > 0
+
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    // free text matches names as it always did; is:pr, checks:failing, ... narrow the list by pull request
+    const query = parseBranchQuery(search)
     const time = (b: Branch) => {
       const t = Date.parse(b.tipDate)
       return Number.isFinite(t) ? t : 0
     }
     return data.branches
-      .filter((b) => (q === '' || b.name.toLowerCase().includes(q)) && (b.isDefault || !isStale(b.tipDate, staleDays, now)))
+      .filter((b) => matchesBranchQuery(query, b.name, branchPrs(prIndex, b.name)) && (b.isDefault || !isStale(b.tipDate, staleDays, now)))
       .sort((a, b) => {
         if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
         return time(b) - time(a)
       })
-  }, [data, search, staleDays, now])
+  }, [data, search, staleDays, now, prIndex])
 
   // bots are left out, as the leaderboard leaves them out until asked
   const peopleCount = useMemo(() => contributors.list.filter((c) => !c.isBot).length, [contributors])
@@ -430,6 +552,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
             defaultBranch={data.defaultBranch}
             palette={palette}
             now={now}
+            prs={prIndex?.byBranch ?? null}
           />
         </LazySlot>
       ) : (
@@ -441,8 +564,9 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="find a branch"
+                placeholder={hasPrs ? 'find a branch or is:pr' : 'find a branch'}
                 aria-label="Find a branch"
+                title={hasPrs ? QUERY_HELP : undefined}
                 spellCheck={false}
                 className="min-w-0 flex-1 bg-transparent text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
               />
@@ -455,9 +579,12 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
             </div>
           </div>
 
-          <div className="flex items-center justify-between px-3 pt-2 text-[11px] text-garden-muted">
-            <span>
-              {rows.length === data.branches.length ? `${rows.length} branches` : `${rows.length} of ${data.branches.length} branches`}
+          <div className="flex flex-wrap items-center justify-between gap-x-2 px-3 pt-2 text-[11px] text-garden-muted">
+            <span className="flex flex-wrap items-center gap-x-2">
+              <span>
+                {rows.length === data.branches.length ? `${rows.length} branches` : `${rows.length} of ${data.branches.length} branches`}
+              </span>
+              {pulls && <PrCountPhrase pulls={pulls} search={search} onSearch={setSearch} />}
             </span>
             <span className="flex items-center gap-2">
               {hiddenBranches.size > 0 && (
@@ -485,6 +612,9 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
                 now={now}
                 onSelect={() => toggleSelectedBranch(branch.name)}
                 onToggleHidden={() => toggleBranchHidden(branch.name)}
+                prs={branchPrs(prIndex, branch.name)}
+                prSwatch={hasPrs}
+                pulls={pulls}
               />
             ))}
           </ul>
@@ -492,7 +622,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
       )}
 
       <footer className="border-t border-garden-border px-3 py-2.5">
-        <Legend />
+        <Legend hasPrs={hasPrMarks} />
       </footer>
     </aside>
   )
