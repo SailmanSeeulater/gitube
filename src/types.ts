@@ -146,8 +146,10 @@ export type ViewMode = 'skeleton' | 'full'
 // ---------- Pull requests (the overlay; see api/pulls.ts and graph/pulls.ts) ----------
 
 /**
- * Where a pull request's review stands. 'waiting': no decision yet (review required, or no review
- * rule). 'unknown': not looked up yet (a visitor without a token pays 3 requests per pull request).
+ * Where a pull request's review stands. 'waiting': no approval or change request stands yet, or a
+ * branch rule still wants more approvals (PullSummary.reviewRequired tells the two apart).
+ * 'unknown': not looked up yet (a visitor without a token pays 3 requests per pull request), or
+ * GitHub did not answer for it.
  */
 export type ReviewState = 'approved' | 'changes' | 'waiting' | 'unknown'
 
@@ -178,6 +180,11 @@ export interface PullSummary {
   /** author's login; null for a deleted account */
   author: string | null
   review: ReviewState
+  /**
+   * true: GitHub reports REVIEW_REQUIRED (a rule still wants approvals); false: GraphQL found no
+   * such rule outstanding; null: not known (REST cannot see branch rules)
+   */
+  reviewRequired: boolean | null
   checks: ChecksState
   /** per-state check counts, when known */
   checkCounts: CheckCounts | null
@@ -197,12 +204,20 @@ export interface PullIndex {
   intoBase: number | null
   /** open pull requests in the repo, from forks too (an estimate when truncated) */
   total: number | null
-  /** open pull requests whose head is in a fork (or, with GraphQL, not on any loaded branch) */
+  /**
+   * open pull requests whose head is in a fork (with GraphQL: everything open not drawn, so also
+   * those from branches not loaded and from the unchecked branches)
+   */
   fromForks: number
   /** same-repo pull requests whose head branch is not among the loaded branches */
   notOnGraph: number
-  /** the REST listing stopped before the last page */
+  /**
+   * not every open pull request was read: the REST listing stopped before the last page, or (GraphQL)
+   * a branch has more pull requests than its pages read
+   */
   truncated: boolean
+  /** loaded branches GitHub did not answer for (GraphQL partial errors): their pull requests are not known; [] for REST */
+  unchecked: string[]
   /** how many pull requests the REST listing read (the most recently updated); 0 for GraphQL */
   listed: number
   source: 'graphql' | 'rest'

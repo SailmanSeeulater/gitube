@@ -1,5 +1,5 @@
 import type { GraphNode, RepoData } from '../types'
-import { nodePrs } from '../graph/pulls'
+import { branchUnchecked, nodePrs } from '../graph/pulls'
 import type { PullsView } from '../hooks/usePulls'
 import { pullsChunk } from '../lazy/parts'
 import { useTheme } from '../theme/useTheme'
@@ -47,13 +47,15 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
   const ownerColour = palette[node.owner] ?? fallback
   const prs = pulls && node.isTip ? nodePrs(pulls.view.index, node.tips) : []
   // a block only where there is something to say: this tip's pull requests, the default branch's
-  // count of them, or the overlay still reading or failed; other tips look as they always did
+  // count of them, a branch GitHub did not answer for, or the overlay still reading or failed;
+  // other tips look as they always did
   const prStatus = pulls?.view.status ?? 'off'
   const isDefaultTip = pulls !== null && node.tips.includes(pulls.data.defaultBranch)
   const showPrs =
     pulls !== null &&
     node.isTip &&
     (prs.length > 0 ||
+      node.tips.some((tip) => branchUnchecked(pulls.view.index, tip)) ||
       prStatus === 'loading' ||
       prStatus === 'error' ||
       (isDefaultTip && (pulls.view.index?.total ?? 0) > 0))

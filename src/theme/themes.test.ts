@@ -266,7 +266,60 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('pull request m
     expect(deltaE2000(theme.success, theme.accent)).toBeGreaterThanOrEqual(15)
     expect(deltaE2000(theme.success, theme.muted)).toBeGreaterThanOrEqual(15)
   })
+
+  // Under red-green colour vision deficiency success and warn merge (Machado deuteranopia dE 1-14,
+  // protanopia 1-9), and success and danger come close too, so the ring never tells checks apart by
+  // colour alone: failing is broken in the middle, running lit only from 12 to 3 o'clock (see
+  // prMark.test.ts). The one review pair with no shape of its own is approved (success) against no
+  // review yet (muted): it must survive the simulation.
+  it('keeps approved apart from no review yet under deuteranopia and protanopia (CIEDE2000 >= 10)', () => {
+    for (const cvd of ['deuteranopia', 'protanopia'] as const) {
+      expect(deltaE2000(simulateCvd(theme.success, cvd), simulateCvd(theme.muted, cvd)), cvd).toBeGreaterThanOrEqual(10)
+    }
+  })
+
+  // A half not looked up yet is drawn in the outline the tip has without a pull request: the branch
+  // colour (organic) or the station colour (metro, garden), at full strength. Both must stand on the canvas.
+  it('draws a ring not looked up yet at 3:1 on the canvas: the station colour, the accent and every branch colour', () => {
+    expect(contrastRatio(theme.stationRing, theme.canvas), 'stationRing').toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(theme.accent, theme.canvas), 'accent').toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(theme.derived.defaultBranchColour, theme.canvas), 'default branch').toBeGreaterThanOrEqual(3)
+    theme.branchColors.forEach((colour, i) => expect(contrastRatio(colour, theme.canvas), theme.branchNames[i]).toBeGreaterThanOrEqual(3))
+  })
 })
+
+/**
+ * A colour as seen with full deuteranopia or protanopia: Machado, Oliveira and Fernandes (2009),
+ * severity 1, applied in linear RGB.
+ */
+function simulateCvd(hex: string, cvd: 'deuteranopia' | 'protanopia'): string {
+  const M =
+    cvd === 'deuteranopia'
+      ? [
+          [0.367322, 0.860646, -0.227968],
+          [0.280085, 0.672501, 0.047413],
+          [-0.01182, 0.04294, 0.968881],
+        ]
+      : [
+          [0.152286, 1.052583, -0.204868],
+          [0.114503, 0.786281, 0.099216],
+          [-0.003882, -0.048116, 1.051998],
+        ]
+  const rgb = parseHex(hex)
+  if (!rgb) throw new Error(`not a colour: ${hex}`)
+  const lin = rgb.map((c) => {
+    const v = c / 255
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  })
+  const out = M.map((row) => row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2]).map((v) => {
+    const c = Math.min(1, Math.max(0, v))
+    const s = c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055
+    return Math.round(s * 255)
+      .toString(16)
+      .padStart(2, '0')
+  })
+  return `#${out.join('')}`
+}
 
 describe('branch colours stay distinct (CIEDE2000)', () => {
   // Obsidian keeps the original palette bit for bit, including two close pairs the design records

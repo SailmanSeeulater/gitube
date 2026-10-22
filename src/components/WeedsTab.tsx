@@ -17,12 +17,14 @@ export interface WeedsTabProps {
   now: number
   /** open pull requests by head branch (the overlay's index), null when not known */
   prs?: ReadonlyMap<string, readonly PullSummary[]> | null
+  /** branches GitHub did not answer for (the index's unchecked): they may have an open pull request */
+  unchecked?: ReadonlyArray<string> | null
 }
 
-/** The weeds with an open pull request, as one string that changes when the set does. */
-const prWeedKey = (report: WeedReport, prs: WeedsTabProps['prs']) =>
+/** The weeds that have (or may have) an open pull request, as one string that changes when the set does. */
+const prWeedKey = (report: WeedReport, hasOpenPr: (name: string) => boolean) =>
   report.weeds
-    .filter((w) => (prs?.get(w.name)?.length ?? 0) > 0)
+    .filter((w) => hasOpenPr(w.name))
     .map((w) => w.name)
     .join('\n')
 
@@ -31,15 +33,17 @@ const prWeedKey = (report: WeedReport, prs: WeedsTabProps['prs']) =>
  * ticked ones from the remote), and thorny branches far apart from it on both sides. Clicking a name
  * selects that branch on the graph.
  */
-export default function WeedsTab({ report, owner, repo, defaultBranch, palette, now, prs = null }: WeedsTabProps) {
+export default function WeedsTab({ report, owner, repo, defaultBranch, palette, now, prs = null, unchecked = null }: WeedsTabProps) {
   const fallback = useTheme().fallback
   const selectedBranch = useGardenStore((s) => s.selectedBranch)
   const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
 
   // ticks start over for each repo: everything but the branches that look kept on purpose and the
-  // ones with an open pull request (deleting the branch would close it)
-  const hasOpenPr = (name: string) => (prs?.get(name)?.length ?? 0) > 0
-  const prKey = prWeedKey(report, prs)
+  // ones with an open pull request (deleting the branch would close it), or whose pull requests
+  // GitHub did not say
+  const notChecked = new Set(unchecked ?? [])
+  const hasOpenPr = (name: string) => (prs?.get(name)?.length ?? 0) > 0 || notChecked.has(name)
+  const prKey = prWeedKey(report, hasOpenPr)
   const [picked, setPicked] = useState(() => defaultWeedPicks(report.weeds, hasOpenPr))
   const [pickedFor, setPickedFor] = useState(report)
   const [prKeyFor, setPrKeyFor] = useState(prKey)
@@ -128,6 +132,13 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
                       >
                         #{pr.number} open
                       </a>
+                    ) : notChecked.has(w.name) ? (
+                      <span
+                        className="shrink-0 text-[10px] text-garden-muted"
+                        title="GitHub did not answer for this branch, so whether it has an open pull request is not known; it is not ticked"
+                      >
+                        PR status not checked
+                      </span>
                     ) : null
                   })()}
                   {w.keep && !hasOpenPr(w.name) && (

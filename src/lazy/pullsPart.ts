@@ -3,5 +3,5 @@
  * inspector's pull request block. The ring on the canvas, the branch list's glyphs and the hook
  * that holds the data are eager and small; this waits until a repo is in.
  */
-export { fetchPullIndex, lookupCost, lookupPull } from '../api/pulls'
+export { LOOKUP_COST, fetchPullIndex, lookupPull } from '../api/pulls'
 export { default } from '../components/PrBlock'

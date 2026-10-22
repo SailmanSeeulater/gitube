@@ -4,7 +4,7 @@
  * gaps, breaks and dots say what they should at every zoom.
  */
 import { describe, expect, it } from 'vitest'
-import { DOT_PITCH, DOT_WIDTH, PR_RING_MIN_DETAIL_PX, drawPrRing, prRingArcs, prRingFor, prRingOuterEdge } from './prMark'
+import { DOT_PITCH, DOT_WIDTH, PR_RING_METRO_CUT, PR_RING_MIN_DETAIL_PX, TRACK_ALPHA, drawPrRing, prRingArcs, prRingFor, prRingOuterEdge } from './prMark'
 import { TIP_RING_PX } from './useLabelPlacer'
 import { LABEL_PLACER_DEFAULTS } from './labelPlacement'
 import { METRO_MIN_ZOOM, metroStationRadius } from './metroView'
@@ -49,6 +49,8 @@ describe('where the ring goes', () => {
       const beyondPx = (prRingOuterEdge(R, w) - today) * zoom
       expect(beyondPx).toBeLessThanOrEqual(1.3 + 1e-9)
       expect((prRingOuterEdge(R, w) - r) * zoom).toBeLessThan(LABEL_PLACER_DEFAULTS.gap)
+      // its inner edge meets the canvas-coloured cut that parts it from the disc (r + 0.3 px)
+      expect((R - w / 2 - r) * zoom).toBeCloseTo(PR_RING_METRO_CUT.centrePx + PR_RING_METRO_CUT.widthPx / 2, 9)
     }
   })
 })
@@ -80,18 +82,63 @@ describe('prRingArcs', () => {
     close(checks[1].a0 - checks[0].a1, breakAngle)
     // the break sits at 3 o'clock
     close((checks[0].a1 + checks[1].a0) / 2, 0)
-    expect(arcs.every((a) => a.tone === 'danger')).toBe(true)
-    expect(prRingArcs(R, 2.5, mark({ checks: 'running' }), px)).toHaveLength(2)
+    expect(arcs.every((a) => a.tone === 'danger' && !a.track)).toBe(true)
   })
 
-  it('dots a draft (no break), and draws a half not looked up yet faint', () => {
-    const draft = prRingArcs(R, 2.5, mark({ draft: true, checks: 'failing' }), px)
-    expect(draft).toHaveLength(2)
+  it('lights a running checks half from 12 to 3 o’clock only, the rest a faint track', () => {
+    const gap = Math.min(3 / R, 0.35)
+    const checks = prRingArcs(R, 2.5, mark({ checks: 'running' }), px).filter((a) => a.side === 'checks')
+    expect(checks).toHaveLength(2)
+    expect(checks.map((a) => a.tone)).toEqual(['warn', 'warn'])
+    const [lit, track] = checks
+    expect(lit.track).toBe(false)
+    close(lit.a0, -Math.PI / 2 + gap / 2)
+    close(lit.a1, 0)
+    expect(track.track).toBe(true)
+    close(track.a0, 0)
+    close(track.a1, Math.PI / 2 - gap / 2)
+  })
+
+  it('gives passing, running and failing checks different shapes, drafts too (not colour alone)', () => {
+    for (const draft of [false, true]) {
+      const shape = (checks: PrMark['checks']) =>
+        JSON.stringify(
+          prRingArcs(R, 2.5, mark({ checks, draft }), px)
+            .filter((a) => a.side === 'checks')
+            .map((a) => [a.a0.toFixed(6), a.a1.toFixed(6), a.track, a.dotted]),
+        )
+      const shapes = new Set([shape('passing'), shape('running'), shape('failing')])
+      expect(shapes.size, `draft ${draft}`).toBe(3)
+    }
+  })
+
+  it('dots a draft and still breaks its danger halves, past at least one dot', () => {
+    const w = 2.5
+    const draft = prRingArcs(R, w, mark({ draft: true, checks: 'failing' }), px)
+    expect(draft).toHaveLength(3)
     expect(draft.every((a) => a.dotted)).toBe(true)
+    const checks = draft.filter((a) => a.side === 'checks')
+    expect(checks).toHaveLength(2)
+    expect(checks[1].a0 - checks[0].a1).toBeGreaterThanOrEqual((2 * DOT_PITCH * w) / R - 1e-9)
+    // at 3 o'clock
+    close((checks[0].a1 + checks[1].a0) / 2, 0)
+    const changes = prRingArcs(R, w, mark({ draft: true, review: 'changes' }), px).filter((a) => a.side === 'review')
+    expect(changes).toHaveLength(2)
+    expect(changes[1].a0 - changes[0].a1).toBeGreaterThanOrEqual((2 * DOT_PITCH * w) / R - 1e-9)
+    // at 9 o'clock
+    close((changes[0].a1 + changes[1].a0) / 2, Math.PI)
+    // a passing draft is unbroken: it differs from a failing one in shape, not just colour
+    expect(prRingArcs(R, w, mark({ draft: true, checks: 'passing' }), px)).toHaveLength(2)
+  })
+
+  it('marks a half not looked up yet as unknown (drawn in the tip’s own colour)', () => {
     const unknown = prRingArcs(R, 2.5, mark({ review: 'unknown', checks: 'unknown' }), px)
-    expect(unknown.every((a) => a.faint && a.tone === 'muted')).toBe(true)
-    // waiting is muted too, but at full strength: lighter than unknown
-    expect(prRingArcs(R, 2.5, mark(), px)[0]).toMatchObject({ tone: 'muted', faint: false })
+    expect(unknown).toHaveLength(2)
+    expect(unknown.every((a) => a.unknown && !a.track)).toBe(true)
+    // the gaps at 12 and 6 o'clock stay: they alone say "a pull request here"
+    close(unknown[1].a0, -Math.PI / 2 + Math.min(3 / R, 0.35) / 2)
+    // waiting is muted, and known
+    expect(prRingArcs(R, 2.5, mark(), px)[0]).toMatchObject({ tone: 'muted', unknown: false })
   })
 
   it('draws two plain halves when the ring is under 3 px on screen', () => {
@@ -100,14 +147,15 @@ describe('prRingArcs', () => {
     expect(tiny.every((a) => !a.dotted)).toBe(true)
     close(tiny[0].a0, Math.PI / 2)
     close(tiny[1].a1 - tiny[1].a0, Math.PI)
+    expect(prRingArcs(PR_RING_MIN_DETAIL_PX - 0.5, 1, mark({ checks: 'running' }), 1)).toHaveLength(2)
   })
 })
 
 describe('drawPrRing', () => {
-  it('strokes each arc and leaves alpha, cap and dash as it found them', () => {
+  function recorder(alpha = 0.4) {
     const log: string[] = []
     const ctx = {
-      globalAlpha: 0.4,
+      globalAlpha: alpha,
       lineCap: 'square' as CanvasLineCap,
       lineWidth: 1,
       strokeStyle: '',
@@ -118,13 +166,31 @@ describe('drawPrRing', () => {
       },
       setLineDash: (d: number[]) => log.push(`dash ${d.join(',')}`),
     }
-    const theme = { success: 'S', warn: 'W', danger: 'D', muted: 'M' }
-    drawPrRing(ctx as unknown as CanvasRenderingContext2D, 0, 0, 10, 2, { review: 'unknown', checks: 'passing', draft: true }, theme, 1)
-    const strokes = log.filter((l) => l.startsWith('stroke'))
-    expect(strokes).toEqual([`stroke M a=0.20 w=${2 * DOT_WIDTH} cap=round`, `stroke S a=0.40 w=${2 * DOT_WIDTH} cap=round`])
+    return { log, ctx, strokes: () => log.filter((l) => l.startsWith('stroke')) }
+  }
+  const theme = { success: 'S', warn: 'W', danger: 'D', muted: 'M' }
+
+  it('strokes each arc and leaves alpha, cap and dash as it found them', () => {
+    const { log, ctx, strokes } = recorder()
+    drawPrRing(ctx as unknown as CanvasRenderingContext2D, 0, 0, 10, 2, { review: 'unknown', checks: 'passing', draft: true }, theme, 1, 'N')
+    expect(strokes()).toEqual([`stroke N a=0.40 w=${2 * DOT_WIDTH} cap=round`, `stroke S a=0.40 w=${2 * DOT_WIDTH} cap=round`])
     expect(log).toContain(`dash 0,${2 * DOT_PITCH}`)
     expect(log[log.length - 1]).toBe('dash ')
     expect(ctx.globalAlpha).toBe(0.4)
     expect(ctx.lineCap).toBe('square')
+  })
+
+  it('draws a pull request not looked up yet in the neutral colour, at the node’s own alpha', () => {
+    const { ctx, strokes } = recorder(0.4)
+    drawPrRing(ctx as unknown as CanvasRenderingContext2D, 0, 0, 10, 2, { review: 'unknown', checks: 'unknown', draft: false }, theme, 1, '#abcdef')
+    expect(strokes()).toEqual(['stroke #abcdef a=0.40 w=2 cap=butt', 'stroke #abcdef a=0.40 w=2 cap=butt'])
+  })
+
+  it('strokes a running half’s track at TRACK_ALPHA of the node’s alpha, then puts alpha back', () => {
+    const { ctx, strokes } = recorder(0.5)
+    drawPrRing(ctx as unknown as CanvasRenderingContext2D, 0, 0, 10, 2, { review: 'approved', checks: 'running', draft: false }, theme, 1, 'N')
+    expect(strokes()).toEqual(['stroke S a=0.50 w=2 cap=butt', 'stroke W a=0.50 w=2 cap=butt', `stroke W a=${(0.5 * TRACK_ALPHA).toFixed(2)} w=2 cap=butt`])
+    expect(TRACK_ALPHA).toBe(0.3)
+    expect(ctx.globalAlpha).toBe(0.5)
   })
 })

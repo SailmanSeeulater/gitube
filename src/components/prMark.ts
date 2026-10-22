@@ -1,8 +1,11 @@
 /**
  * The pull request mark: a ring round a branch tip split in two, review on the left and checks on
  * the right, in the theme's success (approved / passing), warn (running), danger (changes requested
- * / failing) or muted (waiting / no checks). A danger half is broken in its middle so it reads
- * without colour; a draft is dotted; a half not looked up yet is muted and faint.
+ * / failing) or muted (no review yet / no checks). A danger half is broken in its middle, dotted or
+ * not, and a running checks half is lit only from 12 to 3 o'clock (the rest a faint track), so
+ * neither relies on colour; a draft is dotted. A half not looked up yet is drawn at full strength in
+ * the outline colour the tip has without a pull request, so the gaps at 12 and 6 o'clock alone say
+ * "a pull request here". Below PR_RING_MIN_DETAIL_PX everything is colour-only.
  *
  * The ring takes the place of what the tip already draws there (organic: its outer ring; metro: the
  * station outline; garden: just inside the petals' reach), so the tip's footprint and the label
@@ -39,10 +42,12 @@ export interface PrArc {
   a0: number
   a1: number
   tone: PrTone
-  /** not looked up yet: drawn at half the node's alpha */
-  faint: boolean
+  /** not looked up yet: drawn in the caller's neutral colour (the tip's own outline) */
+  unknown: boolean
   /** a draft: round dots instead of a stroke */
   dotted: boolean
+  /** the unlit rest of a running checks half: same tone at TRACK_ALPHA */
+  track: boolean
 }
 
 export interface PrRingOptions {
@@ -65,6 +70,8 @@ const HALF_PI = Math.PI / 2
 /** Draft dots: this share of the ring's width across, one every DOT_PITCH widths. */
 export const DOT_WIDTH = 0.9
 export const DOT_PITCH = 1.35
+/** Opacity of the unlit track of a running checks half (times the node's). */
+export const TRACK_ALPHA = 0.3
 
 type MarkLike = Pick<PrMark, 'review' | 'checks' | 'draft'>
 
@@ -72,7 +79,7 @@ type MarkLike = Pick<PrMark, 'review' | 'checks' | 'draft'>
  * The arcs of a ring of centre radius R and width w (graph units; px = graph units per screen px).
  * Review is the left half (6 to 12 o'clock through 9), checks the right half.
  */
-export function prRingArcs(R: number, _w: number, mark: MarkLike, px: number, opts: PrRingOptions = {}): PrArc[] {
+export function prRingArcs(R: number, w: number, mark: MarkLike, px: number, opts: PrRingOptions = {}): PrArc[] {
   const plain = R / px < PR_RING_MIN_DETAIL_PX
   const gap = plain ? 0 : Math.min(((opts.gapPx ?? GAP_PX) * px) / R, MAX_GAP)
   const breakAngle = Math.min(((opts.breakPx ?? BREAK_PX) * px) / R, MAX_BREAK)
@@ -81,17 +88,25 @@ export function prRingArcs(R: number, _w: number, mark: MarkLike, px: number, op
   for (const side of sides) {
     const state = side === 'review' ? mark.review : mark.checks
     const tone = side === 'review' ? reviewTone(mark.review) : checksTone(mark.checks)
-    const faint = state === 'unknown'
+    const unknown = state === 'unknown'
     const dotted = !plain && mark.draft
     // checks: 12 -> 6 o'clock through 3; review: 6 -> 12 o'clock through 9
     const a0 = (side === 'checks' ? -HALF_PI : HALF_PI) + gap / 2
     const a1 = (side === 'checks' ? HALF_PI : 3 * HALF_PI) - gap / 2
-    const broken = !plain && !dotted && tone === 'danger'
+    // the middle of the half: 3 o'clock for checks, 9 for review
+    const mid = (a0 + a1) / 2
+    const broken = !plain && tone === 'danger'
+    const running = !plain && side === 'checks' && mark.checks === 'running'
     if (broken) {
-      const mid = (a0 + a1) / 2
-      arcs.push({ side, a0, a1: mid - breakAngle / 2, tone, faint, dotted })
-      arcs.push({ side, a0: mid + breakAngle / 2, a1, tone, faint, dotted })
-    } else arcs.push({ side, a0, a1, tone, faint, dotted })
+      // a dotted half's break must skip at least one dot, or it reads as ordinary dot spacing
+      const br = dotted ? Math.min(Math.max(breakAngle, (2 * DOT_PITCH * w) / R), (a1 - a0) / 2) : breakAngle
+      arcs.push({ side, a0, a1: mid - br / 2, tone, unknown, dotted, track: false })
+      arcs.push({ side, a0: mid + br / 2, a1, tone, unknown, dotted, track: false })
+    } else if (running) {
+      // lit from 12 to 3 o'clock, the rest a faint track: under way, not done
+      arcs.push({ side, a0, a1: mid, tone, unknown, dotted, track: false })
+      arcs.push({ side, a0: mid, a1, tone, unknown, dotted, track: true })
+    } else arcs.push({ side, a0, a1, tone, unknown, dotted, track: false })
   }
   return arcs
 }
@@ -100,11 +115,21 @@ export function prRingArcs(R: number, _w: number, mark: MarkLike, px: number, op
 export const PR_RING_LAYOUT = {
   /** organic tip: replaces the ring at outer + 2.5 px (1.5 px wide); the outer edge stays outer + 3.25 px */
   organic: { offsetPx: 2, widthPx: 2.5 },
-  /** metro tip station: replaces the station outline, hugging the disc from outside */
-  metro: { offsetPx: 0.8, widthPx: 2.2 },
+  /**
+   * metro tip station: replaces the station outline: a canvas-coloured cut at the disc's edge
+   * (PR_RING_METRO_CUT), then the ring just outside it; its outer edge stays r + 1.9 px
+   */
+  metro: { offsetPx: 1.1, widthPx: 1.6 },
   /** garden tip: just inside the petals, so the outer edge is their reach */
   garden: { offsetPx: -1.25, widthPx: 2.5 },
 } as const
+
+/**
+ * The cut Garden strokes in the canvas colour round a metro station with a pull request, so a ring
+ * half in the branch's own colour (a green line passing, a red one failing) still parts from the
+ * disc: centred this far from the disc's edge (screen px), this wide; it ends where the ring starts.
+ */
+export const PR_RING_METRO_CUT = { centrePx: -0.1, widthPx: 0.8 } as const
 
 export type PrRingLayout = keyof typeof PR_RING_LAYOUT
 
@@ -124,7 +149,8 @@ const NO_DASH: number[] = []
 
 /**
  * Paints the ring at (x, y) at the context's current globalAlpha (the node's), leaving alpha, line
- * cap and dash as they were.
+ * cap and dash as they were. neutral: the colour of a half not looked up yet, the outline the tip
+ * draws without a pull request (organic: the branch colour; metro and garden: the station colour).
  */
 export function drawPrRing(
   ctx: CanvasRenderingContext2D,
@@ -135,14 +161,15 @@ export function drawPrRing(
   mark: MarkLike,
   theme: Pick<Theme, PrTone>,
   px: number,
+  neutral: string,
 ): void {
   const alpha = ctx.globalAlpha
   const cap = ctx.lineCap
   for (const arc of prRingArcs(R, w, mark, px)) {
     ctx.beginPath()
     ctx.arc(x, y, R, arc.a0, arc.a1)
-    ctx.strokeStyle = toneColour(theme, arc.tone)
-    ctx.globalAlpha = arc.faint ? alpha * 0.5 : alpha
+    ctx.strokeStyle = arc.unknown ? neutral : toneColour(theme, arc.tone)
+    ctx.globalAlpha = alpha * (arc.track ? TRACK_ALPHA : 1)
     if (arc.dotted) {
       ctx.lineWidth = w * DOT_WIDTH
       ctx.lineCap = 'round'
@@ -161,14 +188,18 @@ export function drawPrRing(
 
 // ---------- words ----------
 
-export function reviewWords(pr: Pick<PullSummary, 'review'>): string {
+/**
+ * The review in words. 'waiting' is "review required" only where GitHub says a branch rule still
+ * wants approvals (reviewRequired); elsewhere nobody has approved or asked for changes yet.
+ */
+export function reviewWords(pr: Pick<PullSummary, 'review' | 'reviewRequired'>): string {
   switch (pr.review) {
     case 'approved':
       return 'approved'
     case 'changes':
       return 'changes requested'
     case 'waiting':
-      return 'review required'
+      return pr.reviewRequired ? 'review required' : 'no review yet'
     default:
       return 'review ?'
   }
@@ -210,7 +241,7 @@ export function checksWords(pr: Pick<PullSummary, 'checks' | 'checkCounts'>): st
 }
 
 /** One pull request as a phrase: "open PR #12345: review required, 2 of 30 checks failing, draft". */
-export function prPhrase(pr: Pick<PullSummary, 'number' | 'review' | 'checks' | 'checkCounts' | 'draft'>): string {
+export function prPhrase(pr: Pick<PullSummary, 'number' | 'review' | 'reviewRequired' | 'checks' | 'checkCounts' | 'draft'>): string {
   return `open PR #${pr.number}: ${reviewWords(pr)}, ${checksWords(pr)}${pr.draft ? ', draft' : ''}`
 }
 

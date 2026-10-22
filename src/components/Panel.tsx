@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Branch, PullSummary, RepoData, ViewMode } from '../types'
 import type { ContributorIndex } from '../graph/contributors'
-import { branchPrs, combineMarks, countPulls, lookupPlan } from '../graph/pulls'
+import { branchPrs, branchUnchecked, combineMarks, countPulls, lookupPlan } from '../graph/pulls'
 import type { WeedReport } from '../graph/weeds'
 import type { PullsView } from '../hooks/usePulls'
 import { preload, type Chunk } from '../lazy/chunk'
@@ -36,6 +36,8 @@ export interface PanelProps {
   pulls?: PullsView | null
   /** some tip on the canvas carries a pull request mark (the legend then explains it) */
   hasPrMarks?: boolean
+  /** some of those marks have their review or checks known (the legend's glyph then shows their colours) */
+  prMarksKnown?: boolean
 }
 
 /** The ⚔ form under the panel header: which repo to battle. */
@@ -235,6 +237,8 @@ interface BranchRowProps {
   prSwatch: boolean
   /** the pull request overlay, for the selected row's status line */
   pulls: PullsView | null
+  /** GitHub did not answer for this branch: whether it has a pull request is not known */
+  unchecked: boolean
 }
 
 /**
@@ -260,7 +264,7 @@ function SelectedPrLine({ pr, more, pulls }: { pr: PullSummary; more: number; pu
         <button
           type="button"
           onClick={() => pulls.lookup(pr)}
-          title="Look its review and checks up (2 or 3 of this hour's GitHub requests)"
+          title="Look its review and checks up (3 of this hour's GitHub requests)"
           className="shrink-0 text-garden-accent hover:underline"
         >
           load
@@ -273,7 +277,10 @@ function SelectedPrLine({ pr, more, pulls }: { pr: PullSummary; more: number; pu
   )
 }
 
-function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHidden, prs, prSwatch, pulls }: BranchRowProps) {
+/** What a branch row's title and label add for GitHub not answering about it. */
+const UNCHECKED_SUFFIX = ', PRs not checked (GitHub did not answer)'
+
+function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHidden, prs, prSwatch, pulls, unchecked }: BranchRowProps) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
@@ -288,8 +295,12 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
         aria-pressed={selected}
         onClick={onSelect}
         onKeyDown={onKeyDown}
-        title={prs.length > 0 ? `${branch.name}${prRowSuffix(prs)}` : branch.name}
-        aria-label={prs.length > 0 ? `${branch.name}${branch.isDefault ? ' (default)' : ''}${prRowSuffix(prs)}` : undefined}
+        title={prs.length > 0 ? `${branch.name}${prRowSuffix(prs)}` : unchecked ? `${branch.name}${UNCHECKED_SUFFIX}` : branch.name}
+        aria-label={
+          prs.length > 0 || unchecked
+            ? `${branch.name}${branch.isDefault ? ' (default)' : ''}${prs.length > 0 ? prRowSuffix(prs) : UNCHECKED_SUFFIX}`
+            : undefined
+        }
         className={`group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
           selected ? 'bg-garden-accent/10' : 'hover:bg-garden-hover'
         } ${hidden ? 'opacity-40' : ''}`}
@@ -329,14 +340,18 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
         </button>
       </div>
       {selected && pulls && prs.length > 0 && <SelectedPrLine pr={prs[0]} more={prs.length - 1} pulls={pulls} />}
+      {selected && pulls && prs.length === 0 && unchecked && (
+        <p className="pb-1 pl-[30px] pr-2 text-[11px] leading-[18px] text-garden-muted">PRs not checked (GitHub did not answer)</p>
+      )}
     </li>
   )
 }
 
 /**
  * The count line's one word on pull requests: reading them, how many branches have one (a link that
- * toggles is:pr in the search), or that they could not be read (and why, in its title). Nothing when
- * the repo has none, so such a repo's panel is as it always was.
+ * toggles is:pr in the search), or that they could not be read (and why, in its title); and how many
+ * branches GitHub did not answer for. Nothing when the repo has none, so such a repo's panel is as
+ * it always was.
  */
 function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: string; onSearch: (value: string) => void }) {
   const { status, index, error } = pulls
@@ -353,10 +368,15 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
   }
   if (status === 'error' && error) {
     const when = error.resetAt ? formatClock(error.resetAt) : ''
+    const until = when ? ` until ${when}` : ''
     const reason =
-      error.code === 'rate_limited'
-        ? `GitHub's hourly request limit is used up${when ? ` (rate limited until ${when})` : ''}; a token raises it.`
-        : error.message
+      error.code !== 'rate_limited'
+        ? error.message
+        : error.limit === 'secondary'
+          ? `GitHub asked for a short pause (secondary rate limit)${until}.`
+          : error.limit === 'graphql'
+            ? `GitHub's hourly GraphQL limit for this token is used up${until}.`
+            : `GitHub's hourly request limit is used up${until}${pulls.hasToken ? '.' : '; a token raises it.'}`
     const title = `Open pull requests could not be read: ${reason}`
     return (
       <span className="flex items-center gap-2">
@@ -372,25 +392,38 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
     )
   }
   const withPrs = index ? index.byBranch.size : 0
-  if (status !== 'ready' || withPrs === 0) return null
+  const unchecked = index?.unchecked ?? []
+  if (status !== 'ready' || (withPrs === 0 && unchecked.length === 0)) return null
   const on = hasIsPr(search)
   return (
-    <span className="flex items-center gap-2">
-      {dot}
-      <button
-        type="button"
-        aria-pressed={on}
-        onClick={() => onSearch(toggleIsPr(search))}
-        title={on ? 'Show every branch again (takes is:pr out of the search)' : `List only the branches with an open pull request (${countPulls(index)} open from branches here)`}
-        className={`text-garden-accent hover:underline ${on ? 'font-medium' : ''}`}
-      >
-        {withPrs} with PRs
-      </button>
-    </span>
+    <>
+      {withPrs > 0 && (
+        <span className="flex items-center gap-2">
+          {dot}
+          <button
+            type="button"
+            aria-pressed={on}
+            onClick={() => onSearch(toggleIsPr(search))}
+            title={on ? 'Show every branch again (takes is:pr out of the search)' : `List only the branches with an open pull request (${countPulls(index)} open from branches here)`}
+            className={`text-garden-accent hover:underline ${on ? 'font-medium' : ''}`}
+          >
+            {withPrs} with PRs
+          </button>
+        </span>
+      )}
+      {unchecked.length > 0 && (
+        <span className="flex items-center gap-2">
+          {dot}
+          <span title={`GitHub did not answer for these branches, so whether they have pull requests is not known: ${unchecked.join(', ')}`}>
+            {unchecked.length} not checked
+          </span>
+        </span>
+      )}
+    </>
   )
 }
 
-export default function Panel({ data, palette, contributors, weeds, onBattle, pulls = null, hasPrMarks = false }: PanelProps) {
+export default function Panel({ data, palette, contributors, weeds, onBattle, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
   const [battleOpen, setBattleOpen] = useState(false)
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
@@ -553,6 +586,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
             palette={palette}
             now={now}
             prs={prIndex?.byBranch ?? null}
+            unchecked={prIndex?.unchecked ?? null}
           />
         </LazySlot>
       ) : (
@@ -615,6 +649,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
                 prs={branchPrs(prIndex, branch.name)}
                 prSwatch={hasPrs}
                 pulls={pulls}
+                unchecked={branchUnchecked(prIndex, branch.name)}
               />
             ))}
           </ul>
@@ -622,7 +657,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
       )}
 
       <footer className="border-t border-garden-border px-3 py-2.5">
-        <Legend hasPrs={hasPrMarks} />
+        <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} />
       </footer>
     </aside>
   )

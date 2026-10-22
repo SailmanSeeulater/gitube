@@ -19,7 +19,12 @@ export interface PullsError {
   message: string
   code: GitHubFetchError['code']
   resetAt: string | null
-  /** worth a retry from the count line now (not a rate limit, not a 404) */
+  /**
+   * which limit a rate_limited error hit: the hourly core requests, a token's hourly GraphQL points,
+   * or a secondary limit (a short pause GitHub asks for); null for other errors
+   */
+  limit: 'core' | 'graphql' | 'secondary' | null
+  /** worth a retry from the count line now (not a 404; a rate limit only once its reset time has passed) */
   retriable: boolean
 }
 
@@ -31,7 +36,7 @@ export interface PullsView {
   retry: () => void
   /** marks the index stale, so it is asked again once the graph's own fetch is done (refresh, Grow) */
   invalidate: () => void
-  /** Looks one pull request's review and checks up now (2 or 3 core requests). */
+  /** Looks one pull request's review and checks up now (3 core requests). */
   lookup: (pr: PullSummary) => void
   /**
    * The same after LOOKUP_DEBOUNCE_MS, if the budget allows (AUTO_LOOKUP_MIN_REMAINING); returns a
@@ -60,15 +65,35 @@ export function shouldRetryPulls(failureCount: number, err: unknown): boolean {
   return failureCount < 1 && (code === 'network' || code === 'unknown')
 }
 
-export function describePullsError(err: unknown): PullsError | null {
+/**
+ * What the count line and the inspector say of a failed pull request fetch. A rate limit is worth a
+ * retry once its reset time has passed (or when none was given: at most one request, none if the
+ * listing is skipped again).
+ */
+export function describePullsError(err: unknown, now: number = Date.now()): PullsError | null {
   const e = toFetchError(err)
   if (!e) return null
+  const at = e.resetAt ? Date.parse(e.resetAt) : NaN
+  const limit = e.code !== 'rate_limited' ? null : /secondary/i.test(e.message) ? 'secondary' : /GraphQL/i.test(e.message) ? 'graphql' : 'core'
   return {
     message: e.message,
     code: e.code,
     resetAt: e.resetAt ?? null,
-    retriable: e.code === 'network' || e.code === 'unknown' || e.code === 'unauthorized',
+    limit,
+    retriable:
+      e.code === 'network' || e.code === 'unknown' || e.code === 'unauthorized' || (e.code === 'rate_limited' && (!Number.isFinite(at) || at <= now)),
   }
+}
+
+/**
+ * How long until a rate limit's reset time has passed, plus a second's slack: when the failed fetch
+ * turns retriable (usePulls re-reads its error then). null when it already has, or is not known.
+ */
+export function resetWakeDelay(resetAt: string | null, now: number = Date.now()): number | null {
+  if (!resetAt) return null
+  const wait = Date.parse(resetAt) - now
+  if (!(wait > 0)) return null
+  return Math.min(wait + 1000, 0x7fffffff)
 }
 
 /**
@@ -196,7 +221,25 @@ export function usePulls(data: RepoData | null | undefined, enabled: boolean): P
   const index = query.data ?? null
   // a refetch that fails keeps the index it had: what was read stays on show
   const status: PullsStatus = !data ? 'off' : index ? 'ready' : query.isError && !query.isFetching ? 'error' : enabled || query.isFetching ? 'loading' : 'off'
-  const error = useMemo(() => (status === 'error' ? describePullsError(query.error) : null), [status, query.error])
+
+  // a rate limit turns retriable once its reset time has passed: read the error again then (and,
+  // while the overlay is wanted and the page on show, ask once by itself)
+  const [tick, setTick] = useState(0)
+  const failedReset = status === 'error' ? (toFetchError(query.error)?.resetAt ?? null) : null
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
+  useEffect(() => {
+    const wait = resetWakeDelay(failedReset)
+    if (wait === null) return
+    const timer = setTimeout(() => {
+      setTick((n) => n + 1)
+      if (enabledRef.current && (typeof document === 'undefined' || document.visibilityState === 'visible')) void queryRefetch()
+    }, wait)
+    return () => clearTimeout(timer)
+  }, [failedReset, queryRefetch])
+  // tick re-reads the error against the clock once its reset time has passed
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const error = useMemo(() => (status === 'error' ? describePullsError(query.error, Date.now()) : null), [status, query.error, tick])
 
   const hasToken = token !== ''
   return useMemo<PullsView>(

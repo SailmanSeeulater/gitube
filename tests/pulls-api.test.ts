@@ -4,17 +4,21 @@
  * are real answers for expressjs/express, SailmanSeeulater/Mordi and vitejs/vite (recorded
  * 2026-10-21, slimmed to the fields the overlay reads); edge cases are built from them inline.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { Octokit } from '@octokit/rest'
 import {
   BULK_LOOKUP_MAX,
   GRAPHQL_BATCH,
+  GRAPHQL_MAX_ROUNDS,
+  LOOKUP_COST,
+  LOOKUP_MAX_PAGES,
   REST_MIN_REMAINING,
+  buildMoreQuery,
   buildPullQuery,
   checkBucket,
   fetchPullIndex,
+  gqlErrorMarks,
   listOpenPulls,
-  lookupCost,
   lookupPull,
   mapMergeable,
   mapReviewDecision,
@@ -22,19 +26,23 @@ import {
   normaliseGraphql,
   normaliseRest,
   reduceReviews,
-  resetLookupMemory,
   rollupChecks,
   slimRestPull,
+  type GqlErrorEntry,
   type GqlPullData,
   type SlimRestPull,
 } from '../src/api/pulls'
 import { coreRateFromHeaders, lastPageFromLink, remainingNow } from '../src/api/http'
 import type { RateInfo } from '../src/api/http'
-import { checksWords } from '../src/components/prMark'
-import { GitHubFetchError, type Branch, type RepoData } from '../src/types'
+import { checksWords, reviewWords } from '../src/components/prMark'
+import { defaultWeedPicks } from '../src/graph/weeds'
+import { prMarks } from '../src/graph/pulls'
+import { GitHubFetchError, type Branch, type PullSummary, type RepoData } from '../src/types'
 import gqlExpress from './fixtures/github/graphql-pulls-express.json'
 import gqlMordi from './fixtures/github/graphql-pulls-mordi.json'
 import gqlVite0 from './fixtures/github/graphql-pulls-vite-batch0.json'
+import gqlDokploy from './fixtures/github/graphql-pulls-dokploy.json'
+import gqlDokployCanary2 from './fixtures/github/graphql-pulls-dokploy-canary-p2.json'
 import restExpress1 from './fixtures/github/rest-pulls-express-p1.json'
 import restExpress2 from './fixtures/github/rest-pulls-express-p2.json'
 import checkRuns7531 from './fixtures/github/check-runs-express-7531.json'
@@ -44,11 +52,16 @@ import reviews7531 from './fixtures/github/reviews-express-7531.json'
 const EXPRESS = { owner: 'expressjs', repo: 'express' }
 const VITE = { owner: 'vitejs', repo: 'vite' }
 const MORDI = { owner: 'SailmanSeeulater', repo: 'Mordi' }
+const DOKPLOY = { owner: 'Dokploy', repo: 'dokploy' }
 
 interface GqlFixture {
   variables: Record<string, string>
   headers: Record<string, string>
   data: GqlPullData
+}
+
+interface GqlRefLike {
+  associatedPullRequests: { totalCount: number; pageInfo?: { hasNextPage: boolean; endCursor: string | null }; nodes: Array<Record<string, unknown> | null> }
 }
 
 /** The branch names a recorded query asked for, in order (b0, b1, ...). */
@@ -119,7 +132,7 @@ function fakeGitHub(answer: (call: Call, n: number) => Answer | undefined) {
 
 /** Every recorded ref answer by branch name, across the three repos' fixtures. */
 const REF_ANSWERS = new Map<string, unknown>()
-for (const fixture of [gqlExpress, gqlMordi, gqlVite0] as GqlFixture[]) {
+for (const fixture of [gqlExpress, gqlMordi, gqlVite0, gqlDokploy] as GqlFixture[]) {
   namesOf(fixture).forEach((name, i) => REF_ANSWERS.set(`${fixture.variables.repo}:${name}`, (fixture.data.repository as Record<string, unknown>)[`b${i}`]))
 }
 const NO_PRS = { associatedPullRequests: { totalCount: 0, nodes: [] } }
@@ -142,8 +155,6 @@ function graphqlAnswer(call: Call, fixture: GqlFixture): Answer {
   if (query.includes('rateLimit')) data.rateLimit = { cost: 4, remaining: 4990, resetAt: '2026-10-22T02:00:00Z' }
   return { body: { data }, headers: GQL }
 }
-
-afterEach(() => resetLookupMemory())
 
 // ---------- status mapping ----------
 
@@ -229,6 +240,22 @@ describe('buildPullQuery', () => {
     for (let i = 0; i < names.length; i++) expect(query).toContain(`b${i}: ref(qualifiedName: $b${i})`)
     expect(query).toContain('isCrossRepository')
     expect(query).toContain('checkRunCountsByState')
+    // reviewDecision is empty without a review rule: each reviewer's latest decision comes too
+    expect(query).toContain('reviewDecision latestOpinionatedReviews(first: 10) { nodes { state author { login } } }')
+    // and whether a branch has more pull requests than the first five
+    expect(query).toContain('totalCount pageInfo { hasNextPage endCursor } nodes {')
+  })
+
+  it('asks for the next page of some branches after their cursors, names and cursors as variables', () => {
+    const { query, variables } = buildMoreQuery(VITE, [{ name: 'feat/"quoted" } { evil', cursor: 'Y3Vyc29yOnYy' }], { counts: true })
+    expect(query).not.toContain('quoted')
+    expect(query).not.toContain('Y3Vyc29yOnYy')
+    expect(variables).toEqual({ owner: 'vitejs', repo: 'vite', b0: 'refs/heads/feat/"quoted" } { evil', c0: 'Y3Vyc29yOnYy' })
+    expect(query).toContain('$b0: String!, $c0: String')
+    expect(query).toContain('b0: ref(qualifiedName: $b0) { associatedPullRequests(states: OPEN, first: 100, after: $c0, orderBy: {field: UPDATED_AT, direction: DESC})')
+    expect(query).toContain('fragment PrFields on PullRequest { number title url isDraft isCrossRepository')
+    expect(query).not.toContain('rateLimit')
+    expect(buildMoreQuery(VITE, [{ name: 'a', cursor: 'c' }], { counts: false }).query).not.toContain('CountsByState')
   })
 
   it('asks the first batch for the budget and the open counts, the others not', () => {
@@ -274,6 +301,8 @@ describe('normaliseGraphql', () => {
       head: 'feat/list-routes-subapps',
       base: 'master',
       review: 'waiting',
+      // express's master wants reviews: GitHub says REVIEW_REQUIRED
+      reviewRequired: true,
       checks: 'failing',
       draft: false,
       author: 'bjohansebas',
@@ -292,10 +321,41 @@ describe('normaliseGraphql', () => {
     const result = normaliseGraphql(fixture.data, names, MORDI)
     expect(result.byBranch.size).toBe(2)
     expect(result.byBranch.has(names[gone])).toBe(false)
+    // gone, not unchecked: no error came with the null
+    expect(result.unchecked).toEqual([])
     for (const prs of result.byBranch.values()) {
       expect(prs[0].author).toBe('dependabot')
       expect(prs[0].headSha).toMatch(/^[0-9a-f]{40}$/)
+      // Mordi has no review rule: nobody has reviewed yet, and nothing is "required"
+      expect(prs[0]).toMatchObject({ review: 'waiting', reviewRequired: false })
+      expect(reviewWords(prs[0])).toBe('no review yet')
     }
+  })
+
+  it('without a review rule (reviewDecision null), reads the review from the latest reviews, as REST does', () => {
+    const fixture = gqlMordi as GqlFixture
+    const names = namesOf(fixture)
+    const refs = fixture.data.repository as Record<string, GqlRefLike | null>
+    const i = names.findIndex((_, k) => (refs[`b${k}`]?.associatedPullRequests.nodes.length ?? 0) > 0)
+    const withReviews = (states: string[], decision: string | null = null) => {
+      const repo = structuredClone(refs)
+      const node = repo[`b${i}`]?.associatedPullRequests.nodes[0] as Record<string, unknown>
+      node.reviewDecision = decision
+      node.latestOpinionatedReviews = { nodes: states.map((state, k) => ({ state, author: { login: `reviewer${k}` } })) }
+      return normaliseGraphql({ repository: repo as GqlPullData['repository'] }, names, MORDI).byBranch.get(names[i])?.[0]
+    }
+    expect(withReviews(['APPROVED'])).toMatchObject({ review: 'approved', reviewRequired: false })
+    expect(withReviews(['CHANGES_REQUESTED', 'APPROVED'])).toMatchObject({ review: 'changes', reviewRequired: false })
+    const none = withReviews([])
+    expect(none).toMatchObject({ review: 'waiting', reviewRequired: false })
+    expect(reviewWords(none as PullSummary)).toBe('no review yet')
+    // a dismissal leaves nothing standing
+    expect(withReviews(['DISMISSED'])?.review).toBe('waiting')
+    // a rule that still wants approvals wins over the approvals there are (two needed, one given)
+    const required = withReviews(['APPROVED'], 'REVIEW_REQUIRED')
+    expect(required).toMatchObject({ review: 'waiting', reviewRequired: true })
+    expect(reviewWords(required as PullSummary)).toBe('review required')
+    expect(withReviews([], 'APPROVED')).toMatchObject({ review: 'approved', reviewRequired: false })
   })
 
   it('vite batch 0: stacked pull requests keep their base, drafts their flag; main stays unmarked', () => {
@@ -468,20 +528,26 @@ describe('fetchPullIndex with a token (GraphQL)', () => {
     expect(await bodies()).toEqual(await bodies())
   })
 
-  it('uses partial data that came with errors: refs with errors get no mark', async () => {
+  it('uses partial data that came with errors, asking a ref GitHub did not answer for once more', async () => {
     const fixture = gqlExpress as GqlFixture
-    const gh = fakeGitHub((call) => {
+    const names = namesOf(fixture)
+    // the first query loses b3 to an error; the retry (b3 alone, as b0) is answered
+    const gh = fakeGitHub((call, n) => {
       const answer = graphqlAnswer(call, fixture)
+      if (n > 1) return answer
       const body = answer.body as { data: { repository: Record<string, unknown> } }
       body.data.repository.b3 = null
       return { ...answer, body: { ...body, errors: [{ type: 'NOT_FOUND', path: ['repository', 'b3'], message: 'Could not resolve' }] } }
     })
-    const names = namesOf(fixture)
     const index = await fetchPullIndex(EXPRESS, repoData(EXPRESS, names, 'master'), { token: 't', fetch: gh.fetch })
-    expect(gh.calls).toHaveLength(1)
-    expect(index.byBranch.has(names[3])).toBe(false)
+    expect(gh.calls).toHaveLength(2)
+    const retry = JSON.parse(gh.calls[1].body ?? '{}') as { query: string; variables: Record<string, string> }
+    expect(retry.variables).toMatchObject({ b0: `refs/heads/${names[3]}` })
+    expect(Object.keys(retry.variables).filter((k) => /^b\d+$/.test(k))).toEqual(['b0'])
+    expect(retry.query).not.toContain('rateLimit')
+    expect(index.unchecked).toEqual([])
     const whole = normaliseGraphql(fixture.data, names, EXPRESS).byBranch
-    expect(index.byBranch.size).toBe(whole.size - (whole.has(names[3]) ? 1 : 0))
+    expect(index.byBranch.size).toBe(whole.size)
   })
 
   it('splits a batch GitHub answered 502 to in two, then drops the per-state counts, then gives up', async () => {
@@ -547,47 +613,307 @@ describe('fetchPullIndex with a token (GraphQL)', () => {
     expect(index.source).toBe('rest')
     expect(index.byBranch.size).toBe(8)
     const lookups = gh.calls.filter((c) => /check-runs|status|reviews/.test(c.url))
-    // 8 pull requests: check runs and reviews each, statuses only until one showed none
+    // 8 pull requests: check runs, statuses and reviews each (statuses come and go per pull request)
     expect(lookups.filter((c) => c.url.includes('/check-runs'))).toHaveLength(8)
     expect(lookups.filter((c) => c.url.includes('/reviews'))).toHaveLength(8)
-    expect(lookups.filter((c) => c.url.includes('/status')).length).toBeLessThan(8)
+    expect(lookups.filter((c) => c.url.includes('/status'))).toHaveLength(8)
     for (const prs of index.byBranch.values()) for (const pr of prs) expect([pr.review, pr.checks]).toEqual(['waiting', 'failing'])
     expect(BULK_LOOKUP_MAX).toBeGreaterThanOrEqual(8)
+  })
+})
+
+// ---------- GraphQL partial answers ----------
+
+/** A pull request from a branch of o/r, as the GraphQL query reads it. */
+function ownPr(number: number, head: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    number,
+    title: `pull request ${number}`,
+    url: `https://github.com/o/r/pull/${number}`,
+    isDraft: false,
+    isCrossRepository: false,
+    headRepository: { nameWithOwner: 'o/r' },
+    headRefName: head,
+    headRefOid: `sha-${head}`,
+    baseRefName: 'main',
+    reviewDecision: 'APPROVED',
+    latestOpinionatedReviews: { nodes: [{ state: 'APPROVED', author: { login: 'r' } }] },
+    mergeable: 'MERGEABLE',
+    updatedAt: '2026-10-01T00:00:00Z',
+    author: { login: 'a' },
+    reviewRequests: { totalCount: 0 },
+    commits: {
+      nodes: [
+        {
+          commit: {
+            oid: `sha-${head}`,
+            statusCheckRollup: { state: 'SUCCESS', contexts: { totalCount: 1, checkRunCountsByState: [{ state: 'SUCCESS', count: 1 }], statusContextCountsByState: [] } },
+          },
+        },
+      ],
+    },
+    ...over,
+  }
+}
+
+const refOf = (...nodes: Array<Record<string, unknown> | null>) => ({
+  associatedPullRequests: { totalCount: nodes.length, pageInfo: { hasNextPage: false, endCursor: null }, nodes },
+})
+
+/** A ref's answer to one ask: its value and the error paths under its alias (from associatedPullRequests on). */
+type RefAnswer = { value: unknown; errors?: ReadonlyArray<ReadonlyArray<string | number>> }
+
+/**
+ * A GitHub that answers each aliased ref by branch name, attempt by attempt (a retry is a second
+ * attempt), with RESOURCE_LIMITS_EXCEEDED errors at the paths given, as a 200 with data and errors.
+ */
+function partialGitHub(answers: Record<string, (attempt: number) => RefAnswer>, total = 9) {
+  const attempts = new Map<string, number>()
+  return fakeGitHub((call) => {
+    const { query, variables } = JSON.parse(call.body ?? '{}') as { query: string; variables: Record<string, string> }
+    const repository: Record<string, unknown> = { nameWithOwner: 'o/r' }
+    if (query.includes('open: pullRequests')) {
+      repository.open = { totalCount: total }
+      repository.intoDefault = { totalCount: total }
+    }
+    const errors: GqlErrorEntry[] = []
+    for (const [key, value] of Object.entries(variables)) {
+      if (!/^b\d+$/.test(key)) continue
+      const name = value.replace(/^refs\/heads\//, '')
+      const attempt = (attempts.get(name) ?? 0) + 1
+      attempts.set(name, attempt)
+      const answer = answers[name]?.(attempt) ?? { value: refOf() }
+      repository[key] = answer.value
+      for (const path of answer.errors ?? []) {
+        errors.push({ type: 'RESOURCE_LIMITS_EXCEEDED', message: 'Resource limits for this query exceeded.', path: ['repository', key, ...path] })
+      }
+    }
+    return { body: errors.length > 0 ? { data: { repository }, errors } : { data: { repository } }, headers: GQL }
+  })
+}
+
+const O_R = { owner: 'o', repo: 'r' }
+const ROLLUP = ['associatedPullRequests', 'nodes', 0, 'commits', 'nodes', 0, 'commit', 'statusCheckRollup']
+
+describe('GraphQL partial answers', () => {
+  it('reads each error path as what it cost: checks, counts, review, a node, or the whole ref', () => {
+    const names = ['main', 'feat/a', 'feat/b']
+    const at = (alias: number, ...rest: Array<string | number>) => ({ path: ['repository', `b${alias}`, ...rest] })
+    const marks = gqlErrorMarks(
+      [
+        at(1, ...ROLLUP),
+        at(1, 'associatedPullRequests', 'nodes', 1, 'commits', 'nodes', 0, 'commit', 'statusCheckRollup', 'contexts', 'checkRunCountsByState'),
+        at(1, 'associatedPullRequests', 'nodes', 2, 'reviewDecision'),
+        at(1, 'associatedPullRequests', 'nodes', 3, 'latestOpinionatedReviews'),
+        at(1, 'associatedPullRequests', 'nodes', 4, 'mergeable'),
+        at(2, 'associatedPullRequests', 'nodes', 0),
+        // no path under an alias: nothing to mark
+        { path: ['repository', 'open'] },
+        { path: ['rateLimit'] },
+        {},
+        // an alias the query did not have
+        at(7),
+      ],
+      names,
+    )
+    expect([...marks.unchecked]).toEqual([2])
+    expect(marks.nodes.get('1:0')).toEqual({ checks: true, counts: false, review: false })
+    expect(marks.nodes.get('1:1')).toEqual({ checks: false, counts: true, review: false })
+    expect(marks.nodes.get('1:2')).toEqual({ checks: false, counts: false, review: true })
+    expect(marks.nodes.get('1:3')).toEqual({ checks: false, counts: false, review: true })
+    // mergeable is read as unknown when null anyway
+    expect(marks.nodes.get('1:4')).toEqual({ checks: false, counts: false, review: false })
+    for (const shorter of [[], ['associatedPullRequests'], ['associatedPullRequests', 'nodes'], ['associatedPullRequests', 'totalCount']]) {
+      expect([...gqlErrorMarks([at(0, ...shorter)], names).unchecked], shorter.join('.')).toEqual([0])
+    }
+  })
+
+  it('never reads a failure as a state: errored checks and reviews are unknown, an errored ref unchecked, and asked once more', async () => {
+    const lostTitle = ownPr(7, 'feat/g')
+    const gh = partialGitHub({
+      // its rollup failed (null in the data): checks not known, the review stands
+      'feat/a': () => ({ value: refOf(ownPr(1, 'feat/a', { commits: { nodes: [{ commit: { oid: 'x', statusCheckRollup: null } }] } })), errors: [ROLLUP] }),
+      // the whole ref failed, then answers on the retry
+      'feat/b': (n) => (n === 1 ? { value: null, errors: [[]] } : { value: refOf(ownPr(2, 'feat/b')) }),
+      // its connection failed, on the retry too
+      'feat/c': () => ({ value: { associatedPullRequests: null }, errors: [['associatedPullRequests']] }),
+      // its reviewDecision failed: the review is not known (null would read "no rule")
+      'feat/d': () => ({ value: refOf(ownPr(4, 'feat/d', { reviewDecision: null, latestOpinionatedReviews: { nodes: [] } })), errors: [['associatedPullRequests', 'nodes', 0, 'reviewDecision']] }),
+      // genuinely no checks and no review rule, nobody reviewed: no errors
+      'feat/e': () => ({ value: refOf(ownPr(5, 'feat/e', { reviewDecision: null, latestOpinionatedReviews: { nodes: [] }, commits: { nodes: [{ commit: { oid: 'x', statusCheckRollup: null } }] } })) }),
+      // only the counts failed: the rollup state stands
+      'feat/f': () => ({
+        value: refOf(ownPr(6, 'feat/f', { commits: { nodes: [{ commit: { oid: 'x', statusCheckRollup: { state: 'FAILURE', contexts: null } } }] } })),
+        errors: [[...ROLLUP, 'contexts']],
+      }),
+      // a node nulled through a non-null field, answered on the retry
+      'feat/g': (n) => (n === 1 ? { value: refOf(null), errors: [['associatedPullRequests', 'nodes', 0, 'title']] } : { value: refOf(lostTitle) }),
+      // deleted since the graph: null with no error
+      gone: () => ({ value: null }),
+    })
+    const names = ['main', 'feat/a', 'feat/b', 'feat/c', 'feat/d', 'feat/e', 'feat/f', 'feat/g', 'gone']
+    const index = await fetchPullIndex(O_R, repoData(O_R, names, 'main'), { token: 't', fetch: gh.fetch })
+    // the batch, then one retry of the three unchecked refs (and only them)
+    expect(gh.calls).toHaveLength(2)
+    const retry = JSON.parse(gh.calls[1].body ?? '{}') as { query: string; variables: Record<string, string> }
+    expect(Object.entries(retry.variables).filter(([k]) => /^b\d+$/.test(k)).map(([, v]) => v)).toEqual(['refs/heads/feat/b', 'refs/heads/feat/c', 'refs/heads/feat/g'])
+    expect(retry.query).not.toContain('rateLimit')
+
+    const one = (name: string) => index.byBranch.get(name)?.[0]
+    expect(one('feat/a')).toMatchObject({ review: 'approved', checks: 'unknown', checkCounts: null })
+    expect(one('feat/b')?.number).toBe(2)
+    expect(index.byBranch.has('feat/c')).toBe(false)
+    expect(one('feat/d')).toMatchObject({ review: 'unknown', reviewRequired: null, checks: 'passing' })
+    expect(one('feat/e')).toMatchObject({ review: 'waiting', reviewRequired: false, checks: 'none' })
+    expect(one('feat/f')).toMatchObject({ checks: 'failing', checkCounts: null })
+    expect(one('feat/g')?.number).toBe(7)
+    // gone is gone, not unchecked; feat/c stayed unchecked after its one retry
+    expect(index.byBranch.has('gone')).toBe(false)
+    expect(index.unchecked).toEqual(['feat/c'])
+    // 9 open, 6 drawn: the 3 not drawn include whatever feat/c has
+    expect(index.fromForks).toBe(9 - 6)
+
+    // the canvas draws feat/a's checks as not looked up (a lookup can fill them in), not as "no checks"
+    const tip = { id: 'tip-a', isTip: true, tips: ['feat/a'] }
+    expect(prMarks({ nodes: [tip] } as never, index).get('tip-a')).toMatchObject({ checks: 'unknown', review: 'approved' })
+    // the weeds tab treats an unchecked branch as one that may have a pull request: not ticked
+    const hasOpenPr = (name: string) => index.byBranch.has(name) || index.unchecked.includes(name)
+    expect([...defaultWeedPicks([{ name: 'feat/c', keep: false }, { name: 'gone', keep: false }], hasOpenPr)]).toEqual(['gone'])
+  })
+
+  it('asks over 20 unchecked refs again in two halves', async () => {
+    const names = ['main', ...Array.from({ length: 30 }, (_, i) => `lost/${i}`)]
+    const answers = Object.fromEntries(names.slice(1).map((name) => [name, (n: number) => (n === 1 ? { value: null, errors: [[]] } : { value: refOf() })]))
+    const gh = partialGitHub(answers)
+    const index = await fetchPullIndex(O_R, repoData(O_R, names, 'main'), { token: 't', fetch: gh.fetch })
+    const sizes = gh.calls.map((c) => Object.keys((JSON.parse(c.body ?? '{}') as { variables: object }).variables).filter((k) => /^b\d+$/.test(k)).length)
+    expect(sizes).toEqual([31, 15, 15])
+    expect(index.unchecked).toEqual([])
+  })
+})
+
+// ---------- branches with more pull requests than the first page ----------
+
+describe('a branch whose first five pull requests are all into forks', () => {
+  const fixture = gqlDokploy as GqlFixture
+  const names = namesOf(fixture)
+  const canaryAlias = Object.entries(fixture.variables).find(([, v]) => v === 'refs/heads/canary')?.[0] as string
+  const canaryRef = (fixture.data.repository as Record<string, GqlRefLike>)[canaryAlias]
+  const page2 = gqlDokployCanary2 as unknown as { variables: Record<string, string>; data: GqlPullData }
+
+  /** Dokploy as recorded; follow-up pages from the recorded second page of canary (or `more`). */
+  const dokploy = (more?: (call: Call, variables: Record<string, string>) => Answer) =>
+    fakeGitHub((call) => {
+      const { query, variables } = JSON.parse(call.body ?? '{}') as { query: string; variables: Record<string, string> }
+      if (!query.includes('after: $c0')) return graphqlAnswer(call, fixture)
+      return more ? more(call, variables) : { body: { data: page2.data }, headers: GQL }
+    })
+
+  it('canary: its first page is five pull bots syncing it into forks, its own release pull request on the next', () => {
+    expect(names).toHaveLength(211)
+    expect(canaryRef.associatedPullRequests.totalCount).toBe(9)
+    expect(canaryRef.associatedPullRequests.nodes.every((n) => n?.isCrossRepository === true)).toBe(true)
+    expect(canaryRef.associatedPullRequests.pageInfo?.hasNextPage).toBe(true)
+  })
+
+  it('reads on past the first page, finding canary -> main (#5689), in one more POST for that branch alone', async () => {
+    const gh = dokploy()
+    const index = await fetchPullIndex(DOKPLOY, repoData(DOKPLOY, names, 'canary'), { token: 't', fetch: gh.fetch })
+    // six batches of 40 (the last 11), then canary's next page
+    expect(gh.calls).toHaveLength(Math.ceil(211 / GRAPHQL_BATCH) + 1)
+    const follow = JSON.parse(gh.calls[gh.calls.length - 1].body ?? '{}') as { query: string; variables: Record<string, string> }
+    expect(follow.variables).toEqual({ owner: 'Dokploy', repo: 'dokploy', b0: 'refs/heads/canary', c0: canaryRef.associatedPullRequests.pageInfo?.endCursor })
+    expect(follow.variables).toEqual(page2.variables)
+    const canary = index.byBranch.get('canary') ?? []
+    expect(canary.map((p) => `#${p.number} ${p.head}->${p.base}`)).toEqual(['#5689 canary->main'])
+    expect(index.total).toBe(229)
+    // one fewer "from forks" than before canary's own pull request was found
+    expect(index.fromForks).toBe(220)
+    expect(index.truncated).toBe(false)
+  })
+
+  it('asks nothing more when no branch has a next page', async () => {
+    const gh = fakeGitHub((call) => {
+      const answer = graphqlAnswer(call, fixture)
+      const repo = (answer.body as { data: { repository: Record<string, GqlRefLike | null> } }).data.repository
+      // new objects: the recorded refs are shared with the other tests
+      for (const [key, ref] of Object.entries(repo)) {
+        if (/^b\d+$/.test(key) && ref) repo[key] = { associatedPullRequests: { ...ref.associatedPullRequests, pageInfo: { hasNextPage: false, endCursor: null } } }
+      }
+      return answer
+    })
+    const index = await fetchPullIndex(DOKPLOY, repoData(DOKPLOY, names, 'canary'), { token: 't', fetch: gh.fetch })
+    expect(gh.calls).toHaveLength(Math.ceil(211 / GRAPHQL_BATCH))
+    expect(index.byBranch.has('canary')).toBe(false)
+    expect(index.fromForks).toBe(221)
+  })
+
+  it('keeps reading every page (a branch can have several of its own), up to GRAPHQL_MAX_ROUNDS, then says it is truncated', async () => {
+    let round = 0
+    const gh = dokploy(() => {
+      round += 1
+      const ref = structuredClone((page2.data.repository as Record<string, GqlRefLike>).b0)
+      // another of canary's own on every page, and always a next one
+      ref.associatedPullRequests.nodes = [{ ...(ref.associatedPullRequests.nodes.find((n) => n?.number === 5689) as object), number: 9000 + round, url: `u${round}` }]
+      ref.associatedPullRequests.pageInfo = { hasNextPage: true, endCursor: `cursor-${round}` }
+      return { body: { data: { repository: { nameWithOwner: 'Dokploy/dokploy', b0: ref } } }, headers: GQL }
+    })
+    const index = await fetchPullIndex(DOKPLOY, repoData(DOKPLOY, names, 'canary'), { token: 't', fetch: gh.fetch })
+    expect(round).toBe(GRAPHQL_MAX_ROUNDS)
+    const cursors = gh.calls.slice(-GRAPHQL_MAX_ROUNDS).map((c) => (JSON.parse(c.body ?? '{}') as { variables: Record<string, string> }).variables.c0)
+    expect(cursors).toEqual([canaryRef.associatedPullRequests.pageInfo?.endCursor, 'cursor-1', 'cursor-2'])
+    expect((index.byBranch.get('canary') ?? []).map((p) => p.number).sort()).toEqual([9001, 9002, 9003])
+    expect(index.truncated).toBe(true)
+  })
+
+  it('keeps what the first pages said when a next page cannot be read', async () => {
+    const gh = dokploy(() => ({ status: 502, body: { message: 'Bad Gateway' } }))
+    const index = await fetchPullIndex(DOKPLOY, repoData(DOKPLOY, names, 'canary'), { token: 't', fetch: gh.fetch })
+    expect(index.byBranch.size).toBeGreaterThan(0)
+    expect(index.byBranch.has('canary')).toBe(false)
+    expect(index.truncated).toBe(true)
   })
 })
 
 // ---------- lookups ----------
 
 describe('lookupPull', () => {
-  const lookupAnswers = () =>
+  const lookupAnswers = (status: unknown = status7531) =>
     fakeGitHub((call) => {
       const url = new URL(call.url)
       const headers = { ...CORE, 'x-ratelimit-remaining': '30' }
       if (url.pathname.endsWith('/check-runs')) return { body: checkRuns7531, headers }
-      if (url.pathname.endsWith('/status')) return { body: status7531, headers }
+      if (url.pathname.endsWith('/status')) return { body: status, headers }
       if (url.pathname.endsWith('/reviews')) return { body: reviews7531, headers }
       return undefined
     })
 
-  it('costs 3 requests, then 2 once the repo turned out to have no commit statuses', async () => {
-    expect(lookupCost(EXPRESS)).toBe(3)
-    let gh = lookupAnswers()
+  it('costs 3 requests, reading the commit statuses every time (they come and go per pull request)', async () => {
+    expect(LOOKUP_COST).toBe(3)
+    const gh = lookupAnswers()
     const rates: RateInfo[] = []
     const found = await lookupPull(EXPRESS, { number: 7531, headSha: checkRuns7531.headSha }, { fetch: gh.fetch, onRate: (r) => rates.push(r) })
     expect(gh.calls).toHaveLength(3)
     expect(rates).toHaveLength(3)
     expect(found).toMatchObject({ review: 'waiting', checks: 'failing', requests: 3 })
     expect(found.checkCounts).toMatchObject({ failing: 2, total: 30 })
-    // a repo without statuses: GitHub's combined state reads 'pending', which must not count
+    // a head without statuses: GitHub's combined state reads 'pending', which must not count
     expect(status7531).toMatchObject({ state: 'pending', total_count: 0 })
-    expect(lookupCost(EXPRESS)).toBe(2)
-    gh = lookupAnswers()
-    const again = await lookupPull(EXPRESS, { number: 7317, headSha: checkRuns7531.headSha }, { fetch: gh.fetch })
-    expect(gh.calls).toHaveLength(2)
-    expect(gh.calls.some((c) => c.url.includes('/status'))).toBe(false)
-    expect(again.requests).toBe(2)
-    // another repo still pays for its statuses
-    expect(lookupCost(VITE)).toBe(3)
+    // the next pull request has a failing status (a deploy preview, say): still read, and it counts
+    const failingStatus = { state: 'failure', total_count: 1, statuses: [{ state: 'failure', context: 'deploy/preview' }] }
+    const passingRuns = { ...checkRuns7531, check_runs: checkRuns7531.check_runs.map((r) => ({ ...r, conclusion: 'success' })) }
+    const passingGh = fakeGitHub((call) => {
+      const url = new URL(call.url)
+      const headers = { ...CORE, 'x-ratelimit-remaining': '27' }
+      if (url.pathname.endsWith('/check-runs')) return { body: passingRuns, headers }
+      if (url.pathname.endsWith('/status')) return { body: failingStatus, headers }
+      if (url.pathname.endsWith('/reviews')) return { body: reviews7531, headers }
+      return undefined
+    })
+    const again = await lookupPull(EXPRESS, { number: 7317, headSha: checkRuns7531.headSha }, { fetch: passingGh.fetch })
+    expect(passingGh.calls.filter((c) => c.url.includes('/status'))).toHaveLength(1)
+    expect(again).toMatchObject({ checks: 'failing', requests: 3 })
+    expect(again.checkCounts).toMatchObject({ failing: 1, total: 31 })
   })
 
   it('turns a failed lookup into a GitHubFetchError without the token', async () => {
@@ -596,6 +922,79 @@ describe('lookupPull', () => {
     expect(err).toBeInstanceOf(GitHubFetchError)
     expect((err as GitHubFetchError).code).toBe('rate_limited')
     expect((err as GitHubFetchError).message).not.toContain('ghp_secret')
+  })
+})
+
+describe('lookupPull past the first 100', () => {
+  const SHA = 'c'.repeat(40)
+  /** GitHub's pages of a list, 100 a page, with the Link header it sends. */
+  function paged<T>(call: Call, all: T[], wrap: (items: T[]) => unknown, remaining = 40): Answer {
+    const url = new URL(call.url)
+    const page = Number(url.searchParams.get('page') ?? '1')
+    const items = all.slice((page - 1) * 100, page * 100)
+    const last = Math.max(1, Math.ceil(all.length / 100))
+    const link = page < last ? `<${url.origin}${url.pathname}?per_page=100&page=${page + 1}>; rel="next", <${url.origin}${url.pathname}?per_page=100&page=${last}>; rel="last"` : undefined
+    return { body: wrap(items), headers: { ...CORE, 'x-ratelimit-remaining': String(remaining), ...(link ? { link } : {}) } }
+  }
+  const NO_STATUSES = { state: 'pending', total_count: 0, statuses: [] }
+  function gitHubWith(opts: { runs?: RawRun[]; reviews?: Array<{ state: string; user: { login: string } }>; status?: unknown; remaining?: number }) {
+    const runs = opts.runs ?? []
+    return fakeGitHub((call) => {
+      const url = new URL(call.url)
+      if (url.pathname.endsWith('/check-runs')) return paged(call, runs, (items) => ({ total_count: runs.length, check_runs: items }), opts.remaining)
+      if (url.pathname.endsWith('/status')) return { body: opts.status ?? NO_STATUSES, headers: { ...CORE, 'x-ratelimit-remaining': String(opts.remaining ?? 40) } }
+      if (url.pathname.endsWith('/reviews')) return paged(call, opts.reviews ?? [], (items) => items, opts.remaining)
+      return undefined
+    })
+  }
+  type RawRun = { status: string; conclusion: string | null }
+  const pass: RawRun = { status: 'completed', conclusion: 'success' }
+  const fail: RawRun = { status: 'completed', conclusion: 'failure' }
+
+  it('reads check runs on page 2: 120 runs, the failure the 110th', async () => {
+    const runs = Array.from({ length: 120 }, (_, i) => (i === 109 ? fail : pass))
+    const gh = gitHubWith({ runs })
+    const found = await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch })
+    expect(found).toMatchObject({ checks: 'failing', requests: 4 })
+    expect(found.checkCounts).toMatchObject({ failing: 1, passing: 119, total: 120 })
+    expect(gh.calls.filter((c) => c.url.includes('/check-runs')).map((c) => new URL(c.url).searchParams.get('page'))).toEqual([null, '2'])
+  })
+
+  it('says "unknown" rather than "passing" when runs are left unread (the page cap, or a low budget)', async () => {
+    // the failure past LOOKUP_MAX_PAGES pages
+    const runs = Array.from({ length: 350 }, (_, i) => (i === 340 ? fail : pass))
+    let gh = gitHubWith({ runs })
+    let found = await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch })
+    expect(found.requests).toBe(3 + LOOKUP_MAX_PAGES - 1)
+    expect(found.checks).toBe('unknown')
+    expect(found.checkCounts?.total).toBe(350)
+    // a failure that was read stands
+    gh = gitHubWith({ runs: Array.from({ length: 350 }, (_, i) => (i === 5 ? fail : pass)) })
+    expect((await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch })).checks).toBe('failing')
+    // no token and too few requests left: no further page
+    gh = gitHubWith({ runs: Array.from({ length: 120 }, () => pass), remaining: REST_MIN_REMAINING - 1 })
+    found = await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch })
+    expect(found).toMatchObject({ checks: 'unknown', requests: 3 })
+    // with a token the budget is not a worry
+    gh = gitHubWith({ runs: Array.from({ length: 120 }, () => pass), remaining: REST_MIN_REMAINING - 1 })
+    expect(await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch, token: 't' })).toMatchObject({ checks: 'passing', requests: 4 })
+  })
+
+  it('reads reviews on page 2: the 101st asks for changes', async () => {
+    const reviews = Array.from({ length: 101 }, (_, i) => ({ state: i === 100 ? 'CHANGES_REQUESTED' : i % 2 ? 'COMMENTED' : 'APPROVED', user: { login: i === 100 ? 'last' : `r${i % 7}` } }))
+    const gh = gitHubWith({ reviews })
+    const found = await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gh.fetch })
+    expect(found).toMatchObject({ review: 'changes', requests: 4 })
+    // past the cap the latest reviews may be unread: no verdict from the oldest
+    const many = Array.from({ length: 301 }, () => ({ state: 'APPROVED', user: { login: 'r' } }))
+    expect((await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gitHubWith({ reviews: many }).fetch })).review).toBe('unknown')
+  })
+
+  it('takes the combined state of over 100 commit statuses, not just the first page', async () => {
+    const status = { state: 'failure', total_count: 130, statuses: Array.from({ length: 100 }, () => ({ state: 'success' })) }
+    const found = await lookupPull(EXPRESS, { number: 1, headSha: SHA }, { fetch: gitHubWith({ runs: [pass], status }).fetch })
+    expect(found.checks).toBe('failing')
+    expect(found.checkCounts?.total).toBe(131)
   })
 })
 

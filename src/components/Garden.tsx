@@ -32,7 +32,7 @@ import {
   type TimeForce,
 } from './gardenUtils'
 import { TIP_RING_PX, useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
-import { drawPrRing, prRingFor } from './prMark'
+import { PR_RING_METRO_CUT, drawPrRing, prRingFor } from './prMark'
 import { branchQueryText } from './branchQuery'
 import {
   METRO_BADGE_MIN_PX,
@@ -666,10 +666,11 @@ export default function Garden({
         const turn = hash01(id)
         if (node.isTip) {
           drawTip(ctx, x, y, outer, bloomOf(node.commit.date, gardenNow()), turn, colour, ink)
-          // an open pull request: a ring just inside the petals' reach
+          // an open pull request: a ring just inside the petals' reach (not looked up yet: in the
+          // station colour, since branch-coloured petals would swallow the branch colour)
           if (mark) {
             const ring = prRingFor('garden', reach, px)
-            drawPrRing(ctx, x, y, ring.R, ring.w, mark, th, px)
+            drawPrRing(ctx, x, y, ring.R, ring.w, mark, th, px, th.stationRing)
           }
         } else if (node.isMerge) drawMergeFlower(ctx, x, y, r * 1.2, turn, colour, ink)
         else if (node.isFork || node.isRoot) {
@@ -691,9 +692,15 @@ export default function Garden({
           ctx.fillStyle = colour
           ctx.fill()
           if (mark) {
-            // an open pull request: its ring in place of the station outline, hugging the disc
+            // an open pull request: its ring in place of the station outline, parted from the disc
+            // by a cut in the canvas colour, so a half in the branch's own colour still reads
+            ctx.beginPath()
+            ctx.arc(x, y, r + PR_RING_METRO_CUT.centrePx * px, 0, TWO_PI)
+            ctx.strokeStyle = th.canvas
+            ctx.lineWidth = PR_RING_METRO_CUT.widthPx * px
+            ctx.stroke()
             const pr = prRingFor('metro', r, px)
-            drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px)
+            drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px, th.stationRing)
           } else {
             ctx.strokeStyle = th.stationRing
             ctx.lineWidth = ring
@@ -731,7 +738,7 @@ export default function Garden({
         if (mark) {
           // an open pull request: the tip's ring split into review | checks, reaching no further
           const pr = prRingFor('organic', outer, px)
-          drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px)
+          drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px, colour)
         } else {
           ctx.beginPath()
           ctx.arc(x, y, outer + 2.5 * px, 0, TWO_PI)

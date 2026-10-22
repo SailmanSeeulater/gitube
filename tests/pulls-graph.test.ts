@@ -8,6 +8,7 @@ import { buildGraph } from '../src/graph'
 import {
   branchPrs,
   branchSignature,
+  branchUnchecked,
   combineMarks,
   countPulls,
   defaultTipSummary,
@@ -38,6 +39,7 @@ function pr(head: string, number: number, over: Partial<PullSummary> = {}): Pull
     draft: false,
     author: 'someone',
     review: 'waiting',
+    reviewRequired: null,
     checks: 'passing',
     checkCounts: null,
     reviewersAsked: 0,
@@ -57,6 +59,7 @@ function index(prs: PullSummary[], over: Partial<PullIndex> = {}): PullIndex {
     fromForks: 12 - prs.length,
     notOnGraph: 0,
     truncated: false,
+    unchecked: [],
     listed: 0,
     source: 'graphql',
     fetchedAt: '2026-10-21T00:00:00Z',
@@ -153,7 +156,12 @@ describe('lookups and the index', () => {
 
   it('sums up the default branch: into it, not drawn, from branches here', () => {
     const idx = index([pr('a', 1, { checks: 'failing' }), pr('b', 2, { draft: true }), pr('c', 3)], { intoBase: 127, total: 133, fromForks: 130 })
-    expect(defaultTipSummary(idx)).toEqual({ into: 127, total: 133, notDrawn: 130, onlyForks: false, mapped: 3, failing: 1, drafts: 1 })
+    expect(defaultTipSummary(idx)).toEqual({ into: 127, total: 133, notDrawn: 130, onlyForks: false, unchecked: 0, mapped: 3, failing: 1, drafts: 1 })
+    // branches GitHub did not answer for are counted, so the line can say their pull requests are among those not drawn
+    expect(defaultTipSummary(index([pr('a', 1)], { unchecked: ['b', 'c'] })).unchecked).toBe(2)
+    expect(branchUnchecked(index([], { unchecked: ['b'] }), 'b')).toBe(true)
+    expect(branchUnchecked(index([], { unchecked: ['b'] }), 'a')).toBe(false)
+    expect(branchUnchecked(null, 'b')).toBe(false)
     expect(defaultTipSummary(index([pr('a', 1)], { source: 'rest', fromForks: 5, notOnGraph: 0 })).onlyForks).toBe(true)
     expect(defaultTipSummary(index([pr('a', 1)], { source: 'rest', fromForks: 5, notOnGraph: 2 })).notDrawn).toBe(7)
   })
@@ -172,9 +180,12 @@ describe('lookups and the index', () => {
 
 describe('words', () => {
   it('says each half', () => {
-    expect(reviewWords({ review: 'waiting' })).toBe('review required')
-    expect(reviewWords({ review: 'changes' })).toBe('changes requested')
-    expect(reviewWords({ review: 'unknown' })).toBe('review ?')
+    // "review required" only where GitHub says a branch rule still wants approvals
+    expect(reviewWords({ review: 'waiting', reviewRequired: true })).toBe('review required')
+    expect(reviewWords({ review: 'waiting', reviewRequired: false })).toBe('no review yet')
+    expect(reviewWords({ review: 'waiting', reviewRequired: null })).toBe('no review yet')
+    expect(reviewWords({ review: 'changes', reviewRequired: null })).toBe('changes requested')
+    expect(reviewWords({ review: 'unknown', reviewRequired: null })).toBe('review ?')
     const counts = { failing: 2, running: 1, passing: 27, skipped: 0, total: 30 }
     expect(checksWords({ checks: 'failing', checkCounts: counts })).toBe('2 of 30 checks failing')
     expect(checksWords({ checks: 'running', checkCounts: counts })).toBe('1 of 30 checks running')
@@ -187,8 +198,9 @@ describe('words', () => {
   })
 
   it('gives a branch row its suffix and the inspector its meta line', () => {
-    const one = pr('feat', 12345, { checks: 'failing', checkCounts: { failing: 2, running: 0, passing: 28, skipped: 0, total: 30 } })
+    const one = pr('feat', 12345, { reviewRequired: true, checks: 'failing', checkCounts: { failing: 2, running: 0, passing: 28, skipped: 0, total: 30 } })
     expect(prPhrase(one)).toBe('open PR #12345: review required, 2 of 30 checks failing')
+    expect(prPhrase({ ...one, reviewRequired: false })).toBe('open PR #12345: no review yet, 2 of 30 checks failing')
     expect(prRowSuffix([one])).toBe(', open PR #12345: review required, 2 of 30 checks failing')
     expect(prRowSuffix([{ ...one, draft: true }, one])).toBe(', open PR #12345: review required, 2 of 30 checks failing, draft (+1 more)')
     expect(prRowSuffix([])).toBe('')
@@ -279,14 +291,17 @@ describe('the pulls query', () => {
     expect(shouldRetryPulls(0, new GitHubFetchError('x', 'not_found'))).toBe(false)
   })
 
-  it('offers a retry for what one could fix, not for a rate limit', () => {
-    expect(describePullsError(new GitHubFetchError('limit', 'rate_limited', '2026-10-22T02:00:00Z'))).toEqual({
+  it('offers a retry for what one could fix, and for a rate limit once its reset time has passed', () => {
+    const before = Date.parse('2026-10-22T01:00:00Z')
+    expect(describePullsError(new GitHubFetchError('limit', 'rate_limited', '2026-10-22T02:00:00Z'), before)).toEqual({
       message: 'limit',
       code: 'rate_limited',
       resetAt: '2026-10-22T02:00:00Z',
+      limit: 'core',
       retriable: false,
     })
     expect(describePullsError(new GitHubFetchError('down', 'network'))?.retriable).toBe(true)
+    expect(describePullsError(new GitHubFetchError('down', 'network'))?.limit).toBeNull()
     expect(describePullsError(null)).toBeNull()
   })
 })

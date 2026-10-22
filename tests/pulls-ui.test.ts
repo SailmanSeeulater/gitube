@@ -5,7 +5,7 @@
  */
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Panel from '../src/components/Panel'
 import Legend from '../src/components/Legend'
 import StatusStrip from '../src/components/StatusStrip'
@@ -14,7 +14,8 @@ import PrBlock from '../src/components/PrBlock'
 import WeedsTab from '../src/components/WeedsTab'
 import { buildContributors, buildGraph } from '../src/graph'
 import { findWeeds } from '../src/graph/weeds'
-import type { PullsView } from '../src/hooks/usePulls'
+import { describePullsError, resetWakeDelay, type PullsView } from '../src/hooks/usePulls'
+import { getTheme } from '../src/theme/themes'
 import { useGardenStore } from '../src/store/useGardenStore'
 import { GitHubFetchError, type PullIndex, type PullSummary, type RepoData } from '../src/types'
 import { makeRepo, singleFork } from './fixtures/repos'
@@ -39,10 +40,10 @@ function view(over: Partial<PullsView> = {}): PullsView {
   }
 }
 
-function index(prs: PullSummary[]): PullIndex {
+function index(prs: PullSummary[], unchecked: string[] = []): PullIndex {
   const byBranch = new Map<string, PullSummary[]>()
   for (const p of prs) byBranch.set(p.head, [p])
-  return { byBranch, intoBase: 3, total: 4, fromForks: 4 - prs.length, notOnGraph: 0, truncated: false, listed: 0, source: 'graphql', fetchedAt: '' }
+  return { byBranch, intoBase: 3, total: 4, fromForks: 4 - prs.length, notOnGraph: 0, truncated: false, unchecked, listed: 0, source: 'graphql', fetchedAt: '' }
 }
 
 const PR: PullSummary = {
@@ -55,6 +56,8 @@ const PR: PullSummary = {
   draft: false,
   author: 'dev',
   review: 'waiting',
+  // a branch rule still wants approvals: "review required"
+  reviewRequired: true,
   checks: 'failing',
   checkCounts: { failing: 2, running: 0, passing: 28, skipped: 0, total: 30 },
   reviewersAsked: 1,
@@ -64,7 +67,7 @@ const PR: PullSummary = {
 
 const data: RepoData = singleFork()
 
-function panel(pulls: PullsView | null, hasPrMarks = false): string {
+function panel(pulls: PullsView | null, hasPrMarks = false, prMarksKnown = false): string {
   return renderToStaticMarkup(
     h(Panel, {
       data,
@@ -74,6 +77,7 @@ function panel(pulls: PullsView | null, hasPrMarks = false): string {
       onBattle: () => true,
       pulls,
       hasPrMarks,
+      prMarksKnown,
     }),
   )
 }
@@ -95,6 +99,10 @@ function setStore(partial: Partial<ReturnType<typeof useGardenStore.getState>>):
 
 beforeEach(() => {
   setStore({ layoutMode: 'organic', search: '', selectedBranch: null, panelOpen: true, panelTab: 'branches', hiddenBranches: new Set(), rate: null })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('no pull requests, no change', () => {
@@ -137,11 +145,49 @@ describe('with pull requests', () => {
 
   it('says it is checking, or that it could not, in the same place', () => {
     expect(panel(view({ status: 'loading' }))).toContain('checking PRs…')
-    const failed = panel(view({ status: 'error', error: { message: 'x', code: 'rate_limited', resetAt: null, retriable: false } }))
+    const failed = panel(view({ status: 'error', error: { message: 'x', code: 'rate_limited', resetAt: null, limit: 'core', retriable: false } }))
     expect(failed).toContain('PRs not checked')
     expect(failed).not.toMatch(/<button[^>]*>PRs not checked/)
-    const retriable = panel(view({ status: 'error', error: { message: 'offline', code: 'network', resetAt: null, retriable: true } }))
+    const retriable = panel(view({ status: 'error', error: { message: 'offline', code: 'network', resetAt: null, limit: null, retriable: true } }))
     expect(retriable).toMatch(/<button[^>]*>PRs not checked<\/button>/)
+  })
+
+  it('says why a rate limit stopped it, offering a token only to a visitor without one', () => {
+    const limited = (limit: 'core' | 'graphql' | 'secondary', hasToken: boolean) =>
+      panel(view({ hasToken, status: 'error', error: { message: 'x', code: 'rate_limited', resetAt: null, limit, retriable: false } }))
+    expect(limited('core', false)).toContain('a token raises it')
+    expect(limited('core', true)).not.toContain('a token raises it')
+    expect(limited('core', true)).toContain('hourly request limit is used up')
+    expect(limited('graphql', true)).toContain('hourly GraphQL limit for this token is used up')
+    expect(limited('graphql', true)).not.toContain('a token raises it')
+    expect(limited('secondary', true)).toContain('a short pause (secondary rate limit)')
+  })
+
+  it('turns "PRs not checked" into a retry once the rate limit has reset, with no new error', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.parse('2026-10-22T01:00:00Z'))
+    const err = new GitHubFetchError('GitHub API rate limit exceeded while listing pull requests.', 'rate_limited', '2026-10-22T01:00:30Z')
+    const line = () => panel(view({ status: 'error', error: describePullsError(err) }))
+    expect(line()).not.toMatch(/<button[^>]*>PRs not checked/)
+    // usePulls re-reads the same error a second after the reset time
+    let html = line()
+    setTimeout(() => (html = line()), resetWakeDelay(err.resetAt ?? null) ?? 0)
+    vi.advanceTimersByTime(30_000)
+    expect(html).not.toMatch(/<button[^>]*>PRs not checked/)
+    vi.advanceTimersByTime(1_000)
+    expect(html).toMatch(/<button[^>]*>PRs not checked<\/button>/)
+  })
+
+  it('counts the branches GitHub did not answer for, even with no pull request found', () => {
+    const html = panel(view({ index: index([], ['feature']) }))
+    expect(html).toContain('1 not checked')
+    expect(html).toMatch(/title="GitHub did not answer for these branches[^"]*feature"/)
+    expect(html).not.toContain('with PRs')
+    const both = panel(view({ index: index([PR], ['main']) }), true)
+    expect(both).toContain('1 with PRs')
+    expect(both).toContain('1 not checked')
+    // its row says so in its label
+    expect(html).toContain('aria-label="feature, PRs not checked (GitHub did not answer)"')
   })
 
   it('shows the selected pull request row’s status in one line under it', () => {
@@ -150,6 +196,14 @@ describe('with pull requests', () => {
     expect(html).toContain('review required')
     expect(html).toContain('2/30 failing')
     expect(html).toContain('#42 ↗')
+    // no branch rule asking for reviews: nothing is "required"
+    const noRule = panel(view({ index: index([{ ...PR, reviewRequired: false }]) }), true)
+    expect(noRule).toContain('</svg>no review yet</span>')
+    expect(noRule).toContain('open PR #42: no review yet')
+    // (the legend's hint names both wordings)
+    expect(noRule).not.toContain('</svg>review required')
+    // a branch GitHub did not answer for says so under its row
+    expect(panel(view({ index: index([], ['feature']) }))).toContain('PRs not checked (GitHub did not answer)</p>')
   })
 })
 
@@ -169,6 +223,23 @@ describe('legend', () => {
       expect(items(withPrs), layout).toBe(base + 1)
       expect(withPrs).toContain('pull request')
       expect(withPrs).toContain('left arc: review')
+    }
+  })
+
+  it('draws what the canvas draws: the gapped ring in the tip’s own colour until some review or checks are known', () => {
+    const theme = getTheme(useGardenStore.getState().themeId)
+    for (const layout of ['organic', 'metro', 'garden'] as const) {
+      setStore({ layoutMode: layout })
+      const unknown = renderToStaticMarkup(h(Legend, { hasPrs: true, prKnown: false }))
+      expect(unknown, layout).not.toContain(`stroke="${theme.success}"`)
+      expect(unknown, layout).not.toContain(`stroke="${theme.danger}"`)
+      expect(unknown, layout).toContain(`stroke="${layout === 'organic' ? theme.derived.defaultBranchColour : theme.stationRing}"`)
+      expect(unknown, layout).toMatch(/title="split at 12 and 6 o&#x27;clock, in the tip&#x27;s own colour: an open pull request/)
+      const known = renderToStaticMarkup(h(Legend, { hasPrs: true, prKnown: true }))
+      expect(known, layout).toContain(`stroke="${theme.success}"`)
+      expect(known, layout).toContain(`stroke="${theme.danger}"`)
+      expect(known, layout).toContain('grey no review yet / review required')
+      expect(known, layout).toContain('amber half-lit running')
     }
   })
 })
@@ -220,6 +291,11 @@ describe('weeds', () => {
     expect(html).toContain('title="deleting this branch closes PR #42"')
     expect(html).toContain('#42 open')
     expect(html).not.toContain('origin old')
+    // a weed GitHub did not answer for may have one: not ticked, and it says why
+    const unchecked = renderToStaticMarkup(h(WeedsTab, { ...props, prs: new Map(), unchecked: ['old'] }))
+    expect((unchecked.match(/checked=""/g) ?? []).length).toBe(1)
+    expect(unchecked).toContain('PR status not checked')
+    expect(unchecked).not.toContain('origin old')
   })
 })
 
@@ -245,6 +321,46 @@ describe('inspector pull request block', () => {
     expect(html).toContain('2 of 30 checks failing')
     expect(html).toContain('draft · conflicts with feat/x · into feat/x · by dev')
     expect(html).not.toContain('PR head is newer')
+  })
+
+  it('says "no review yet" where no branch rule asks for reviews', () => {
+    const html = block({ ...PR, headSha: tip.id, reviewRequired: false })
+    expect(html).toContain('no review yet')
+    expect(html).not.toContain('review required')
+  })
+
+  it('says when GitHub did not answer for the tip’s branch, and counts such branches on the default tip', () => {
+    const lost = renderToStaticMarkup(
+      h(PrBlock, {
+        node: tip,
+        prs: [],
+        pulls: { view: view({ index: index([], ['feature']) }), data, graphAt: null, onAddToken: noop, onRefresh: noop },
+        palette: {},
+        fallback: 'currentColor',
+      }),
+    )
+    expect(lost).toContain('PRs not checked (GitHub did not answer)')
+    const main = graph.nodes.find((n) => n.tips.includes('main')) as (typeof graph.nodes)[number]
+    const summary = renderToStaticMarkup(
+      h(PrBlock, {
+        node: main,
+        prs: [],
+        pulls: { view: view({ index: index([PR], ['other']) }), data, graphAt: null, onAddToken: noop, onRefresh: noop },
+        palette: {},
+        fallback: 'currentColor',
+      }),
+    )
+    expect(summary).toContain('3 not drawn (forks, branches not loaded, or 1 branch GitHub did')
+    // the inspector opens its block for such a tip (the block itself loads lazily)
+    const inspector = renderToStaticMarkup(
+      h(NodeInspector, {
+        node: tip,
+        palette: {},
+        onClose: noop,
+        pulls: { view: view({ index: index([], ['feature']) }), data, graphAt: null, onAddToken: noop, onRefresh: noop },
+      }),
+    )
+    expect(inspector).toContain('checking pull requests')
   })
 
   it('says when the branch moved on since the graph was fetched', () => {

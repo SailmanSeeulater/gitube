@@ -139,6 +139,8 @@ export default function App() {
   const pulls = usePulls(opened ? null : fetched.data, pullsEnabled)
   /** tip node id -> its pull request mark; empty when there are none (the canvas then looks as before) */
   const marks = useMemo(() => prMarks(graph, opened ? null : pulls.index), [graph, opened, pulls.index])
+  /** some mark has its review or checks known (else all are the gapped ring in the tip's own colour): the legend shows what is drawn */
+  const prMarksKnown = useMemo(() => [...marks.values()].some((m) => m.review !== 'unknown' || m.checks !== 'unknown'), [marks])
   const pullsInvalidate = pulls.invalidate
 
   // the leaderboard covers every fetched commit, whatever is hidden
@@ -548,6 +550,7 @@ export default function App() {
           onBattle={startBattle}
           pulls={opened ? null : pulls}
           hasPrMarks={marks.size > 0 && !timelapseOpen}
+          prMarksKnown={prMarksKnown}
         />
       )}
 

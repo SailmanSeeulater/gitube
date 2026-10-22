@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { ChecksState, PrMark, PullSummary, ReviewState } from '../types'
 import type { Theme } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
-import { DOT_PITCH, DOT_WIDTH, checksTone, checksWords, checksWordsShort, prRingArcs, reviewTone, reviewWords, toneColour, type PrRingOptions, type PrTone } from './prMark'
+import { DOT_PITCH, DOT_WIDTH, TRACK_ALPHA, checksTone, checksWords, checksWordsShort, prRingArcs, reviewTone, reviewWords, toneColour, type PrRingOptions, type PrTone } from './prMark'
 
 type MarkLike = Pick<PrMark, 'review' | 'checks' | 'draft'>
 
@@ -16,7 +16,10 @@ function arcPath(cx: number, cy: number, R: number, a0: number, a1: number): str
   return `M${f(x0)} ${f(y0)}A${f(R)} ${f(R)} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f(x1)} ${f(y1)}`
 }
 
-/** The ring's arcs as SVG paths round (cx, cy), in screen px, as the canvas draws them. */
+/**
+ * The ring's arcs as SVG paths round (cx, cy), in screen px, as the canvas draws them. neutral: the
+ * colour of a half not looked up yet (the outline the glyph has without a pull request).
+ */
 export function PrRingPaths({
   cx,
   cy,
@@ -24,6 +27,7 @@ export function PrRingPaths({
   w,
   mark,
   theme,
+  neutral,
   opts,
 }: {
   cx: number
@@ -32,6 +36,7 @@ export function PrRingPaths({
   w: number
   mark: MarkLike
   theme: Theme
+  neutral: string
   opts?: PrRingOptions
 }) {
   return (
@@ -41,8 +46,8 @@ export function PrRingPaths({
           key={i}
           d={arcPath(cx, cy, R, arc.a0, arc.a1)}
           fill="none"
-          stroke={toneColour(theme, arc.tone)}
-          strokeOpacity={arc.faint ? 0.5 : 1}
+          stroke={arc.unknown ? neutral : toneColour(theme, arc.tone)}
+          strokeOpacity={arc.track ? TRACK_ALPHA : undefined}
           strokeWidth={arc.dotted ? w * DOT_WIDTH : w}
           strokeLinecap={arc.dotted ? 'round' : 'butt'}
           strokeDasharray={arc.dotted ? `0.01 ${f(w * DOT_PITCH)}` : undefined}
@@ -63,7 +68,7 @@ export function PrSwatch({ colour, mark }: { colour: string; mark: MarkLike | nu
       {mark ? (
         <>
           <circle cx={7} cy={7} r={3.3} fill={colour} />
-          <PrRingPaths cx={7} cy={7} R={5.9} w={1.7} mark={mark} theme={theme} opts={{ gapPx: 2.2, breakPx: 2.6 }} />
+          <PrRingPaths cx={7} cy={7} R={5.9} w={1.7} mark={mark} theme={theme} neutral={colour} opts={{ gapPx: 2.2, breakPx: 2.6 }} />
         </>
       ) : (
         <circle cx={7} cy={7} r={5} fill={colour} />
@@ -80,7 +85,7 @@ export function PrHalfGlyph({ side, state }: { side: 'review'; state: ReviewStat
   const cx = side === 'review' ? 8.5 : 3.5
   return (
     <svg width={12} height={12} viewBox="0 0 12 12" aria-hidden="true" className="shrink-0">
-      <PrRingPaths cx={cx} cy={6} R={4.4} w={1.7} mark={mark} theme={theme} opts={{ sides: [side], gapPx: 1.5, breakPx: 2.4 }} />
+      <PrRingPaths cx={cx} cy={6} R={4.4} w={1.7} mark={mark} theme={theme} neutral={theme.muted} opts={{ sides: [side], gapPx: 1.5, breakPx: 2.4 }} />
     </svg>
   )
 }
@@ -94,8 +99,8 @@ const TONE_TEXT: Record<PrTone, string> = {
 }
 
 /**
- * "◖ review required  ◗ 2 of 30 checks failing": a pull request's two halves in words, each by its
- * half of the ring. compact (the selected branch row) leaves out how many reviewers were asked.
+ * "◖ no review yet  ◗ 2 of 30 checks failing" (or "review required" where a branch rule wants
+ * approvals): a pull request's two halves in words, each by its half of the ring. compact (the selected branch row) leaves out how many reviewers were asked.
  */
 export function PrStatusLine({ pr, compact = false, children }: { pr: PullSummary; compact?: boolean; children?: ReactNode }) {
   return (
@@ -123,7 +128,7 @@ export function PrGlyph({ mark, colour, size = 16 }: { mark: MarkLike; colour: s
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="shrink-0">
       <circle cx={c} cy={c} r={size * 0.24} fill={colour} />
-      <PrRingPaths cx={c} cy={c} R={size * 0.4} w={size * 0.13} mark={mark} theme={theme} opts={{ gapPx: 2.2, breakPx: 2.8 }} />
+      <PrRingPaths cx={c} cy={c} R={size * 0.4} w={size * 0.13} mark={mark} theme={theme} neutral={colour} opts={{ gapPx: 2.2, breakPx: 2.8 }} />
     </svg>
   )
 }

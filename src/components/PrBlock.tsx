@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import type { GraphNode, PullSummary } from '../types'
-import { lookupCost } from '../api/pulls'
-import { combineMarks, defaultTipSummary, headMoved, lookupPlan } from '../graph/pulls'
+import { LOOKUP_COST } from '../api/pulls'
+import { branchUnchecked, combineMarks, defaultTipSummary, headMoved, lookupPlan } from '../graph/pulls'
 import type { InspectorPulls } from './NodeInspector'
 import { PrGlyph, PrStatusLine } from './PrGlyph'
 import { prMeta } from './prMark'
@@ -33,13 +33,14 @@ const linkClass = 'text-garden-accent hover:underline'
 export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlockProps) {
   const { view, data } = pulls
   const { index, status, error } = view
-  const ref = { owner: data.owner, repo: data.repo }
   const shown = prs.slice(0, SHOWN)
+  // the tip's branches GitHub did not answer for: whether they have pull requests is not known
+  const unchecked = node.tips.filter((tip) => branchUnchecked(index, tip))
   const isDefaultTip = node.tips.includes(data.defaultBranch)
   const summary = useMemo(() => (isDefaultTip && index ? defaultTipSummary(index) : null), [isDefaultTip, index])
   const tipOf = useMemo(() => new Map(data.branches.map((b) => [b.name, b] as const)), [data])
 
-  // look the shown pull requests up once the tip has been open a moment (no token: 2 or 3 requests each)
+  // look the shown pull requests up once the tip has been open a moment (no token: 3 requests each)
   const { autoLookup, canAutoLookup, lookupErrors } = view
   const due = shown.filter((pr) => lookupPlan(pr, view) === 'auto')
   const dueKey = due.map((pr) => pr.number).join(',')
@@ -91,11 +92,17 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
               <ExternalIcon size={12} />
             </a>
           </p>
-          {summary.notDrawn > 0 && (
-            <p className="text-garden-muted">
-              {summary.notDrawn} from {summary.onlyForks ? 'forks' : 'forks or branches not loaded'} (no branch on the graph, so not drawn)
-            </p>
-          )}
+          {summary.notDrawn > 0 &&
+            (summary.unchecked > 0 ? (
+              <p className="text-garden-muted">
+                {summary.notDrawn} not drawn (forks, branches not loaded, or {summary.unchecked} branch{summary.unchecked === 1 ? '' : 'es'} GitHub did
+                not answer for)
+              </p>
+            ) : (
+              <p className="text-garden-muted">
+                {summary.notDrawn} from {summary.onlyForks ? 'forks' : 'forks or branches not loaded'} (no branch on the graph, so not drawn)
+              </p>
+            ))}
           {summary.mapped > 0 && (
             <p className="text-garden-muted">
               {summary.mapped} from branches on the graph
@@ -105,19 +112,28 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
                 .join(', ')}
             </p>
           )}
-          {index?.truncated && (
-            <p className="text-garden-muted">
-              checked the {index.listed} most recently updated of ~{index.total ?? index.listed}
-            </p>
-          )}
+          {index?.truncated &&
+            (index.source === 'rest' ? (
+              <p className="text-garden-muted">
+                checked the {index.listed} most recently updated of ~{index.total ?? index.listed}
+              </p>
+            ) : (
+              <p className="text-garden-muted">some branches have more open pull requests than were read</p>
+            ))}
         </div>
+      )}
+
+      {unchecked.length > 0 && (
+        <p className="leading-snug text-garden-muted" title={unchecked.join(', ')}>
+          PRs not checked (GitHub did not answer)
+        </p>
       )}
 
       {shown.map((pr) => {
         const mark = combineMarks([pr])
         const branch = tipOf.get(pr.head)
         const plan = lookupPlan(pr, view)
-        const cost = lookupCost(ref)
+        const cost = LOOKUP_COST
         return (
           <div key={pr.number} className="flex flex-col gap-0.5 leading-snug">
             <p className="flex min-w-0 items-center gap-1.5">

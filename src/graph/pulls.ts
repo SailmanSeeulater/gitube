@@ -67,6 +67,11 @@ export function headMoved(branch: Pick<Branch, 'tipSha'>, pr: Pick<PullSummary, 
   return pr.headSha !== '' && pr.headSha !== branch.tipSha
 }
 
+/** The branch is one GitHub did not answer for (GraphQL partial errors): whether it has a pull request is not known. */
+export function branchUnchecked(index: PullIndex | null | undefined, branch: string): boolean {
+  return index?.unchecked.includes(branch) ?? false
+}
+
 /** How many branches have an open pull request in the index. */
 export function branchesWithPrs(index: PullIndex | null | undefined): number {
   return index ? index.byBranch.size : 0
@@ -125,6 +130,8 @@ export interface DefaultTipSummary {
   notDrawn: number
   /** notDrawn is forks alone */
   onlyForks: boolean
+  /** branches GitHub did not answer for: their pull requests are among notDrawn */
+  unchecked: number
   /** pull requests from branches on the graph */
   mapped: number
   /** of those, with failing checks */
@@ -151,6 +158,7 @@ export function defaultTipSummary(index: PullIndex): DefaultTipSummary {
     notDrawn: index.fromForks + index.notOnGraph,
     // GraphQL counts everything not drawn together (total less what the branches have)
     onlyForks: index.source === 'rest' && index.notOnGraph === 0,
+    unchecked: index.unchecked.length,
     mapped: seen.size,
     failing,
     drafts,
