@@ -3,16 +3,19 @@ import { formatClock } from './gardenUtils'
 import { AlertIcon, CloseIcon } from './icons'
 
 /**
- * A fetch failure, bad_file (a saved garden that could not be opened) or export_failed (the image
- * could not be made); for the last two, message says why.
+ * A fetch failure, bad_file (a saved garden that could not be opened), export_failed (the image
+ * could not be made; for these two, message says why) or chunk_failed (a part of the app that loads
+ * on demand could not be fetched, most likely because a deploy replaced it: a reload fixes it).
  */
-export type ErrorCode = GitHubFetchError['code'] | 'bad_file' | 'export_failed'
+export type ErrorCode = GitHubFetchError['code'] | 'bad_file' | 'export_failed' | 'chunk_failed'
 
 export interface ErrorCardProps {
   code: ErrorCode
   message?: string
   resetAt?: string | null
   onAddToken?: () => void
+  /** chunk_failed's action */
+  onReload?: () => void
   onDismiss?: () => void
 }
 
@@ -20,6 +23,7 @@ interface Copy {
   title: string
   hint: string
   tokenAction?: string
+  reloadAction?: string
 }
 
 function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: string | undefined): Copy {
@@ -78,10 +82,16 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
         title: "couldn't save the image",
         hint: message ? `${message}. try again, or save the data as JSON instead.` : 'try again, or save the data as JSON instead.',
       }
+    case 'chunk_failed':
+      return {
+        title: "couldn't load that part of repo-garden",
+        hint: 'the site has probably been updated since this tab was opened. reload to get the new version.',
+        reloadAction: 'reload',
+      }
   }
 }
 
-export default function ErrorCard({ code, message, resetAt, onAddToken, onDismiss }: ErrorCardProps) {
+export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss }: ErrorCardProps) {
   const copy = copyFor(code, resetAt, message)
   return (
     <div
@@ -102,6 +112,15 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onDismis
               className="mt-3 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
             >
               {copy.tokenAction}
+            </button>
+          )}
+          {copy.reloadAction && onReload && (
+            <button
+              type="button"
+              onClick={onReload}
+              className="mt-3 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+            >
+              {copy.reloadAction}
             </button>
           )}
         </div>

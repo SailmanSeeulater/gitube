@@ -1,9 +1,19 @@
 import { useCallback, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { preload } from '../lazy/chunk'
+import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
 import { getTheme } from '../theme/themes'
-import ExportMenu from './ExportMenu'
 import { DownloadIcon, KeyIcon, PaletteIcon, SproutIcon } from './icons'
-import ThemePicker from './ThemePicker'
+import { LazySlot, lazyPart } from './LazyPart'
+
+// both drop-downs load on first open, or as the pointer or focus reaches their button
+const ThemePicker = lazyPart(themePickerChunk)
+const ExportMenu = lazyPart(exportMenuChunk)
+const preloadThemePicker = () => preload(themePickerChunk)
+const preloadExportMenu = () => preload(exportMenuChunk)
+
+/** The drop-downs' box, for their placeholder while they load (each sets its own width). */
+const DROPDOWN_FRAME = 'self-end rounded-xl border border-garden-border bg-garden-panel/95 px-3 py-2.5 shadow-soft backdrop-blur'
 
 export interface TopBarProps {
   value: string
@@ -164,6 +174,8 @@ export default function TopBar({
           ref={themeButtonRef}
           type="button"
           onClick={toggleTheme}
+          onPointerEnter={preloadThemePicker}
+          onFocus={preloadThemePicker}
           aria-haspopup="listbox"
           aria-expanded={themeOpen}
           aria-controls={themeOpen ? themeListId : undefined}
@@ -179,6 +191,8 @@ export default function TopBar({
           ref={exportButtonRef}
           type="button"
           onClick={toggleExport}
+          onPointerEnter={preloadExportMenu}
+          onFocus={preloadExportMenu}
           aria-haspopup="menu"
           aria-expanded={exportOpen}
           aria-controls={exportOpen ? exportMenuId : undefined}
@@ -207,19 +221,23 @@ export default function TopBar({
       </div>
 
       {themeOpen && (
-        <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+        <LazySlot frame={`w-[232px] ${DROPDOWN_FRAME}`} label="loading themes">
+          <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+        </LazySlot>
       )}
 
       {exportOpen && (
-        <ExportMenu
-          id={exportMenuId}
-          canExport={canExport}
-          onExportImage={onExportImage}
-          onExportData={onExportData}
-          onOpenFile={pickFile}
-          onClose={closeExport}
-          buttonRef={exportButtonRef}
-        />
+        <LazySlot frame={`w-[260px] ${DROPDOWN_FRAME}`}>
+          <ExportMenu
+            id={exportMenuId}
+            canExport={canExport}
+            onExportImage={onExportImage}
+            onExportData={onExportData}
+            onOpenFile={pickFile}
+            onClose={closeExport}
+            buttonRef={exportButtonRef}
+          />
+        </LazySlot>
       )}
 
       {tokenOpen && (

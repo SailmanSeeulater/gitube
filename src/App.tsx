@@ -2,18 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
-import { buildScore } from './graph/score'
 import { findWeeds, type WeedReport } from './graph/weeds'
-import TimelapseBar from './components/TimelapseBar'
-import GardenBattle from './components/GardenBattle'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
-import { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from './export/gardenFile'
-import { canvasToPng, composeGraphImage, downloadBlob } from './export/image'
+import { battleChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
+import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { useRepoData } from './hooks/useRepoData'
-import { useGardenStore } from './store/useGardenStore'
+import { useGardenStore, type LayoutMode } from './store/useGardenStore'
 import { applyTheme } from './theme/applyTheme'
 import { readStoredThemeId } from './theme/storage'
 import { THEME_STORAGE_KEY } from './theme/themes'
@@ -26,10 +23,21 @@ import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
 import NodeInspector from './components/NodeInspector'
 import { staleBranchNames } from './components/gardenUtils'
+import { LazySlot, lazyPart, reloadPage } from './components/LazyPart'
 import { useMetroView } from './components/useMetroView'
 
 /** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
 const PANEL_INSET = 324
+
+// loaded when first opened (see lazy/parts.ts)
+const TimelapseBar = lazyPart(timelapseChunk)
+const GardenBattle = lazyPart(battleChunk)
+
+/** The time-lapse controls' placeholder while they load, where they will be (and the status strip was). */
+const TIMELAPSE_FRAME =
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 px-3 py-2 shadow-soft backdrop-blur'
+/** The battle's placeholder: the battle covers the app, so its placeholder does. */
+const BATTLE_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-garden-bg'
 
 /** GitHub owner and repo names are case-insensitive. */
 function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
@@ -48,6 +56,8 @@ export default function App() {
   /** A garden opened from a saved file; it stands in for fetched data until the next Grow. */
   const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
+  /** a part of the app that loads on demand could not be fetched (a deploy replaced it): offer a reload */
+  const [chunkFailed, setChunkFailed] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
 
@@ -166,30 +176,58 @@ export default function App() {
     if (!timelapseOpen || !data || !graph) return null
     return buildTimeline(graph, viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden))
   }, [timelapseOpen, data, graph, viewMode, effectiveHidden])
-  // the same history as notes, for the music box (pitches follow the palette's branch order)
-  const score = useMemo(
-    () => (timeline && data && graph ? buildScore(graph, timeline, data.branches.map((b) => b.name), data.defaultBranch) : null),
-    [timeline, data, graph],
-  )
   const gardenTimelapse = useMemo<GardenTimelapse | null>(
     () => (timeline && data ? { timeline, progress: timelapseProgress, title: `${data.owner}/${data.repo}` } : null),
     [timeline, data],
   )
-  const openTimelapse = useCallback(() => setTimelapseOpen(true), [])
+  const openTimelapse = useCallback(() => {
+    // the garden goes back to its first commit at once, while the controls may still be loading
+    timelapseProgress.current = 0
+    setTimelapseOpen(true)
+  }, [])
   const closeTimelapse = useCallback(() => {
     setTimelapseOpen(false)
     timelapseProgress.current = 1
   }, [])
+  const timelapseFailed = useCallback(() => {
+    closeTimelapse()
+    setChunkFailed(true)
+  }, [closeTimelapse])
   // a different repo starts with the whole garden on show
   useEffect(() => closeTimelapse(), [data, closeTimelapse])
   const getGraphCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
-  const timelapseFileName = useCallback(
-    (ext: string) => (data ? gardenFileName(data, ext, new Date(), 'timelapse') : `repo-garden-timelapse.${ext}`),
-    [data],
-  )
 
-  // metro mode: the straight layout of exactly this graph (null in organic mode)
-  const metro = useMetroView(graph, data ?? null, viewMode, layoutMode === 'metro')
+  // ---- layouts ----
+  // Metro's engine is a chunk of its own, loaded once metro is picked (or was the saved layout).
+  // Until it is in, the canvas keeps the layout it had and then tweens across as before; a garden
+  // about to appear for the first time waits for it, so a saved metro layout never flashes organic.
+  const metroWanted = layoutMode === 'metro'
+  const metroEngine = useChunk(metroChunk, metroWanted)
+  const metroLayout = metroWanted && metroEngine.status === 'ready' ? metroEngine.value.metroLayout : null
+  const drawnLayoutRef = useRef<LayoutMode>(metroWanted ? 'organic' : layoutMode)
+  /** the layout on the canvas: layoutMode, except that metro waits for its engine */
+  const drawnLayout: LayoutMode = metroWanted && !metroLayout ? drawnLayoutRef.current : layoutMode
+  useEffect(() => {
+    drawnLayoutRef.current = drawnLayout
+  }, [drawnLayout])
+  const gardenShownRef = useRef(false)
+  const holdGarden = metroWanted && !metroLayout && metroEngine.status !== 'failed' && !gardenShownRef.current
+  const showGarden = graph !== null && !holdGarden
+  useEffect(() => {
+    gardenShownRef.current = showGarden
+  }, [showGarden])
+  // The engine could not be loaded: the switch goes back to the layout on the canvas and the reload
+  // card says why. Not saved, so the saved layout stays metro for the reload; picking metro again
+  // tries again.
+  useEffect(() => {
+    if (!metroWanted || metroEngine.status !== 'failed') return
+    const shown = drawnLayoutRef.current
+    useGardenStore.setState({ layoutMode: shown === 'metro' ? 'organic' : shown })
+    setChunkFailed(true)
+  }, [metroWanted, metroEngine.status])
+
+  // metro mode: the straight layout of exactly this graph (null in the other layouts)
+  const metro = useMetroView(graph, data ?? null, viewMode, metroLayout)
 
   // Branch colours in the active theme. Kept out of the graph memo so a theme switch is a repaint:
   // the graph, its layout and the labels stay put. Covers every branch, hidden ones included.
@@ -220,6 +258,7 @@ export default function App() {
       }
       setInvalidUrl(false)
       setFileError(null)
+      setChunkFailed(false)
       setOpened(null)
       resetForNewRepo()
       if (sameRepo(repoRef, parsed)) {
@@ -260,6 +299,10 @@ export default function App() {
     [clearSelection],
   )
   const endBattle = useCallback(() => setBattleRef(null), [])
+  const battleFailed = useCallback(() => {
+    setBattleRef(null)
+    setChunkFailed(true)
+  }, [])
 
   const showContributor = useCallback(
     (key: string) => {
@@ -273,38 +316,57 @@ export default function App() {
   // ---- save and open ----
   const [exportError, setExportError] = useState<string | null>(null)
 
+  /**
+   * The export code (see lazy/parts.ts), or null and the reload card when it cannot be loaded. The
+   * save menu brings it along, so from the menu this resolves at once.
+   */
+  const loadExporters = useCallback(async () => {
+    try {
+      return await exportersChunk.load()
+    } catch {
+      setChunkFailed(true)
+      return null
+    }
+  }, [])
+
   /** The graph canvas as it is on screen, captioned with the repo and what the view shows. */
   const exportImage = useCallback(async () => {
     const canvas = canvasHostRef.current?.querySelector('canvas')
     if (!data || !canvas) return
+    const kit = await loadExporters()
+    if (!kit) return
     const commitCount = Object.keys(data.commits).length
-    const parts = [viewMode, layoutMode, `${data.branches.length} branches`, `${commitCount} commits`]
+    const parts = [viewMode, drawnLayout, `${data.branches.length} branches`, `${commitCount} commits`]
     if (selectedBranch !== null) parts.push(`branch ${selectedBranch}`)
     const person = selectedContributor !== null ? contributors?.list.find((c) => c.key === selectedContributor) : undefined
     if (person) parts.push(`commits by ${person.name}`)
     const day = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     try {
-      const image = composeGraphImage(canvas, theme, {
+      const image = kit.composeGraphImage(canvas, theme, {
         title: `${data.owner}/${data.repo}`,
         detail: parts.join(' · '),
         credit: `repo-garden · ${day}`,
       })
-      downloadBlob(await canvasToPng(image), gardenFileName(data, 'png'))
+      kit.downloadBlob(await kit.canvasToPng(image), kit.gardenFileName(data, 'png'))
       setExportError(null)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : String(err))
     }
-  }, [data, viewMode, layoutMode, selectedBranch, selectedContributor, contributors, theme])
+  }, [data, loadExporters, viewMode, drawnLayout, selectedBranch, selectedContributor, contributors, theme])
 
-  const exportData = useCallback(() => {
+  const exportData = useCallback(async () => {
     if (!data) return
-    downloadBlob(new Blob([serializeGarden(data)], { type: 'application/json' }), gardenFileName(data, 'json'))
-  }, [data])
+    const kit = await loadExporters()
+    if (!kit) return
+    kit.downloadBlob(new Blob([kit.serializeGarden(data)], { type: 'application/json' }), kit.gardenFileName(data, 'json'))
+  }, [data, loadExporters])
 
   const openFile = useCallback(
     async (file: File) => {
+      const kit = await loadExporters()
+      if (!kit) return
       try {
-        const saved = parseGardenFile(await file.text())
+        const saved = kit.parseGardenFile(await file.text())
         resetForNewRepo()
         setOpened({ data: saved.data, savedAt: saved.savedAt })
         // no fetch while a file is open; Grow (the input now names the repo) loads it live
@@ -313,10 +375,10 @@ export default function App() {
         setInvalidUrl(false)
         setFileError(null)
       } catch (err) {
-        setFileError(err instanceof GardenFileError ? err.message : 'the file could not be read.')
+        setFileError(err instanceof kit.GardenFileError ? err.message : 'the file could not be read.')
       }
     },
-    [resetForNewRepo],
+    [resetForNewRepo, loadExporters],
   )
 
   // a saved .json dropped anywhere on the page opens it
@@ -348,6 +410,7 @@ export default function App() {
       setInvalidUrl(false)
       setFileError(null)
       setExportError(null)
+      setChunkFailed(false)
       setTokenOpen(false)
       setBattleRef(null)
     }
@@ -356,13 +419,14 @@ export default function App() {
   }, [clearSelection])
 
   const showEmpty = !graph && !isFetching && !error && !invalidUrl && fileError === null
-  const showGrowing = !graph && isFetching && repoRef !== null
+  // also while a first garden waits for the metro engine (see layouts)
+  const showGrowing = (!graph && isFetching && repoRef !== null) || (graph !== null && holdGarden)
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
       {/* The canvas stops short of the side panel so zoom-to-fit never hides nodes behind it. */}
       <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
-        {graph && (
+        {graph && showGarden && (
           <Garden
             graph={graph}
             palette={palette}
@@ -375,7 +439,7 @@ export default function App() {
             focus={focus}
             timelapse={gardenTimelapse}
             thorns={weeds?.thorns ?? null}
-            garden={layoutMode === 'garden'}
+            garden={drawnLayout === 'garden'}
           />
         )}
       </div>
@@ -384,7 +448,7 @@ export default function App() {
       {showGrowing && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="animate-pulse text-[13px] text-garden-muted">
-            growing {repoRef.owner}/{repoRef.repo}…
+            growing {shownOwner}/{shownRepo}…
           </p>
         </div>
       )}
@@ -405,26 +469,31 @@ export default function App() {
       />
 
       {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
-      {!invalidUrl && fileError !== null && <ErrorCard code="bad_file" message={fileError} onDismiss={() => setFileError(null)} />}
-      {!invalidUrl && fileError === null && exportError !== null && (
+      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
+      {!invalidUrl && !chunkFailed && fileError !== null && (
+        <ErrorCard code="bad_file" message={fileError} onDismiss={() => setFileError(null)} />
+      )}
+      {!invalidUrl && !chunkFailed && fileError === null && exportError !== null && (
         <ErrorCard code="export_failed" message={exportError} onDismiss={() => setExportError(null)} />
       )}
-      {!invalidUrl && fileError === null && exportError === null && error && !isFetching && (
+      {!invalidUrl && !chunkFailed && fileError === null && exportError === null && error && !isFetching && (
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
       {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} onBattle={startBattle} />}
 
-      {timelapseOpen && graph ? (
-        <TimelapseBar
-          onClose={closeTimelapse}
-          timeline={timeline}
-          score={score}
-          progress={timelapseProgress}
-          getCanvas={getGraphCanvas}
-          fileName={timelapseFileName}
-          besidePanel={panelOpen}
-        />
+      {timelapseOpen && graph && data ? (
+        <LazySlot frame={TIMELAPSE_FRAME} label="loading the time-lapse" onFailed={timelapseFailed}>
+          <TimelapseBar
+            onClose={closeTimelapse}
+            graph={graph}
+            data={data}
+            timeline={timeline}
+            progress={timelapseProgress}
+            getCanvas={getGraphCanvas}
+            besidePanel={panelOpen}
+          />
+        </LazySlot>
       ) : (
         <StatusStrip
           data={data}
@@ -448,16 +517,18 @@ export default function App() {
       )}
 
       {battleRef && data && (
-        <GardenBattle
-          a={data}
-          b={challenger.data}
-          bRef={battleRef}
-          bFetching={challenger.isFetching}
-          bError={challenger.error}
-          theme={theme}
-          onRetry={challenger.refetch}
-          onClose={endBattle}
-        />
+        <LazySlot frame={BATTLE_FRAME} label="setting up the battle" onFailed={battleFailed}>
+          <GardenBattle
+            a={data}
+            b={challenger.data}
+            bRef={battleRef}
+            bFetching={challenger.isFetching}
+            bError={challenger.error}
+            theme={theme}
+            onRetry={challenger.refetch}
+            onClose={endBattle}
+          />
+        </LazySlot>
       )}
     </div>
   )

@@ -1,23 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { MusicBox } from '../audio/musicBox'
-import { notesBetween, pickNotes, type Score } from '../graph/score'
+import { buildScore, notesBetween, pickNotes } from '../graph/score'
 import { clockAt, type Timeline } from '../graph/timeline'
+import { gardenFileName } from '../export/gardenFile'
 import { downloadBlob } from '../export/image'
 import { pickVideoType, recordCanvas, type CanvasRecording } from '../export/video'
+import type { Graph, RepoData } from '../types'
 import { CloseIcon, MuteIcon, PauseIcon, PlayIcon, RecordIcon, SoundIcon, StopIcon } from './icons'
 
 export interface TimelapseBarProps {
   onClose: () => void
+  /** the graph on show */
+  graph: Graph
+  /** the repo it was built from: its branches give the music box its pitches, its name the recording's */
+  data: RepoData
   /** of the graph on show */
   timeline: Timeline | null
-  /** the same history as notes, for the music box */
-  score: Score | null
   /** 0..1, shared with Garden, which reads it every frame */
   progress: RefObject<number>
   /** the graph canvas to record */
   getCanvas: () => HTMLCanvasElement | null
-  /** file name for a recording with this extension */
-  fileName: (ext: string) => string
   /** the side panel is open: keep clear of it */
   besidePanel: boolean
 }
@@ -62,7 +64,12 @@ function clock(ms: number): string {
  * box (each commit a note as it appears), and recording the canvas, with its sound, to a video
  * file. Unmounting throws away an unfinished recording and closes the audio.
  */
-export default function TimelapseBar({ onClose, timeline, score, progress, getCanvas, fileName, besidePanel }: TimelapseBarProps) {
+export default function TimelapseBar({ onClose, graph, data, timeline, progress, getCanvas, besidePanel }: TimelapseBarProps) {
+  // the same history as notes, for the music box (pitches follow the palette's branch order)
+  const score = useMemo(
+    () => (timeline ? buildScore(graph, timeline, data.branches.map((b) => b.name), data.defaultBranch) : null),
+    [graph, timeline, data],
+  )
   const [playing, setPlaying] = useState(true)
   const [shown, setShown] = useState(0)
   const [length, setLength] = useState<(typeof LENGTHS)[number]>(20)
@@ -164,7 +171,7 @@ export default function TimelapseBar({ onClose, timeline, score, progress, getCa
     setRecording(null)
     setPlaying(false)
     try {
-      downloadBlob(await rec.finish(), fileName(rec.type.ext))
+      downloadBlob(await rec.finish(), gardenFileName(data, rec.type.ext, new Date(), 'timelapse'))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

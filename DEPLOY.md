@@ -138,3 +138,4 @@ copy it up and reload nginx by hand, as in step 3.
 | `Host key verification failed` | The VPS was rebuilt. Update `VPS_HOST_KEY` in the workflow from `ssh-keyscan -t ed25519 146.235.217.254`. |
 | Smoke test fails on the first push | DNS or certbot (steps 1 and 3) not done yet. The files are already synced, so rerun the job afterwards. |
 | Graph never loads, console shows a CSP error | Something new is fetched from another host. Add it to `connect-src` in the headers snippet. |
+| "couldn't load that part of repo-garden" right after a deploy | Expected in a tab opened before the deploy. The optional parts (time-lapse, battle, metro, themes, export, people and weeds tabs) load on first use (`src/lazy/parts.ts`), and the rsync `--delete` removed the old build's files. Reloading fixes it, and the message offers the reload. |

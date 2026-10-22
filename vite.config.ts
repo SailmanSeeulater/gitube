@@ -43,8 +43,27 @@ function themeBoot(): Plugin {
   }
 }
 
+/**
+ * The large libraries get chunks of their own, so a deploy that only changes the app (most of them)
+ * leaves them cached (assets/ is served immutable for a year; see deploy/nginx). The first visit
+ * downloads the same bytes either way, in a few parallel files instead of one. The optional parts
+ * of the app are split off separately, by dynamic import() (see src/lazy/parts.ts).
+ */
+const VENDOR_CHUNKS = [
+  // React and the state libraries built on it
+  { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler|@tanstack|zustand)[\\/]/, priority: 2 },
+  // the canvas: react-force-graph-2d and everything it pulls in (force-graph, d3-*, bezier-js, ...)
+  { name: 'force-graph', test: /node_modules[\\/]react-force-graph-2d[\\/]/, priority: 1 },
+  // the GitHub client and its dependencies
+  { name: 'octokit', test: /node_modules[\\/]@octokit[\\/]/, priority: 1 },
+]
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), themeBoot()],
+  build: {
+    // the entry stays assets/index-<hash>.js, which the deploy smoke test looks for
+    rolldownOptions: { output: { codeSplitting: { groups: VENDOR_CHUNKS } } },
+  },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
