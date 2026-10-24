@@ -90,10 +90,16 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             "sudo find '$WEB_ROOT/assets' -type f -mtime +30 -delete"
 
-      # The page, the right build, and the security policy that lets it reach GitHub.
+      # The page, the right build, and the security policy that lets it reach GitHub and Umami.
+      # The headers snippet goes to the VPS by hand (DEPLOY.md, step 6), so a merge that came before
+      # it fails here rather than leaving the tracker silently blocked.
       - name: Smoke test
         run: |
           curl -fsS "$SITE_URL/" | grep -q "<title>repo-garden</title>"
           asset=$(grep -o '/assets/index-[A-Za-z0-9_-]*\.js' dist/index.html | head -1)
           curl -fsSI "$SITE_URL$asset" | grep -qi "cache-control: public, max-age=31536000, immutable"
           curl -fsSI "$SITE_URL/" | grep -i "content-security-policy" | grep -q "https://api.github.com"
+          curl -fsSI "$SITE_URL/" | grep -i "content-security-policy" | grep -q "https://stats.latesailor.dev" || {
+            echo "::error::The live Content-Security-Policy does not allow https://stats.latesailor.dev. Install deploy/nginx/repo-garden-headers.conf on the VPS (DEPLOY.md, step 6), then rerun this job."
+            exit 1
+          }

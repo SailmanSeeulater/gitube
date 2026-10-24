@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App'
+import { initAnalytics } from './analytics/umami'
 import { useGardenStore } from './store/useGardenStore'
 import { applyTheme } from './theme/applyTheme'
 import { getTheme } from './theme/themes'
@@ -23,3 +24,6 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+// Umami's tracker, once the page has loaded: only in a production build with a website ID set.
+initAnalytics()

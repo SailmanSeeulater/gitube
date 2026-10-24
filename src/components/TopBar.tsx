@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { track } from '../analytics/umami'
 import { preload } from '../lazy/chunk'
 import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
@@ -92,6 +93,17 @@ export default function TopBar({
     setThemeOpen(false)
     if (refocus) themeButtonRef.current?.focus()
   }, [])
+  // A theme switch counts once, as the picker closes (by any path): the arrow keys preview each
+  // theme on the way, and a click keeps the list open for comparing. Both ends read the store, so
+  // this hangs on themeOpen alone, and a theme synced from another tab while it is shut is ignored.
+  useEffect(() => {
+    if (!themeOpen) return
+    const opened = useGardenStore.getState().themeId
+    return () => {
+      const theme = useGardenStore.getState().themeId
+      if (theme !== opened) track('theme-switch', { theme })
+    }
+  }, [themeOpen])
   const toggleExport = () => {
     if (!exportOpen && tokenOpen) onToggleToken()
     setThemeOpen(false)
@@ -135,7 +147,12 @@ export default function TopBar({
   }, [dropdown, closeTheme, closeExport])
 
   const commitToken = () => {
-    if (dirty) setToken(draft)
+    if (!dirty) return
+    // Enter commits and then blurs, which commits again before a re-render: the store tells whether
+    // this one adds a token. The event carries nothing of it, and clearing it sends nothing.
+    const added = draft.trim() !== '' && draft.trim() !== useGardenStore.getState().token
+    setToken(draft)
+    if (added) track('token-added')
   }
   const clearToken = () => {
     setDraft('')

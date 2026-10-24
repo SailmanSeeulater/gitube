@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { track } from '../analytics/umami'
 import { readSound, writeSound } from '../audio/context'
 import { MusicBox } from '../audio/musicBox'
 import { buildScore, notesBetween, pickNotes } from '../graph/score'
@@ -174,6 +175,8 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
     setPlaying(false)
     try {
       downloadBlob(await rec.finish(), gardenFileName(data, rec.type.ext, new Date(), 'timelapse'))
+      // 'webm' counts the time-lapse video export, whatever the browser recorded (Safari's is mp4)
+      track('export', { format: 'webm' })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

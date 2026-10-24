@@ -163,6 +163,35 @@ legend) and one inspector (hover a repo or a day for details).
 - **Lazy loading**: person mode is its own chunk in `lazy/parts.ts`, so the repo garden's first
   load does not get heavier.
 
+### Analytics
+
+Person mode reports through the repo garden's Umami tracker, under the README's "Analytics" rules.
+Every event goes through `track()` in `src/analytics/umami.ts`: add the new names to its
+`AnalyticsEvent` union, and never call `window.umami` directly.
+
+| Event | Data |
+| --- | --- |
+| `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached` and `token` as in repo mode; `login` only for a live fetch without a token |
+| `view-switch` | `view`: `garden`, `lines` or `constellation` |
+| `poster-export` | none |
+| `timelapse-play` | none (the repo garden's event, reused) |
+
+- `grow` counts requests, as in repo mode (README, "Analytics"): it fires once per grow or refresh
+  request for a profile (the input, an example, a `?user=` share link, the refresh button), when
+  its data has arrived, from GitHub or the cache. A token change, a background refetch or a view
+  switch sends none by itself. It first fires in Phase 4, when the life garden can show a profile;
+  Phases 1 and 2 only build and test the rule for its data.
+- That rule is pure: `source` and `login` are decided from the fetch result. `login` is the only
+  name a person-mode event carries, and only when the profile was fetched live without a token.
+  Never from `profileCache.ts`: a cached profile may have been fetched with a token since removed.
+  Decide `login` in that rule, as `growEventData` in `src/analytics/useRepoAnalytics.ts` does for
+  repo mode; `track()` dropping `login` under a token is only the backstop.
+- Never send a private repo name, even while the privacy toggle reveals them on screen. No event
+  carries a repo name at all.
+- Shared controls keep sending the repo garden's events in person mode: `theme-switch` and
+  `token-added` from the top bar, `share-copy` if the copy-link button is reused, and `export`
+  `{ format: 'webm' }` from the reused time-lapse recording. They carry no names either way.
+
 ## 7. Phases
 
 ### Phase 0 — Branch, contracts, input, share link
@@ -174,18 +203,23 @@ legend) and one inspector (hover a repo or a day for details).
 - [ ] `npm test` and `npm run typecheck` pass.
 - [ ] Typing `SailmanSeeulater` or opening `?user=SailmanSeeulater` shows the person placeholder;
       `?repo=vitejs/vite` still grows the repo garden exactly as before.
+- [ ] Sends no new analytics events: the placeholder sends none, and repo mode's are unchanged.
 
 ### Phase 1 — Tier 1 fetcher (no token) and cache
 - `api/profile.ts`: `fetchProfileRest(login, opts)` with progress events, abort, rate-limit
   reading and error codes, reusing the Octokit setup from `api/github.ts` where it can.
 - Recorded fixtures for a real user, offline tests on them.
 - `api/profileCache.ts` with tests.
+- The pure rule for `grow`'s data (section 6, Analytics), with tests. Nothing calls `track()` yet.
 
 **Done when**
 - [ ] Tests cover: normal user, user with 0 public repos, organization (`not_a_user`), 404,
       rate limited, more than 100 repos (pagination).
 - [ ] `npx tsx scripts/smoke-profile.ts <login>` prints repo count, request count and the span.
 - [ ] A second load within 24 h spends no requests.
+- [ ] Tests of the `grow` data rule: `mode: 'person'`, `source: 'rest'`; `login` only for a live
+      fetch without a token, never for a profile from `profileCache.ts`.
+- [ ] Sends no new analytics events: nothing shows a profile until Phase 4.
 
 ### Phase 2 — Tier 2 fetcher (token, GraphQL)
 - Verify the schema with one live query first (section 2) and record fixtures.
@@ -198,6 +232,9 @@ legend) and one inspector (hover a repo or a day for details).
       repo whose contributions needed a second page.
 - [ ] The smoke script with a token prints total contributions per year and matches the numbers on
       the user's github.com profile within the known limits.
+- [ ] Tests of the `grow` data rule: `source: 'graphql'`, and `source: 'rest'` after a fallback;
+      neither carries `login` (a token is set).
+- [ ] Still sends no new analytics events.
 
 ### Phase 3 — Timeline model
 - `profile/timeline.ts` exactly as section 4, pure and tested.
@@ -205,6 +242,7 @@ legend) and one inspector (hover a repo or a day for details).
 **Done when**
 - [ ] Tests on hand-made fixtures cover: span merging, dormancy, a language switch, streaks,
       tier 1 vs tier 2 inputs, an empty profile, and determinism (same input, same output).
+- [ ] Sends no new analytics events (the model is pure).
 
 ### Phase 4 — Life garden view
 - Canvas view, side panel, inspector, legend with the data limits, privacy toggle.
@@ -214,6 +252,9 @@ legend) and one inspector (hover a repo or a day for details).
 - [ ] `SailmanSeeulater` renders with and without a token, in a light and a dark theme.
 - [ ] Hover shows repo name (or "private repo"), born date, active spans, commits, stars.
 - [ ] Private names are hidden by default and never appear in the URL.
+- [ ] `grow` with `mode: 'person'` fires once per grow or refresh request for a profile, when its
+      data has arrived (as in repo mode), with `source: 'rest'` or `source: 'graphql'`, with and
+      without a token; with a token it carries no name. A token change or a background refetch sends none.
 
 ### Phase 5 — Time-lapse, poster export, share
 - Year-by-year growth with play and scrub, WebM recording, PNG poster export.
@@ -221,6 +262,8 @@ legend) and one inspector (hover a repo or a day for details).
 **Done when**
 - [ ] A recording plays from the join year to today and respects the privacy toggle.
 - [ ] Opening a copied `?user=…&view=garden` link reproduces the view.
+- [ ] `timelapse-play` fires when the person time-lapse opens, and `poster-export` when a poster is
+      saved.
 
 ### Phase 6 — Life lines and Constellation views
 - The two remaining views from section 5, with a view switcher like the layout switcher.
@@ -228,6 +271,7 @@ legend) and one inspector (hover a repo or a day for details).
 **Done when**
 - [ ] All three views share the panel, inspector, theme, time-lapse and exports.
 - [ ] Each view's layout code is pure and has tests for placement determinism.
+- [ ] `view-switch` fires with `view`: `garden`, `lines` or `constellation` when the view changes.
 
 ### Phase 7 — Polish and ship
 - Error and empty states, request counter and "add a token" nudge in person mode, README section,
@@ -236,7 +280,10 @@ legend) and one inspector (hover a repo or a day for details).
 
 **Done when**
 - [ ] Lighthouse-style check: the repo garden's first-load size is unchanged (person mode is lazy).
-- [ ] README documents person mode, both tiers and their limits.
+- [ ] README documents person mode, both tiers and their limits, and lists its events under
+      Analytics.
+- [ ] All person-mode events show up in Umami from the live site, and with a token none carries a
+      name (no `login`, no repo).
 - [ ] PR open, CI green.
 
 ## 8. Risks
