@@ -12,6 +12,8 @@ import { preload } from './lazy/chunk'
 import { battleChunk, contributorsTabChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
 import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
+import { track } from './analytics/umami'
+import { useRepoAnalytics } from './analytics/useRepoAnalytics'
 import { useRepoData } from './hooks/useRepoData'
 import { usePulls } from './hooks/usePulls'
 import { useGardenStore, type LayoutMode } from './store/useGardenStore'
@@ -143,6 +145,19 @@ export default function App() {
   const prMarksKnown = useMemo(() => [...marks.values()].some((m) => m.review !== 'unknown' || m.checks !== 'unknown'), [marks])
   const pullsInvalidate = pulls.invalidate
 
+  // grow, fetch-error and pr-overlay (the click events are sent where each click is handled)
+  const noteGrow = useRepoAnalytics({
+    data: fetched.data,
+    fetchedAt: fetched.fetchedAt,
+    cachedAt: fetched.cachedAt,
+    isFetching,
+    error,
+    pullsStatus: pulls.status,
+    pullsIndex: pulls.index,
+    prMarkCount: marks.size,
+    initialRepo: initialShare.repo,
+  })
+
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
   // merged branches to clear away, and thorny ones drifting far from the default branch
@@ -213,6 +228,7 @@ export default function App() {
     // the garden goes back to its first commit at once, while the controls may still be loading
     timelapseProgress.current = 0
     setTimelapseOpen(true)
+    track('timelapse-play')
   }, [])
   const closeTimelapse = useCallback(() => {
     setTimelapseOpen(false)
@@ -295,6 +311,8 @@ export default function App() {
       setChunkFailed(false)
       setOpened(null)
       resetForNewRepo()
+      // a fetch already in flight for the same repo answers this Grow too
+      noteGrow(parsed)
       if (sameRepo(repoRef, parsed)) {
         if (!isFetching) {
           // its pull requests are read again once the graph is in
@@ -305,7 +323,7 @@ export default function App() {
         setRepoRef(parsed)
       }
     },
-    [repoRef, isFetching, refetch, resetForNewRepo, pullsInvalidate],
+    [repoRef, isFetching, refetch, resetForNewRepo, pullsInvalidate, noteGrow],
   )
 
   const submit = useCallback(() => grow(input), [grow, input])
@@ -322,9 +340,10 @@ export default function App() {
   const openToken = useCallback(() => setTokenOpen(true), [])
   /** the status strip's refresh (and the inspector's): the graph from GitHub, then its pull requests */
   const refresh = useCallback(() => {
+    if (repoRef) noteGrow(repoRef)
     pullsInvalidate()
     refetch()
-  }, [pullsInvalidate, refetch])
+  }, [repoRef, noteGrow, pullsInvalidate, refetch])
   const inspectorPulls = useMemo<InspectorPulls | null>(
     () =>
       opened || !fetched.data
@@ -344,6 +363,7 @@ export default function App() {
       // a selection made for one repo means nothing to the other
       clearSelection()
       setBattleRef(ref)
+      track('battle-start')
       return true
     },
     [clearSelection],
@@ -407,6 +427,7 @@ export default function App() {
       })
       kit.downloadBlob(await kit.canvasToPng(image), kit.gardenFileName(data, 'png'))
       setExportError(null)
+      track('export', { format: 'png' })
     } catch (err) {
       setExportError(err instanceof Error ? err.message : String(err))
     }
@@ -417,6 +438,7 @@ export default function App() {
     const kit = await loadExporters()
     if (!kit) return
     kit.downloadBlob(new Blob([kit.serializeGarden(data)], { type: 'application/json' }), kit.gardenFileName(data, 'json'))
+    track('export', { format: 'json' })
   }, [data, loadExporters])
 
   const openFile = useCallback(
@@ -432,6 +454,7 @@ export default function App() {
         setInput(`${saved.data.owner}/${saved.data.repo}`)
         setInvalidUrl(false)
         setFileError(null)
+        track('export', { format: 'garden-file' })
       } catch (err) {
         setFileError(err instanceof kit.GardenFileError ? err.message : 'the file could not be read.')
       }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Branch, PullSummary, RepoData, ViewMode } from '../types'
+import { track } from '../analytics/umami'
 import type { ContributorIndex } from '../graph/contributors'
 import { branchPrs, branchUnchecked, combineMarks, countPulls, lookupPlan } from '../graph/pulls'
 import type { WeedReport } from '../graph/weeds'
@@ -99,7 +100,10 @@ function CopyLinkButton() {
       return
     }
     done.then(
-      () => setState('copied'),
+      () => {
+        setState('copied')
+        track('share-copy')
+      },
       () => setState('failed'),
     )
   }
@@ -445,6 +449,14 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
   const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
   // metro picked, its engine still on the way (App loads it and keeps the old layout until then)
   const metroLoading = useChunk(metroChunk, false).status === 'loading' && layoutMode === 'metro'
+  const pickView = (view: ViewMode) => {
+    if (view !== viewMode) track('view-mode', { view })
+    setViewMode(view)
+  }
+  const pickLayout = (layout: LayoutMode) => {
+    if (layout !== layoutMode) track('layout-switch', { layout })
+    setLayoutMode(layout)
+  }
   // The people tab mounts once its code is in, instead of suspending on the way: a share link's
   // ?by= selects the tab as soon as the repo is in, which from the repo cache can be before its
   // code, and Suspense would then hold the placeholder for its 300 ms fallback throttle as well.
@@ -540,14 +552,14 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
 
       <div className="flex gap-2 px-3 py-2.5">
         <div className="flex-1">
-          <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
+          <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={pickView} />
         </div>
         <div className="flex-[1.45]" title="organic: free physics. metro: straight lanes, like a tube map. garden: grown upward as plants">
           <Segmented
             ariaLabel="Layout"
             options={LAYOUT_OPTIONS}
             value={layoutMode}
-            onChange={setLayoutMode}
+            onChange={pickLayout}
             onIntent={preloadLayout}
             pending={metroLoading ? 'metro' : null}
           />
