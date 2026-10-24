@@ -1,23 +1,26 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { readSound, writeSound } from '../audio/context'
 import { MusicBox } from '../audio/musicBox'
-import { notesBetween, pickNotes, type Score } from '../graph/score'
+import { buildScore, notesBetween, pickNotes } from '../graph/score'
 import { clockAt, type Timeline } from '../graph/timeline'
+import { gardenFileName } from '../export/gardenFile'
 import { downloadBlob } from '../export/image'
 import { pickVideoType, recordCanvas, type CanvasRecording } from '../export/video'
+import type { Graph, RepoData } from '../types'
 import { CloseIcon, MuteIcon, PauseIcon, PlayIcon, RecordIcon, SoundIcon, StopIcon } from './icons'
 
 export interface TimelapseBarProps {
   onClose: () => void
+  /** the graph on show */
+  graph: Graph
+  /** the repo it was built from: its branches give the music box its pitches, its name the recording's */
+  data: RepoData
   /** of the graph on show */
   timeline: Timeline | null
-  /** the same history as notes, for the music box */
-  score: Score | null
   /** 0..1, shared with Garden, which reads it every frame */
   progress: RefObject<number>
   /** the graph canvas to record */
   getCanvas: () => HTMLCanvasElement | null
-  /** file name for a recording with this extension */
-  fileName: (ext: string) => string
   /** the side panel is open: keep clear of it */
   besidePanel: boolean
 }
@@ -28,24 +31,8 @@ const LENGTHS = [10, 20, 40, 60] as const
 const HOLD_MS = 1500
 /** Notes struck in one frame at most (pickNotes thins a burst of commits to this). */
 const NOTES_PER_FRAME = 4
-/** localStorage key of the music box switch. */
-const SOUND_STORAGE_KEY = 'repo-garden:sound'
-
-function readSound(): boolean {
-  try {
-    return localStorage.getItem(SOUND_STORAGE_KEY) === 'on'
-  } catch {
-    return false
-  }
-}
-
-function writeSound(on: boolean): void {
-  try {
-    localStorage.setItem(SOUND_STORAGE_KEY, on ? 'on' : 'off')
-  } catch {
-    // storage unavailable: the switch still holds for this visit
-  }
-}
+/** Presses that count as a user gesture for starting audio. */
+const GESTURES = ['click', 'touchend', 'keydown'] as const
 
 function shortDate(ms: number): string {
   return Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : ''
@@ -62,7 +49,12 @@ function clock(ms: number): string {
  * box (each commit a note as it appears), and recording the canvas, with its sound, to a video
  * file. Unmounting throws away an unfinished recording and closes the audio.
  */
-export default function TimelapseBar({ onClose, timeline, score, progress, getCanvas, fileName, besidePanel }: TimelapseBarProps) {
+export default function TimelapseBar({ onClose, graph, data, timeline, progress, getCanvas, besidePanel }: TimelapseBarProps) {
+  // the same history as notes, for the music box (pitches follow the palette's branch order)
+  const score = useMemo(
+    () => (timeline ? buildScore(graph, timeline, data.branches.map((b) => b.name), data.defaultBranch) : null),
+    [graph, timeline, data],
+  )
   const [playing, setPlaying] = useState(true)
   const [shown, setShown] = useState(0)
   const [length, setLength] = useState<(typeof LENGTHS)[number]>(20)
@@ -92,10 +84,26 @@ export default function TimelapseBar({ onClose, timeline, score, progress, getCa
     setSound(next)
     writeSound(next)
   }
-  // left on last time: ready the instrument now (the click that opened the time-lapse lets audio start)
+  // Left on last time: ready the instrument now. Audio may start at once: the click that opened the
+  // time-lapse counts when these controls mount within it (their chunk was loaded already), or when
+  // App unlocked audio in it (audio/context.ts). Otherwise WebKit keeps it suspended, so the next
+  // press anywhere starts it.
   useEffect(() => {
     if (soundRef.current) ensureMusic()
-    return () => musicRef.current?.close()
+    const stopWaking = () => {
+      for (const type of GESTURES) window.removeEventListener(type, wake, true)
+    }
+    const wake = () => {
+      stopWaking()
+      if (soundRef.current) ensureMusic()
+    }
+    if (musicRef.current && !musicRef.current.running) {
+      for (const type of GESTURES) window.addEventListener(type, wake, true)
+    }
+    return () => {
+      stopWaking()
+      musicRef.current?.close()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -125,10 +133,11 @@ export default function TimelapseBar({ onClose, timeline, score, progress, getCa
         progress.current = Math.min(1, from + (now - startedAt) / (length * 1000))
         setShown(progress.current)
       }
-      // the commits that appeared since the last frame, as notes
+      // the commits that appeared since the last frame, as notes (dropped while the audio is not
+      // running yet, rather than all sounding at once when it starts)
       const music = musicRef.current
       const notes = scoreRef.current
-      if (soundRef.current && music && notes) {
+      if (soundRef.current && music?.running && notes) {
         for (const note of pickNotes(notesBetween(notes, heardRef.current, progress.current), NOTES_PER_FRAME)) music.play(note)
       }
       heardRef.current = progress.current
@@ -164,7 +173,7 @@ export default function TimelapseBar({ onClose, timeline, score, progress, getCa
     setRecording(null)
     setPlaying(false)
     try {
-      downloadBlob(await rec.finish(), fileName(rec.type.ext))
+      downloadBlob(await rec.finish(), gardenFileName(data, rec.type.ext, new Date(), 'timelapse'))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

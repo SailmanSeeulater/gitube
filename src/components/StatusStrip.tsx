@@ -1,4 +1,6 @@
 import type { Graph, RepoData } from '../types'
+import { preload } from '../lazy/chunk'
+import { timelapseChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
 import { formatClock, formatDateTime, relativeTime, stageLabel } from './gardenUtils'
 import { PlayIcon } from './icons'
@@ -16,6 +18,9 @@ export interface StatusStripProps {
   /** opens the time-lapse (the strip gives way to its controls); omitted while there is no graph */
   onTimelapse?: () => void
 }
+
+/** the time-lapse controls load as the pointer or focus reaches their button */
+const preloadTimelapse = () => preload(timelapseChunk)
 
 const shell =
   'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
@@ -81,6 +86,8 @@ export default function StatusStrip({
         <button
           type="button"
           onClick={onTimelapse}
+          onPointerEnter={preloadTimelapse}
+          onFocus={preloadTimelapse}
           title="Replay the garden growing from its first loaded commit, and record it as a video"
           className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
         >

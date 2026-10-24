@@ -69,13 +69,26 @@ jobs:
           echo "Using key: $(ssh-keygen -lf ~/.ssh/deploy_key)"
           printf '%s\n' "$VPS_HOST_KEY" > ~/.ssh/known_hosts
 
+      # Earlier builds' hashed assets stay for 30 days. Every app change renames every lazy chunk
+      # (src/lazy/parts.ts), since each imports index-<hash>.js by name, so deleting the old files
+      # broke the optional parts in every tab opened before the deploy. Content-hashed files never
+      # change under their name, so keeping them is safe.
       - name: Sync build to the web root
         run: |
-          rsync -rlz --delete --checksum \
-            --chmod=D755,F644 --chown=www-data:www-data \
-            --rsync-path="sudo rsync" \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
-            dist/ "$VPS_USER@$VPS_HOST:$WEB_ROOT/"
+          RSYNC=(rsync -rltz --checksum --chmod=D755,F644 --chown=www-data:www-data \
+            --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes")
+          # 1. New hashed assets first, and nothing deleted: a tab opened before this deploy still
+          #    lazy-loads its own build's chunks, which import the index-<hash>.js it already runs.
+          "${RSYNC[@]}" dist/assets/ "$VPS_USER@$VPS_HOST:$WEB_ROOT/assets/"
+          # 2. Then index.html and the rest, deleting stale non-asset files; assets/ is excluded,
+          #    so it is protected from --delete.
+          "${RSYNC[@]}" --delete --exclude=/assets/ dist/ "$VPS_USER@$VPS_HOST:$WEB_ROOT/"
+          # 3. Prune hashed files no deploy has shipped in 30 days (-t above refreshes the mtime of
+          #    every file in the current build, unchanged vendor chunks included).
+          # Guard: never let an empty or unexpected WEB_ROOT turn this into a prune of /assets.
+          case "$WEB_ROOT" in /var/www/?*) ;; *) echo "::error::refusing to prune: WEB_ROOT='$WEB_ROOT'"; exit 1 ;; esac
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "sudo find '$WEB_ROOT/assets' -type f -mtime +30 -delete"
 
       # The page, the right build, and the security policy that lets it reach GitHub.
       - name: Smoke test

@@ -10,7 +10,7 @@ export interface ExportMenuProps {
   onOpenFile: () => void
   /** close the menu; refocus: hand focus back to the toggle button */
   onClose: (refocus: boolean) => void
-  /** the button that toggles the menu: presses on it do not count as outside */
+  /** the button that toggles the menu: focus moving onto it does not count as leaving */
   buttonRef: RefObject<HTMLElement | null>
 }
 
@@ -42,7 +42,8 @@ function Item({ icon, label, hint, disabled = false, onSelect }: ItemProps) {
 
 /**
  * Drop-down from the top bar: save the graph as a PNG or the loaded data as JSON, or open a saved
- * file. Up/Down move between items; Escape, a click outside or tabbing away closes it.
+ * file. Up/Down move between items; tabbing away closes it. Escape and a click outside close it
+ * too, through TopBar (which also covers the menu's placeholder while it loads).
  */
 export default function ExportMenu({ id, canExport, onExportImage, onExportData, onOpenFile, onClose, buttonRef }: ExportMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -50,31 +51,14 @@ export default function ExportMenu({ id, canExport, onExportImage, onExportData,
   const items = (): HTMLButtonElement[] =>
     Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [])
 
-  // open with the first available item focused
+  // Open with the first available item focused, unless focus has moved on while the menu was
+  // loading (it can open a fetch after the click), as in ThemePicker.
   useEffect(() => {
-    items()[0]?.focus()
+    const focused = document.activeElement
+    const stayed = focused === null || focused === document.body || focused === buttonRef.current
+    if (stayed) items()[0]?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Capture phase on window, as in ThemePicker: the menu takes this Escape, so App's Escape
-  // (clear the selection) does not also run.
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.stopPropagation()
-      onClose(true)
-    }
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null
-      if (target !== null && (menuRef.current?.contains(target) || buttonRef.current?.contains(target))) return
-      onClose(false)
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [onClose, buttonRef])
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return

@@ -36,13 +36,8 @@ export { collapseToSkeleton, isSkeletonNode } from './collapse'
 export { assignPalette, colorAt, rotateHue, shiftLightness, ACCENT_COLOR, BRANCH_COLORS } from './color'
 export { ACTIVITY_BUCKETS, buildContributors, contributorFocus, linkKey } from './contributors'
 export type { Contributor, ContributorBranch, ContributorFocus, ContributorIndex } from './contributors'
-export {
-  metroLayout,
-  shortBranchName,
-  uniqueShortNames,
-  skeletonRunColumns,
-  laneRunColumns,
-} from './metro'
+// The metro engine is not re-exported: the app loads it on demand (lazy/parts.ts), and a static
+// re-export here would pull it back into the first download. Import its functions from './metro'.
 export type {
   MetroBounds,
   MetroLabel,

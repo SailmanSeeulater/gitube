@@ -1,9 +1,19 @@
-import { useCallback, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { preload } from '../lazy/chunk'
+import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
 import { getTheme } from '../theme/themes'
-import ExportMenu from './ExportMenu'
 import { DownloadIcon, KeyIcon, PaletteIcon, SproutIcon } from './icons'
-import ThemePicker from './ThemePicker'
+import { LazySlot, lazyPart } from './LazyPart'
+
+// both drop-downs load on first open, or as the pointer or focus reaches their button
+const ThemePicker = lazyPart(themePickerChunk)
+const ExportMenu = lazyPart(exportMenuChunk)
+const preloadThemePicker = () => preload(themePickerChunk)
+const preloadExportMenu = () => preload(exportMenuChunk)
+
+/** The drop-downs' box, for their placeholder while they load (each sets its own width). */
+const DROPDOWN_FRAME = 'self-end rounded-xl border border-garden-border bg-garden-panel/95 px-3 py-2.5 shadow-soft backdrop-blur'
 
 export interface TopBarProps {
   value: string
@@ -57,9 +67,11 @@ export default function TopBar({
   const setThemeId = useGardenStore((s) => s.setThemeId)
   const [themeOpen, setThemeOpen] = useState(false)
   const themeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const themeSlotRef = useRef<HTMLDivElement | null>(null)
   const themeListId = useId()
   const [exportOpen, setExportOpen] = useState(false)
   const exportButtonRef = useRef<HTMLButtonElement | null>(null)
+  const exportSlotRef = useRef<HTMLDivElement | null>(null)
   const exportMenuId = useId()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [seenTokenOpen, setSeenTokenOpen] = useState(tokenOpen)
@@ -90,6 +102,37 @@ export default function TopBar({
     if (refocus) exportButtonRef.current?.focus()
   }, [])
   const pickFile = useCallback(() => fileInputRef.current?.click(), [])
+
+  // Escape (wherever focus is) and pointer presses outside close the open drop-down. Handled here
+  // rather than in ThemePicker and ExportMenu, so they also close its placeholder while it loads
+  // and the notice when it could not be loaded. Capture phase on window: the drop-down takes this
+  // Escape, so App's Escape (clear the selection) does not also run.
+  const dropdown = themeOpen ? 'theme' : exportOpen ? 'export' : null
+  useEffect(() => {
+    if (dropdown === null) return
+    const slot = dropdown === 'theme' ? themeSlotRef : exportSlotRef
+    const button = dropdown === 'theme' ? themeButtonRef : exportButtonRef
+    const close = dropdown === 'theme' ? closeTheme : closeExport
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      // focus goes back to the button, unless it has moved on elsewhere
+      const focused = document.activeElement
+      const stayed = focused === null || focused === document.body || focused === button.current
+      close(stayed || slot.current?.contains(focused) === true)
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null
+      if (target !== null && (slot.current?.contains(target) || button.current?.contains(target))) return
+      close(false)
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [dropdown, closeTheme, closeExport])
 
   const commitToken = () => {
     if (dirty) setToken(draft)
@@ -164,6 +207,8 @@ export default function TopBar({
           ref={themeButtonRef}
           type="button"
           onClick={toggleTheme}
+          onPointerEnter={preloadThemePicker}
+          onFocus={preloadThemePicker}
           aria-haspopup="listbox"
           aria-expanded={themeOpen}
           aria-controls={themeOpen ? themeListId : undefined}
@@ -179,6 +224,8 @@ export default function TopBar({
           ref={exportButtonRef}
           type="button"
           onClick={toggleExport}
+          onPointerEnter={preloadExportMenu}
+          onFocus={preloadExportMenu}
           aria-haspopup="menu"
           aria-expanded={exportOpen}
           aria-controls={exportOpen ? exportMenuId : undefined}
@@ -206,20 +253,29 @@ export default function TopBar({
         />
       </div>
 
+      {/* the drop-downs' wrappers draw no box (contents): they mark what counts as inside */}
       {themeOpen && (
-        <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+        <div ref={themeSlotRef} className="contents">
+          <LazySlot frame={`w-[232px] ${DROPDOWN_FRAME}`} label="loading themes">
+            <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
+          </LazySlot>
+        </div>
       )}
 
       {exportOpen && (
-        <ExportMenu
-          id={exportMenuId}
-          canExport={canExport}
-          onExportImage={onExportImage}
-          onExportData={onExportData}
-          onOpenFile={pickFile}
-          onClose={closeExport}
-          buttonRef={exportButtonRef}
-        />
+        <div ref={exportSlotRef} className="contents">
+          <LazySlot frame={`w-[260px] ${DROPDOWN_FRAME}`}>
+            <ExportMenu
+              id={exportMenuId}
+              canExport={canExport}
+              onExportImage={onExportImage}
+              onExportData={onExportData}
+              onOpenFile={pickFile}
+              onClose={closeExport}
+              buttonRef={exportButtonRef}
+            />
+          </LazySlot>
+        </div>
       )}
 
       {tokenOpen && (

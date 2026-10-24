@@ -34,7 +34,7 @@ export interface ThemePickerProps {
   onChange: (id: ThemeId) => void
   /** close the picker; refocus: hand focus back to the toggle button */
   onClose: (refocus: boolean) => void
-  /** the button that toggles the picker: pointer and focus moves onto it do not count as leaving */
+  /** the button that toggles the picker: focus moving onto it does not count as leaving */
   buttonRef: RefObject<HTMLElement | null>
 }
 
@@ -42,39 +42,22 @@ export interface ThemePickerProps {
  * Compact popover listing the ten themes in a Dark and a Light group, each with a swatch. A
  * single-select listbox: Up/Down/Home/End move and apply the theme at once (a switch is only a
  * repaint, so previewing is cheap), Enter or Space confirms and closes, a click applies and keeps
- * the list open for comparing. Escape, a click outside or tabbing away closes it.
+ * the list open for comparing. Tabbing away closes it; Escape and a click outside close it too,
+ * through TopBar (which also covers the picker's placeholder while it loads).
  */
 export default function ThemePicker({ id, value, onChange, onClose, buttonRef }: ThemePickerProps) {
   const listRef = useRef<HTMLDivElement | null>(null)
   const optionRefs = useRef(new Map<ThemeId, HTMLDivElement>())
   const initialValue = useRef(value)
 
-  // open with the active theme focused
+  // Open with the active theme focused, unless focus has moved on while the picker was loading
+  // (it can open a fetch after the click): taking focus back would pull it from where the user went.
   useEffect(() => {
-    optionRefs.current.get(initialValue.current)?.focus()
+    const focused = document.activeElement
+    const stayed = focused === null || focused === document.body || focused === buttonRef.current
+    if (stayed) optionRefs.current.get(initialValue.current)?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Escape (wherever focus is) and pointer presses outside close the picker. Capture phase on
-  // window: the picker takes this Escape, so App's Escape (clear the selection) does not also run.
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.stopPropagation()
-      const focused = document.activeElement
-      onClose(focused !== null && (listRef.current?.contains(focused) === true || focused === buttonRef.current))
-    }
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null
-      if (target !== null && (listRef.current?.contains(target) || buttonRef.current?.contains(target))) return
-      onClose(false)
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [onClose, buttonRef])
 
   const choose = (theme: Theme) => {
     onChange(theme.id)

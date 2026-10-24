@@ -1,10 +1,12 @@
 /**
  * The music box's instrument (Web Audio): a soft plucked tone per note with a short echo, through
  * a limiter so a busy week never clips. It plays to the speakers and to `stream`, which the video
- * recorder mixes into a recording. Browser only; create it from a click (browsers keep audio
- * suspended until the page has had a gesture).
+ * recorder mixes into a recording. Browser only; create it from a click, or after a click that
+ * called unlockAudio (audio/context.ts): browsers keep audio suspended until the page has had a
+ * gesture, and WebKit wants the context made or resumed within one.
  */
 import { frequencyOf, type Note } from '../graph/score'
+import { takeAudioContext } from './context'
 
 /** Loudness of one plain note before the limiter, and of a tip. */
 const NOTE_GAIN = 0.22
@@ -23,8 +25,8 @@ export class MusicBox {
   /** the mix as a MediaStream, for recording */
   readonly stream: MediaStream
 
-  constructor() {
-    const ctx = new AudioContext()
+  /** ctx: by default the one unlockAudio made in the click that opened the time-lapse, if any */
+  constructor(ctx: AudioContext = takeAudioContext()) {
     this.ctx = ctx
     this.input = ctx.createGain()
 
@@ -56,6 +58,14 @@ export class MusicBox {
   /** Browsers start audio suspended; call from a click before playing. */
   resume(): Promise<void> {
     return this.ctx.state === 'suspended' ? this.ctx.resume() : Promise.resolve()
+  }
+
+  /**
+   * The audio is running. While it is not, notes are best not played: its clock stands still, so
+   * they would all sound at once when it starts.
+   */
+  get running(): boolean {
+    return this.ctx.state === 'running'
   }
 
   play(note: Note): void {

@@ -2,13 +2,22 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Branch, RepoData, ViewMode } from '../types'
 import type { ContributorIndex } from '../graph/contributors'
 import type { WeedReport } from '../graph/weeds'
+import { preload, type Chunk } from '../lazy/chunk'
+import { battleChunk, contributorsTabChunk, metroChunk, weedsTabChunk } from '../lazy/parts'
+import { useChunk } from '../lazy/useChunk'
 import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
 import { useTheme } from '../theme/useTheme'
 import { STALE_OPTIONS, isStale, relativeTime } from './gardenUtils'
-import ContributorsTab from './ContributorsTab'
 import Legend from './Legend'
-import WeedsTab from './WeedsTab'
+import { ChunkPlaceholder, LazySlot, lazyPart } from './LazyPart'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon, SwordsIcon } from './icons'
+
+// the people and weeds tabs load when first shown, or as the pointer or focus reaches their tab
+const ContributorsTab = lazyPart(contributorsTabChunk)
+const WeedsTab = lazyPart(weedsTabChunk)
+const TAB_CHUNKS: Partial<Record<PanelTab, Chunk<unknown>>> = { contributors: contributorsTabChunk, weeds: weedsTabChunk }
+/** a lazy tab's placeholder, in the list's place */
+const TAB_FRAME = 'min-h-0 flex-1 px-3 py-3'
 
 export interface PanelProps {
   data: RepoData
@@ -107,6 +116,11 @@ interface TabsProps {
   weedCount: number
 }
 
+function preloadTab(tab: PanelTab): void {
+  const chunk = TAB_CHUNKS[tab]
+  if (chunk) preload(chunk)
+}
+
 function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProps) {
   const tabs: ReadonlyArray<{ id: PanelTab; label: string; count: number }> = [
     { id: 'branches', label: 'branches', count: branchCount },
@@ -124,6 +138,8 @@ function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProp
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.id)}
+            onPointerEnter={() => preloadTab(tab.id)}
+            onFocus={() => preloadTab(tab.id)}
             className={`-mb-px flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-[12px] transition-colors ${
               active ? 'border-garden-accent text-garden-accent' : 'border-transparent text-garden-muted hover:text-garden-text'
             }`}
@@ -142,9 +158,13 @@ interface SegmentedProps<T extends string | number> {
   options: ReadonlyArray<{ value: T; label: string }>
   value: T
   onChange: (value: T) => void
+  /** the pointer or focus reached an option (to start loading what it needs) */
+  onIntent?: (value: T) => void
+  /** an option whose code is still loading: it pulses */
+  pending?: T | null
 }
 
-function Segmented<T extends string | number>({ ariaLabel, options, value, onChange }: SegmentedProps<T>) {
+function Segmented<T extends string | number>({ ariaLabel, options, value, onChange, onIntent, pending = null }: SegmentedProps<T>) {
   return (
     <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-lg bg-garden-field p-0.5">
       {options.map((option) => {
@@ -155,10 +175,13 @@ function Segmented<T extends string | number>({ ariaLabel, options, value, onCha
             type="button"
             role="radio"
             aria-checked={active}
+            aria-busy={option.value === pending || undefined}
             onClick={() => onChange(option.value)}
+            onPointerEnter={onIntent ? () => onIntent(option.value) : undefined}
+            onFocus={onIntent ? () => onIntent(option.value) : undefined}
             className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
               active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
-            }`}
+            } ${option.value === pending ? 'animate-pulse' : ''}`}
           >
             {option.label}
           </button>
@@ -180,6 +203,11 @@ const LAYOUT_OPTIONS: ReadonlyArray<{ value: LayoutMode; label: string }> = [
 ]
 
 const STALE_SEGMENTS = STALE_OPTIONS.map((o) => ({ value: o.days, label: o.label }))
+
+/** the metro layout's engine is its own chunk: start on it when the pointer reaches the option */
+const preloadLayout = (mode: LayoutMode) => {
+  if (mode === 'metro') preload(metroChunk)
+}
 
 interface BranchRowProps {
   branch: Branch
@@ -265,6 +293,12 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
   const clearHiddenBranches = useGardenStore((s) => s.clearHiddenBranches)
   const selectedBranch = useGardenStore((s) => s.selectedBranch)
   const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
+  // metro picked, its engine still on the way (App loads it and keeps the old layout until then)
+  const metroLoading = useChunk(metroChunk, false).status === 'loading' && layoutMode === 'metro'
+  // The people tab mounts once its code is in, instead of suspending on the way: a share link's
+  // ?by= selects the tab as soon as the repo is in, which from the repo cache can be before its
+  // code, and Suspense would then hold the placeholder for its 300 ms fallback throttle as well.
+  const peopleCode = useChunk(contributorsTabChunk, panelOpen && panelTab === 'contributors')
 
   // one timestamp per loaded repo keeps relative dates consistent across rows
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,7 +357,11 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
         </div>
         <button
           type="button"
-          onClick={() => setBattleOpen((open) => !open)}
+          onClick={() => {
+            // the battle's code loads while the challenger is typed in
+            if (!battleOpen) preload(battleChunk)
+            setBattleOpen(!battleOpen)
+          }}
           aria-expanded={battleOpen}
           title="Garden battle: grow another repo beside this one and score them"
           aria-label="Garden battle"
@@ -350,7 +388,14 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
           <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={setViewMode} />
         </div>
         <div className="flex-[1.45]" title="organic: free physics. metro: straight lanes, like a tube map. garden: grown upward as plants">
-          <Segmented ariaLabel="Layout" options={LAYOUT_OPTIONS} value={layoutMode} onChange={setLayoutMode} />
+          <Segmented
+            ariaLabel="Layout"
+            options={LAYOUT_OPTIONS}
+            value={layoutMode}
+            onChange={setLayoutMode}
+            onIntent={preloadLayout}
+            pending={metroLoading ? 'metro' : null}
+          />
         </div>
       </div>
 
@@ -363,16 +408,30 @@ export default function Panel({ data, palette, contributors, weeds, onBattle }: 
       />
 
       {panelTab === 'contributors' ? (
-        <ContributorsTab contributors={contributors} palette={palette} now={now} />
+        peopleCode.status === 'ready' ? (
+          <LazySlot key="contributors" frame={TAB_FRAME} label="loading people">
+            <ContributorsTab contributors={contributors} palette={palette} now={now} />
+          </LazySlot>
+        ) : (
+          // coming back to the tab, or the pointer reaching it, tries again
+          <ChunkPlaceholder
+            key="contributors"
+            frame={TAB_FRAME}
+            label="loading people"
+            failed={peopleCode.status === 'failed'}
+          />
+        )
       ) : panelTab === 'weeds' ? (
-        <WeedsTab
-          report={weeds}
-          owner={data.owner}
-          repo={data.repo}
-          defaultBranch={data.defaultBranch}
-          palette={palette}
-          now={now}
-        />
+        <LazySlot key="weeds" frame={TAB_FRAME} label="loading weeds">
+          <WeedsTab
+            report={weeds}
+            owner={data.owner}
+            repo={data.repo}
+            defaultBranch={data.defaultBranch}
+            palette={palette}
+            now={now}
+          />
+        </LazySlot>
       ) : (
         <>
           <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
