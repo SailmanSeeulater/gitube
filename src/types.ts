@@ -142,3 +142,97 @@ export interface Graph {
 }
 
 export type ViewMode = 'skeleton' | 'full'
+
+// ---------- Pull requests (the overlay; see api/pulls.ts and graph/pulls.ts) ----------
+
+/**
+ * Where a pull request's review stands. 'waiting': no approval or change request stands yet, or a
+ * branch rule still wants more approvals (PullSummary.reviewRequired tells the two apart).
+ * 'unknown': not looked up yet (a visitor without a token pays 3 requests per pull request), or
+ * GitHub did not answer for it.
+ */
+export type ReviewState = 'approved' | 'changes' | 'waiting' | 'unknown'
+
+/** The rollup of a pull request head's check runs and commit statuses; 'unknown' = not looked up yet. */
+export type ChecksState = 'passing' | 'running' | 'failing' | 'none' | 'unknown'
+
+export interface CheckCounts {
+  failing: number
+  running: number
+  passing: number
+  skipped: number
+  total: number
+}
+
+/** One open pull request from a branch of the repo itself (fork pull requests have no branch here). */
+export interface PullSummary {
+  number: number
+  title: string
+  /** html_url on github.com */
+  url: string
+  /** head branch name, a branch of this repo */
+  head: string
+  /** the head commit GitHub has; differs from the branch's tipSha when the branch moved since the graph was fetched */
+  headSha: string
+  /** base branch name */
+  base: string
+  draft: boolean
+  /** author's login; null for a deleted account */
+  author: string | null
+  review: ReviewState
+  /**
+   * true: GitHub reports REVIEW_REQUIRED (a rule still wants approvals); false: GraphQL found no
+   * such rule outstanding; null: not known (REST cannot see branch rules)
+   */
+  reviewRequired: boolean | null
+  checks: ChecksState
+  /** per-state check counts, when known */
+  checkCounts: CheckCounts | null
+  /** reviewers (people and teams) asked for a review and not yet answered; null when unknown */
+  reviewersAsked: number | null
+  /** true: conflicts with its base; false: mergeable; null: not known (always null without a token) */
+  conflict: boolean | null
+  /** ISO 8601 */
+  updatedAt: string
+}
+
+/** The open pull requests of a repo, by head branch. Never stored (not in the cache or saved files). */
+export interface PullIndex {
+  /** head branch name -> its open pull requests, most recently updated first */
+  byBranch: Map<string, PullSummary[]>
+  /** open pull requests into the default branch (null when not known) */
+  intoBase: number | null
+  /** open pull requests in the repo, from forks too (an estimate when truncated) */
+  total: number | null
+  /**
+   * open pull requests whose head is in a fork (with GraphQL: everything open not drawn, so also
+   * those from branches not loaded and from the unchecked branches)
+   */
+  fromForks: number
+  /** same-repo pull requests whose head branch is not among the loaded branches */
+  notOnGraph: number
+  /**
+   * not every open pull request was read: the REST listing stopped before the last page, or (GraphQL)
+   * a branch has more pull requests than its pages read
+   */
+  truncated: boolean
+  /** loaded branches GitHub did not answer for (GraphQL partial errors): their pull requests are not known; [] for REST */
+  unchecked: string[]
+  /** how many pull requests the REST listing read (the most recently updated); 0 for GraphQL */
+  listed: number
+  source: 'graphql' | 'rest'
+  /** ISO time of the fetch */
+  fetchedAt: string
+}
+
+/** What the canvas draws round one tip: its pull requests combined, worst first. */
+export interface PrMark {
+  review: ReviewState
+  checks: ChecksState
+  /** every pull request on the node is a draft */
+  draft: boolean
+  /** any of them conflicts with its base */
+  conflict: boolean
+  /** how many pull requests the mark stands for */
+  count: number
+}

@@ -3,6 +3,8 @@ import type { Theme } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 import { BUD_AFTER_DAYS, WILT_AFTER_DAYS, petalAngles } from './gardenLook'
 import { gardenInk, leafColour } from './gardenPaint'
+import { PrRingPaths } from './PrGlyph'
+import type { PrMark } from '../types'
 
 type GlyphKind =
   | 'tip'
@@ -20,6 +22,9 @@ type GlyphKind =
   | 'wilted'
   | 'flower'
   | 'roots'
+  | 'pr'
+  | 'pr-station'
+  | 'pr-bloom'
 
 /** Ellipse petals around (9, 9) for the garden glyphs, as gardenPaint draws them. */
 function Petals({ angles, reach, long, short, fill }: { angles: number[]; reach: number; long: number; short: number; fill: string }) {
@@ -48,14 +53,21 @@ const THORN_PATH = Array.from({ length: 9 }, (_, i) => {
   return `M${p(5.5, a - half)}L${p(8.8, a)}L${p(5.5, a + half)}Z`
 }).join('')
 
+/** The legend's pull request once some review or checks are known: review approved (left), checks failing (right, broken). */
+const LEGEND_PR: Pick<PrMark, 'review' | 'checks' | 'draft'> = { review: 'approved', checks: 'failing', draft: false }
+/** ...and while none is (a visitor without a token, before a tip is opened): the gapped ring in the tip's own colour. */
+const LEGEND_PR_UNKNOWN: Pick<PrMark, 'review' | 'checks' | 'draft'> = { review: 'unknown', checks: 'unknown', draft: false }
+
 /**
  * The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them, in the
  * active theme (metro stations in its station colour, run markers in its runMark, and so on).
+ * prKnown: the pull request glyphs show review and checks colours, as the canvas does once known.
  */
-function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
+function Glyph({ kind, theme, prKnown }: { kind: GlyphKind; theme: Theme; prKnown: boolean }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
   const branch = theme.derived.defaultBranchColour
   const ink = gardenInk(theme)
+  const prMark = prKnown ? LEGEND_PR : LEGEND_PR_UNKNOWN
   switch (kind) {
     // metro mode: the station glyphs Garden draws on the straight map
     case 'station':
@@ -101,6 +113,30 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <text x="9" y="5" fill={theme.derived.runMark} fontSize="6" textAnchor="middle">
             +N
           </text>
+        </svg>
+      )
+    // a tip with an open pull request: the layout's tip glyph, its ring split in review | checks
+    case 'pr':
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="9" r="4" fill={branch} />
+          <PrRingPaths cx={9} cy={9} R={6.6} w={2} mark={prMark} theme={theme} neutral={branch} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
+        </svg>
+      )
+    case 'pr-station':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="9" y2="9" stroke={branch} strokeWidth="2.5" />
+          <circle cx="9" cy="9" r="4.5" fill={branch} />
+          <PrRingPaths cx={9} cy={9} R={5.9} w={1.9} mark={prMark} theme={theme} neutral={theme.stationRing} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
+        </svg>
+      )
+    case 'pr-bloom':
+      return (
+        <svg {...common}>
+          <Petals angles={petalAngles('bloom', 0.1)} reach={3.6} long={3} short={1.7} fill={branch} />
+          <circle cx="9" cy="9" r="2.2" fill={ink.centre} />
+          <PrRingPaths cx={9} cy={9} R={5.8} w={1.8} mark={prMark} theme={theme} neutral={theme.stationRing} opts={{ gapPx: 1.8, breakPx: 2.8 }} />
         </svg>
       )
     case 'tip':
@@ -204,10 +240,31 @@ const GARDEN_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string
   { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
 ]
 
-export default function Legend() {
+const PR_HALVES =
+  'left arc: review (green approved, red broken changes requested, grey no review yet / review required). ' +
+  'right arc: checks (green passing, amber half-lit running, red broken failing). dotted: draft.'
+/** The pull request item's hint, as the canvas shows them: with review and checks known, or none yet. */
+const PR_HINT = {
+  known: `an open pull request from this branch. ${PR_HALVES} split at 12 and 6 o'clock, in the tip's own colour: not looked up yet (click the tip). click the tip for details`,
+  unknown: `split at 12 and 6 o'clock, in the tip's own colour: an open pull request from this branch, not looked up yet (click the tip). once looked up, ${PR_HALVES}`,
+}
+
+/** The pull request item for each layout, on its tip glyph (organic: the empty sixth cell; else a seventh). */
+const PR_KINDS: Record<'organic' | 'metro' | 'garden', GlyphKind> = { organic: 'pr', metro: 'pr-station', garden: 'pr-bloom' }
+
+export interface LegendProps {
+  /** some tip on the canvas carries a pull request mark: the legend explains it (one item, only then) */
+  hasPrs?: boolean
+  /** some of those marks have their review or checks known (else every one is the gapped neutral ring) */
+  prKnown?: boolean
+}
+
+export default function Legend({ hasPrs = false, prKnown = false }: LegendProps) {
   const theme = useTheme()
   const layout = useGardenStore((s) => s.layoutMode)
-  const items = layout === 'metro' ? METRO_ITEMS : layout === 'garden' ? GARDEN_ITEMS : ITEMS
+  const base = layout === 'metro' ? METRO_ITEMS : layout === 'garden' ? GARDEN_ITEMS : ITEMS
+  const prItem = { kind: PR_KINDS[layout], label: 'pull request', hint: prKnown ? PR_HINT.known : PR_HINT.unknown }
+  const items = hasPrs ? [...base, prItem] : base
   return (
     <div>
       {layout === 'garden' && (
@@ -216,7 +273,7 @@ export default function Legend() {
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {items.map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
-            <Glyph kind={item.kind} theme={theme} />
+            <Glyph kind={item.kind} theme={theme} prKnown={prKnown} />
             <span className="text-[12px] text-garden-text-dim">{item.label}</span>
           </li>
         ))}

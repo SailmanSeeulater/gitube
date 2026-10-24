@@ -3,6 +3,7 @@ import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
 import { findWeeds, type WeedReport } from './graph/weeds'
+import { countPulls, prMarks } from './graph/pulls'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
@@ -12,6 +13,7 @@ import { battleChunk, contributorsTabChunk, exportersChunk, metroChunk, timelaps
 import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { useRepoData } from './hooks/useRepoData'
+import { usePulls } from './hooks/usePulls'
 import { useGardenStore, type LayoutMode } from './store/useGardenStore'
 import { applyTheme } from './theme/applyTheme'
 import { readStoredThemeId } from './theme/storage'
@@ -23,7 +25,7 @@ import Panel from './components/Panel'
 import StatusStrip from './components/StatusStrip'
 import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
-import NodeInspector from './components/NodeInspector'
+import NodeInspector, { type InspectorPulls } from './components/NodeInspector'
 import { staleBranchNames } from './components/gardenUtils'
 import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
 import { useMetroView } from './components/useMetroView'
@@ -128,6 +130,18 @@ export default function App() {
     () => (data ? buildGraph(data, viewMode, { hiddenBranches: effectiveHidden }) : null),
     [data, viewMode, effectiveHidden],
   )
+
+  // ---- pull requests (the overlay) ----
+  // The repo's open pull requests, once its graph is in and its own fetch has finished: never for a
+  // saved file (no network at all), never for a battle's challenger, and not while a challenger
+  // named by a share link is still growing (the anonymous budget goes to it first).
+  const pullsEnabled = opened === null && fetched.data !== undefined && !isFetching && !(battleRef !== null && challenger.isFetching)
+  const pulls = usePulls(opened ? null : fetched.data, pullsEnabled)
+  /** tip node id -> its pull request mark; empty when there are none (the canvas then looks as before) */
+  const marks = useMemo(() => prMarks(graph, opened ? null : pulls.index), [graph, opened, pulls.index])
+  /** some mark has its review or checks known (else all are the gapped ring in the tip's own colour): the legend shows what is drawn */
+  const prMarksKnown = useMemo(() => [...marks.values()].some((m) => m.review !== 'unknown' || m.checks !== 'unknown'), [marks])
+  const pullsInvalidate = pulls.invalidate
 
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
@@ -282,12 +296,16 @@ export default function App() {
       setOpened(null)
       resetForNewRepo()
       if (sameRepo(repoRef, parsed)) {
-        if (!isFetching) refetch()
+        if (!isFetching) {
+          // its pull requests are read again once the graph is in
+          pullsInvalidate()
+          refetch()
+        }
       } else {
         setRepoRef(parsed)
       }
     },
-    [repoRef, isFetching, refetch, resetForNewRepo],
+    [repoRef, isFetching, refetch, resetForNewRepo, pullsInvalidate],
   )
 
   const submit = useCallback(() => grow(input), [grow, input])
@@ -302,6 +320,18 @@ export default function App() {
   )
 
   const openToken = useCallback(() => setTokenOpen(true), [])
+  /** the status strip's refresh (and the inspector's): the graph from GitHub, then its pull requests */
+  const refresh = useCallback(() => {
+    pullsInvalidate()
+    refetch()
+  }, [pullsInvalidate, refetch])
+  const inspectorPulls = useMemo<InspectorPulls | null>(
+    () =>
+      opened || !fetched.data
+        ? null
+        : { view: pulls, data: fetched.data, graphAt: fetched.fetchedAt, onAddToken: openToken, onRefresh: refresh },
+    [opened, fetched.data, fetched.fetchedAt, pulls, openToken, refresh],
+  )
   const toggleToken = useCallback(() => setTokenOpen((open) => !open), [])
   const handleNodeClick = useCallback((id: string) => setInspectorNodeId(id), [setInspectorNodeId])
   const handleBackgroundClick = useCallback(() => clearSelection(), [clearSelection])
@@ -363,6 +393,8 @@ export default function App() {
     if (!kit) return
     const commitCount = Object.keys(data.commits).length
     const parts = [viewMode, drawnLayout, `${data.branches.length} branches`, `${commitCount} commits`]
+    const prCount = marks.size > 0 && !timelapseOpen ? countPulls(pulls.index) : 0
+    if (prCount > 0) parts.push(`${prCount} open PR${prCount === 1 ? '' : 's'}`)
     if (selectedBranch !== null) parts.push(`branch ${selectedBranch}`)
     const person = selectedContributor !== null ? contributors?.list.find((c) => c.key === selectedContributor) : undefined
     if (person) parts.push(`commits by ${person.name}`)
@@ -378,7 +410,7 @@ export default function App() {
     } catch (err) {
       setExportError(err instanceof Error ? err.message : String(err))
     }
-  }, [data, loadExporters, viewMode, drawnLayout, selectedBranch, selectedContributor, contributors, theme])
+  }, [data, loadExporters, viewMode, drawnLayout, selectedBranch, selectedContributor, contributors, theme, marks, timelapseOpen, pulls.index])
 
   const exportData = useCallback(async () => {
     if (!data) return
@@ -468,6 +500,7 @@ export default function App() {
             timelapse={gardenTimelapse}
             thorns={weeds?.thorns ?? null}
             garden={drawnLayout === 'garden'}
+            prMarks={timelapseOpen ? null : marks}
           />
         )}
       </div>
@@ -508,7 +541,18 @@ export default function App() {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && contributors && weeds && <Panel data={data} palette={palette} contributors={contributors} weeds={weeds} onBattle={startBattle} />}
+      {data && graph && contributors && weeds && (
+        <Panel
+          data={data}
+          palette={palette}
+          contributors={contributors}
+          weeds={weeds}
+          onBattle={startBattle}
+          pulls={opened ? null : pulls}
+          hasPrMarks={marks.size > 0 && !timelapseOpen}
+          prMarksKnown={prMarksKnown}
+        />
+      )}
 
       {timelapseOpen && graph && data ? (
         <LazySlot
@@ -543,7 +587,7 @@ export default function App() {
           isFetching={isFetching}
           fileSavedAt={opened ? opened.savedAt : null}
           cachedAt={cachedAt}
-          onRefresh={refetch}
+          onRefresh={refresh}
           onTimelapse={graph ? openTimelapse : undefined}
         />
       )}
@@ -555,6 +599,7 @@ export default function App() {
           onClose={closeInspector}
           authorKey={contributors?.keyBySha.get(inspectorNode.id) ?? null}
           onShowAuthor={showContributor}
+          pulls={inspectorPulls}
         />
       )}
 

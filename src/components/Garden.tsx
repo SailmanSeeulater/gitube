@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
-import type { Graph, GraphLink, GraphNode, ViewMode } from '../types'
+import type { Graph, GraphLink, GraphNode, PrMark, ViewMode } from '../types'
 import type { ContributorFocus } from '../graph/contributors'
 import { clockAt, growth, stemGrowth, type Timeline } from '../graph/timeline'
 import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
@@ -32,6 +32,8 @@ import {
   type TimeForce,
 } from './gardenUtils'
 import { TIP_RING_PX, useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
+import { PR_RING_METRO_CUT, drawPrRing, prRingFor } from './prMark'
+import { branchQueryText } from './branchQuery'
 import {
   METRO_BADGE_MIN_PX,
   METRO_BEAD_RING_PX,
@@ -95,6 +97,12 @@ export interface GardenProps {
    * plants (gardenLook / gardenPaint). Ignored while metro is set.
    */
   garden?: boolean
+  /**
+   * node id -> the open pull requests of the branches whose tip it is, combined (see graph/pulls):
+   * drawn as a ring split into review | checks in place of the tip's own ring. Paint only: the label
+   * placer never sees it, so marks arriving or changing never move a label. null for none.
+   */
+  prMarks?: ReadonlyMap<string, PrMark> | null
 }
 
 export interface GardenTimelapse {
@@ -282,6 +290,7 @@ export default function Garden({
   timelapse = null,
   thorns = null,
   garden: gardenProp = false,
+  prMarks = null,
 }: GardenProps) {
   const garden = gardenProp && metro === null
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -458,7 +467,9 @@ export default function Garden({
   const reachSet = focus ? focus.nodes : branchReach
   const litLinks = focus ? focus.links : null
   const labelReach = focus ? focus.labels : branchReach
-  const query = search.trim().toLowerCase()
+  // pull request qualifiers (is:pr, checks:failing, ...) filter the branch list only: the canvas
+  // matches the free text, which for a plain search is the search exactly as before
+  const query = branchQueryText(search).toLowerCase()
 
   const bumpHover = useCallback(() => setHoverVersion((v) => v + 1), [])
 
@@ -613,6 +624,7 @@ export default function Garden({
       const isLabelled = index.tipLabel.has(id)
       const matches = query !== '' && isLabelled && (index.tipLabelLower.get(id) ?? '').includes(query)
       const outer = metro ? r : r + (node.isTip ? 2 : 0)
+      const mark = node.isTip && prMarks ? prMarks.get(id) : undefined
       // how far the drawn node reaches: a garden tip's petals spread past its body
       const reach = garden && node.isTip ? outer * BLOOM_SCALE : outer
 
@@ -652,8 +664,15 @@ export default function Garden({
         // tips bloom, bud or wilt by age; merges flower; forks are knots on the stem; a root
         // without a tip is a seed; plain commits (full view) are leaves on the stem
         const turn = hash01(id)
-        if (node.isTip) drawTip(ctx, x, y, outer, bloomOf(node.commit.date, gardenNow()), turn, colour, ink)
-        else if (node.isMerge) drawMergeFlower(ctx, x, y, r * 1.2, turn, colour, ink)
+        if (node.isTip) {
+          drawTip(ctx, x, y, outer, bloomOf(node.commit.date, gardenNow()), turn, colour, ink)
+          // an open pull request: a ring just inside the petals' reach (not looked up yet: in the
+          // station colour, since branch-coloured petals would swallow the branch colour)
+          if (mark) {
+            const ring = prRingFor('garden', reach, px)
+            drawPrRing(ctx, x, y, ring.R, ring.w, mark, th, px, th.stationRing)
+          }
+        } else if (node.isMerge) drawMergeFlower(ctx, x, y, r * 1.2, turn, colour, ink)
         else if (node.isFork || node.isRoot) {
           ctx.beginPath()
           ctx.arc(x, y, r * 0.9, 0, TWO_PI)
@@ -672,9 +691,21 @@ export default function Garden({
         if (node.isTip) {
           ctx.fillStyle = colour
           ctx.fill()
-          ctx.strokeStyle = th.stationRing
-          ctx.lineWidth = ring
-          ctx.stroke()
+          if (mark) {
+            // an open pull request: its ring in place of the station outline, parted from the disc
+            // by a cut in the canvas colour, so a half in the branch's own colour still reads
+            ctx.beginPath()
+            ctx.arc(x, y, r + PR_RING_METRO_CUT.centrePx * px, 0, TWO_PI)
+            ctx.strokeStyle = th.canvas
+            ctx.lineWidth = PR_RING_METRO_CUT.widthPx * px
+            ctx.stroke()
+            const pr = prRingFor('metro', r, px)
+            drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px, th.stationRing)
+          } else {
+            ctx.strokeStyle = th.stationRing
+            ctx.lineWidth = ring
+            ctx.stroke()
+          }
         } else if (kind === 'interchange') {
           ctx.fillStyle = th.stationRing
           ctx.fill()
@@ -704,11 +735,17 @@ export default function Garden({
         ctx.arc(x, y, outer, 0, TWO_PI)
         ctx.fillStyle = fill
         ctx.fill()
-        ctx.beginPath()
-        ctx.arc(x, y, outer + 2.5 * px, 0, TWO_PI)
-        ctx.strokeStyle = colour
-        ctx.lineWidth = 1.5 * px
-        ctx.stroke()
+        if (mark) {
+          // an open pull request: the tip's ring split into review | checks, reaching no further
+          const pr = prRingFor('organic', outer, px)
+          drawPrRing(ctx, x, y, pr.R, pr.w, mark, th, px, colour)
+        } else {
+          ctx.beginPath()
+          ctx.arc(x, y, outer + 2.5 * px, 0, TWO_PI)
+          ctx.strokeStyle = colour
+          ctx.lineWidth = 1.5 * px
+          ctx.stroke()
+        }
       } else if (node.isMerge) {
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
@@ -759,7 +796,7 @@ export default function Garden({
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf, garden, gardenNow, ink, leafOf],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf, garden, gardenNow, ink, leafOf, prMarks],
   )
 
   const paintPointerArea = useCallback(

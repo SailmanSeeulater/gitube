@@ -22,6 +22,10 @@ const LAZY_ONLY = [
   'export/image.ts',
   'export/gardenFile.ts',
   'export/exporters.ts',
+  // the pull request overlay's network client and inspector block (its ring and row glyphs are eager)
+  'lazy/pullsPart.ts',
+  'api/pulls.ts',
+  'components/PrBlock.tsx',
 ]
 
 /** specifier ('./x', '../y/z') taken from the module at path from ('components/A.tsx'), relative to src/ */
@@ -120,6 +124,7 @@ describe('lazy parts', () => {
         'components/WeedsTab.tsx',
         'export/exporters.ts',
         'graph/metro.ts',
+        'lazy/pullsPart.ts',
       ].sort(),
     )
   })

@@ -45,3 +45,9 @@ export const weedsTabChunk = defineChunk(() => import('../components/WeedsTab'))
 
 /** The metro layout engine (graph/metro), loaded when metro is picked or was the saved layout. */
 export const metroChunk = defineChunk(() => import('../graph/metro'))
+
+/**
+ * The pull request overlay's GitHub client (api/pulls) and the node inspector's pull request block,
+ * one chunk, loaded as soon as a repo's data is in (usePulls), so it is there before a tip is opened.
+ */
+export const pullsChunk = defineChunk(() => import('./pullsPart'))

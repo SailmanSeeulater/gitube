@@ -2,13 +2,39 @@ import { Octokit } from '@octokit/rest'
 import { GitHubFetchError } from '../types'
 import type { Branch, Commit, FetchOptions, FetchProgress, FetchStage, RepoData } from '../types'
 import type { RepoRef } from './parseRepoUrl'
+import {
+  PER_PAGE,
+  errorStatus,
+  hasHttpResponse,
+  hasNextLink,
+  isServerErrorResponse,
+  noteRateLimit,
+  runPool,
+  toFetchError,
+  type ErrorContext,
+  type HeaderBag,
+  type RateState,
+} from './http'
+
+// the shared HTTP helpers moved to api/http.ts; still importable from here
+export {
+  errorStatus,
+  hasNextLink,
+  noteRateLimit,
+  parseResetAt,
+  readHeader,
+  scrub,
+  toFetchError,
+  type ErrorContext,
+  type HeaderBag,
+  type RateState,
+} from './http'
 
 /** Hard caps and defaults for one fetchRepoData call. */
 const DEFAULT_TRUNK_LIMIT = 500
 const DEFAULT_BRANCH_LIMIT = 250
 const DEFAULT_MAX_BRANCHES = 200
 const COMPARE_CONCURRENCY = 6
-const PER_PAGE = 100
 /**
  * Minimum trunk commits to fetch before the "all merge-bases covered" early stop may kick in.
  * Only applies when at least one merge base is known; with none (trunk-only repo, or every
@@ -34,22 +60,6 @@ interface RawCommit {
     committer?: { name?: string; date?: string } | null
   }
   author?: { login?: string; avatar_url?: string } | null
-}
-
-type HeaderBag = Record<string, string | number | undefined>
-
-interface RateState {
-  requestsUsed: number
-  remaining: number | null
-  resetAt: string | null
-}
-
-interface ErrorContext {
-  what: string
-  signal?: AbortSignal
-  token?: string
-  owner: string
-  repo: string
 }
 
 /**
@@ -406,68 +416,6 @@ function firstLine(message: string | null | undefined): string {
   return (idx === -1 ? message : message.slice(0, idx)).trim()
 }
 
-function readHeader(headers: HeaderBag | undefined, name: string): string | undefined {
-  if (!headers) return undefined
-  const lower = name.toLowerCase()
-  const direct = headers[lower] ?? headers[name]
-  if (direct !== undefined && direct !== null) return String(direct)
-  for (const key of Object.keys(headers)) {
-    if (key.toLowerCase() === lower) {
-      const value = headers[key]
-      return value === undefined || value === null ? undefined : String(value)
-    }
-  }
-  return undefined
-}
-
-function noteRateLimit(state: RateState, headers: HeaderBag | undefined): void {
-  const remaining = readHeader(headers, 'x-ratelimit-remaining')
-  if (remaining !== undefined) {
-    const n = Number(remaining)
-    state.remaining = Number.isFinite(n) ? n : null
-  }
-  const reset = parseResetAt(headers)
-  if (reset !== null) state.resetAt = reset
-}
-
-/**
- * When the caller may retry, from the response headers. retry-after wins: GitHub only sends
- * it for secondary (abuse) limits, which clear within minutes, whereas x-ratelimit-reset is
- * on every response and points at the hourly primary window. GitHub's docs say to honour
- * retry-after first.
- */
-function parseResetAt(headers: HeaderBag | undefined): string | null {
-  const retryAfter = readHeader(headers, 'retry-after')?.trim()
-  if (retryAfter !== undefined && retryAfter !== '') {
-    const n = Number(retryAfter)
-    if (Number.isFinite(n) && n >= 0) return new Date(Date.now() + n * 1000).toISOString()
-    const at = Date.parse(retryAfter) // RFC 7231 also allows an HTTP-date
-    if (Number.isFinite(at)) return new Date(at).toISOString()
-  }
-  const reset = readHeader(headers, 'x-ratelimit-reset')
-  if (reset !== undefined) {
-    const n = Number(reset)
-    if (Number.isFinite(n) && n > 0) return new Date(n * 1000).toISOString()
-  }
-  return null
-}
-
-function errorStatus(err: unknown): number | undefined {
-  const status = (err as { status?: unknown } | null)?.status
-  return typeof status === 'number' ? status : undefined
-}
-
-/** True when err carries a real HTTP response (Octokit synthesises status 500 with none for a fetch failure). */
-function hasHttpResponse(err: unknown): boolean {
-  return (err as { response?: unknown } | null)?.response !== undefined
-}
-
-/** A genuine 5xx answer from GitHub: worth exactly one retry. */
-function isServerErrorResponse(err: unknown): boolean {
-  const status = errorStatus(err)
-  return hasHttpResponse(err) && status !== undefined && status >= 500 && status < 600
-}
-
 /** A compare answer meaning GitHub could not produce this one diff: skip the branch, keep the rest. */
 function isSkippableCompareStatus(err: unknown): boolean {
   const status = errorStatus(err)
@@ -489,131 +437,4 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const timer = setTimeout(done, ms)
     signal?.addEventListener('abort', done, { once: true })
   })
-}
-
-function hasNextLink(headers: HeaderBag | undefined, pageLength: number): boolean {
-  const link = readHeader(headers, 'link')
-  if (link !== undefined) return /<[^<>]+>;\s*rel="next"/.test(link)
-  // No Link header at all: assume more pages only when the page is full.
-  return pageLength >= PER_PAGE
-}
-
-/** Remove the token from any text that might end up in an error message. */
-function scrub(text: string, token: string | undefined): string {
-  if (!token) return text
-  return text.split(token).join('[REDACTED]')
-}
-
-/**
- * Map anything thrown by Octokit (RequestError, AbortError, plain Error) to a GitHubFetchError.
- * Never includes the token.
- */
-function toFetchError(err: unknown, ctx: ErrorContext): GitHubFetchError {
-  if (err instanceof GitHubFetchError) return err
-
-  const e = (err ?? {}) as {
-    name?: string
-    status?: number
-    message?: string
-    response?: { headers?: HeaderBag; data?: unknown }
-    cause?: unknown
-  }
-
-  if (ctx.signal?.aborted || e.name === 'AbortError') {
-    return new GitHubFetchError(`Fetch aborted while ${ctx.what}`, 'aborted')
-  }
-
-  const rawMessage = typeof e.message === 'string' ? e.message : String(err)
-  const message = scrub(rawMessage, ctx.token)
-  const status = typeof e.status === 'number' ? e.status : undefined
-  const headers = e.response?.headers
-
-  // Octokit wraps fetch failures in a RequestError with status 500 and no response.
-  if (e.name === 'HttpError' && !e.response) {
-    return new GitHubFetchError(`Network error while ${ctx.what}: ${message}`, 'network')
-  }
-  if (status === undefined && (e.name === 'TypeError' || err instanceof TypeError)) {
-    return new GitHubFetchError(`Network error while ${ctx.what}: ${message}`, 'network')
-  }
-
-  if (status === 404) {
-    return new GitHubFetchError(
-      `${ctx.owner}/${ctx.repo} was not found while ${ctx.what}. It may be private, renamed or misspelled.`,
-      'not_found',
-    )
-  }
-
-  if (status === 403 || status === 429) {
-    const remaining = readHeader(headers, 'x-ratelimit-remaining')
-    const retryAfter = readHeader(headers, 'retry-after')
-    // The hourly primary quota is exhausted only when remaining is 0; a secondary (abuse)
-    // limit arrives with retry-after and plenty of quota left, and a token would not help it.
-    const primary = remaining === '0'
-    const looksRateLimited = status === 429 || primary || retryAfter !== undefined || /rate limit/i.test(message)
-    if (looksRateLimited) {
-      const resetAt = parseResetAt(headers)
-      const kind = primary ? 'rate limit' : 'secondary rate limit'
-      const when = resetAt ? ` Retry after ${resetAt}.` : ''
-      const hint =
-        primary && !ctx.token ? ' Add a personal access token to raise the limit from 60 to 5000 requests per hour.' : ''
-      return new GitHubFetchError(`GitHub API ${kind} exceeded while ${ctx.what}.${when}${hint}`, 'rate_limited', resetAt)
-    }
-    return new GitHubFetchError(
-      `GitHub refused the request (403) while ${ctx.what}: ${message}`,
-      'unauthorized',
-    )
-  }
-
-  if (status === 401) {
-    const hint = ctx.token ? 'The token is invalid or expired.' : 'Authentication is required.'
-    return new GitHubFetchError(`GitHub rejected the credentials (401) while ${ctx.what}. ${hint}`, 'unauthorized')
-  }
-
-  // On the endpoints wrapped here (repos.get, listBranches, compare, listCommits) the only
-  // documented 409 is "Git Repository is empty.", a deterministic state no retry can fix.
-  if (status === 409) {
-    return new GitHubFetchError(
-      `${ctx.owner}/${ctx.repo} has no commits yet (GitHub answered 409 while ${ctx.what}).`,
-      'empty_repo',
-    )
-  }
-
-  return new GitHubFetchError(
-    `Unexpected error while ${ctx.what}${status !== undefined ? ` (HTTP ${status})` : ''}: ${message}`,
-    'unknown',
-  )
-}
-
-/**
- * Run `worker` over `items` with at most `concurrency` in flight. Stops launching new work after
- * the first failure and rejects with that error once in-flight workers settle.
- */
-async function runPool<T>(
-  items: ReadonlyArray<T>,
-  concurrency: number,
-  worker: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-  let next = 0
-  let failed = false
-  let failure: unknown = undefined
-
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (!failed) {
-      const index = next
-      next += 1
-      if (index >= items.length) return
-      try {
-        await worker(items[index], index)
-      } catch (err) {
-        if (!failed) {
-          failed = true
-          failure = err
-        }
-        return
-      }
-    }
-  })
-
-  await Promise.all(runners)
-  if (failed) throw failure
 }

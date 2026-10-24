@@ -1,7 +1,27 @@
-import type { GraphNode } from '../types'
+import type { GraphNode, RepoData } from '../types'
+import { branchUnchecked, nodePrs } from '../graph/pulls'
+import type { PullsView } from '../hooks/usePulls'
+import { pullsChunk } from '../lazy/parts'
 import { useTheme } from '../theme/useTheme'
 import { formatDateTime, relativeTime, shortSha } from './gardenUtils'
 import { CloseIcon, ExternalIcon } from './icons'
+import { LazySlot, lazyPart } from './LazyPart'
+
+// the pull request block lives in the pulls chunk, loaded once a repo is in (see usePulls)
+const PrBlock = lazyPart(pullsChunk)
+
+/** What the inspector needs for a tip's open pull requests (absent for a saved file). */
+export interface InspectorPulls {
+  view: PullsView
+  /** the repo the pull requests are of */
+  data: Pick<RepoData, 'owner' | 'repo' | 'defaultBranch' | 'branches'>
+  /** when the graph on show was fetched from GitHub (ISO), for "PR head is newer than this tip" */
+  graphAt: string | null
+  /** opens the token form (no token: lookups cost the visitor's 60 requests an hour) */
+  onAddToken: () => void
+  /** fetches the graph and its pull requests again */
+  onRefresh: () => void
+}
 
 export interface NodeInspectorProps {
   node: GraphNode
@@ -12,9 +32,11 @@ export interface NodeInspectorProps {
   authorKey?: string | null
   /** Highlights the author's commits (and shows them in the leaderboard). */
   onShowAuthor?: (key: string) => void
+  /** the open pull request overlay; null or absent shows none */
+  pulls?: InspectorPulls | null
 }
 
-export default function NodeInspector({ node, palette, onClose, authorKey = null, onShowAuthor }: NodeInspectorProps) {
+export default function NodeInspector({ node, palette, onClose, authorKey = null, onShowAuthor, pulls = null }: NodeInspectorProps) {
   const { commit } = node
   const kinds: string[] = []
   if (node.isTip) kinds.push('tip')
@@ -23,6 +45,20 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
   if (node.isRoot) kinds.push('root')
   const fallback = useTheme().fallback
   const ownerColour = palette[node.owner] ?? fallback
+  const prs = pulls && node.isTip ? nodePrs(pulls.view.index, node.tips) : []
+  // a block only where there is something to say: this tip's pull requests, the default branch's
+  // count of them, a branch GitHub did not answer for, or the overlay still reading or failed;
+  // other tips look as they always did
+  const prStatus = pulls?.view.status ?? 'off'
+  const isDefaultTip = pulls !== null && node.tips.includes(pulls.data.defaultBranch)
+  const showPrs =
+    pulls !== null &&
+    node.isTip &&
+    (prs.length > 0 ||
+      node.tips.some((tip) => branchUnchecked(pulls.view.index, tip)) ||
+      prStatus === 'loading' ||
+      prStatus === 'error' ||
+      (isDefaultTip && (pulls.view.index?.total ?? 0) > 0))
 
   return (
     <div
@@ -83,6 +119,20 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
               {tip}
             </span>
           ))}
+        </div>
+      )}
+
+      {showPrs && pulls && (
+        <div className="mt-2.5 border-t border-garden-border pt-2.5">
+          <LazySlot
+            fallback={
+              <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+                checking pull requests…
+              </p>
+            }
+          >
+            <PrBlock node={node} prs={prs} pulls={pulls} palette={palette} fallback={fallback} />
+          </LazySlot>
         </div>
       )}
 

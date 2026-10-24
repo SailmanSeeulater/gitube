@@ -21,6 +21,7 @@
   --color-garden-text-dim: var(--garden-text-dim);
   --color-garden-warn: var(--garden-warn);
   --color-garden-danger: var(--garden-danger);
+  --color-garden-success: var(--garden-success);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --shadow-soft: var(--garden-shadow);
 }
