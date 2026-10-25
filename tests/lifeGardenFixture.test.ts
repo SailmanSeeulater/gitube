@@ -1,0 +1,354 @@
+/**
+ * The life garden end to end, on the recordings: kepano through the token tier (GraphQL, 2013 to
+ * 2026) and gaearon through the tier without one (REST, 301 repos), each fetched by the real
+ * fetcher, grown as PersonApp grows it, painted in all ten themes with its labels, and shown in the
+ * panel, inspector, legend and status strip; then a user with no repos and an account a day old.
+ * PersonApp itself is rendered on the server with the profile already in the query cache.
+ */
+import { createElement as h } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import PersonApp from '../src/PersonApp'
+import PersonInspector from '../src/profile/PersonInspector'
+import PersonLegend, { dataLimits } from '../src/profile/PersonLegend'
+import PersonPanel from '../src/profile/PersonPanel'
+import PersonStatus from '../src/profile/PersonStatus'
+import { dayDetail } from '../src/profile/dayIndex'
+import { LIFE_MAX_K, fitLifeCamera, panLifeCamera, zoomLifeCamera } from '../src/profile/lifeCamera'
+import { MAX_LEAVES_PER_PLANT } from '../src/profile/lifeGardenLayout'
+import { languagePalette } from '../src/profile/lifeInk'
+import { profileQueryKey } from '../src/profile/useProfileData'
+import { usePersonStore } from '../src/profile/usePersonStore'
+import { dayKey, dayNumber } from '../src/profile/timeline'
+import { THEMES, getTheme, type Theme } from '../src/theme/themes'
+import type { ProfileData, ProfileRepo } from '../src/types'
+import type { CtxEntry } from './helpers/recordingCtx'
+import {
+  FAKE_TOKEN,
+  GAEARON_NOW,
+  KEPANO_NOW,
+  VIEW,
+  gaearonProfile,
+  grow,
+  kepanoProfile,
+  paint,
+  setGarden,
+  setPerson,
+  textOf,
+  type Grown,
+} from './helpers/personScene'
+
+const noop = () => {}
+const dark = getTheme('obsidian')
+const light = getTheme('paper')
+
+let kepano: ProfileData
+let gaearon: ProfileData
+
+beforeAll(async () => {
+  ;[kepano, gaearon] = await Promise.all([kepanoProfile(), gaearonProfile()])
+})
+
+beforeEach(() => {
+  usePersonStore.getState().resetFor('nobody')
+  setPerson({ tab: 'repos' })
+  setGarden({ panelOpen: true, rate: null, token: '', themeId: dark.id })
+})
+
+/** Every number a call was given or a property was set to. */
+function numbersOf(log: CtxEntry[]): number[] {
+  return log.flatMap((e) => (e.kind === 'call' ? e.args : [e.value])).filter((v): v is number => typeof v === 'number')
+}
+
+/** Paints g's garden as the canvas does, and checks what every frame must hold. */
+function paintsCleanly(g: Grown): void {
+  const { rec } = paint(g)
+  const first = rec.log.find((e) => e.kind === 'call' && /^(fill|fillRect|stroke|fillText)$/.test(e.name))
+  expect(first).toMatchObject({ kind: 'call', name: 'fillRect', args: [0, 0, VIEW.width * 2, VIEW.height * 2] })
+  expect(first?.kind === 'call' && first.style.fillStyle).toBe(g.theme.canvas)
+  for (const n of numbersOf(rec.log)) expect(Number.isFinite(n)).toBe(true)
+  expect(rec.calls('save')).toHaveLength(rec.calls('restore').length)
+}
+
+function panel(g: Grown): string {
+  return renderToStaticMarkup(
+    h(PersonPanel, {
+      profile: g.profile,
+      timeline: g.timeline,
+      colourOf: g.colourOf,
+      name: g.name,
+      privateCount: g.privateKeys.size,
+      revealed: false,
+      onReveal: noop,
+      theme: g.theme,
+    }),
+  )
+}
+
+function inspector(g: Grown): string {
+  return renderToStaticMarkup(h(PersonInspector, { profile: g.profile, timeline: g.timeline, days: g.days, colourOf: g.colourOf, name: g.name }))
+}
+
+function legend(g: Grown): string {
+  return renderToStaticMarkup(h(PersonLegend, { profile: g.profile, timeline: g.timeline, colourOf: g.colourOf, theme: g.theme, hasPrivate: g.privateKeys.size > 0 }))
+}
+
+function status(g: Grown, hasToken: boolean): string {
+  return renderToStaticMarkup(h(PersonStatus, { profile: g.profile, timeline: g.timeline, cachedAt: null, hasToken, onRefresh: noop, onAddToken: noop }))
+}
+
+/** PersonApp on the server, with profile already in the query cache under the key its tier gives it. */
+function personApp(profile: ProfileData, token: string, theme: Theme): string {
+  setGarden({ token, themeId: theme.id })
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+  client.setQueryData(profileQueryKey(profile.login, token), { profile, cachedAt: null })
+  return renderToStaticMarkup(
+    h(
+      QueryClientProvider,
+      { client },
+      h(PersonApp, { login: profile.login, request: 0, view: null, focusInput: false, onRepo: noop, onUser: noop }),
+    ),
+  )
+}
+
+/** What each plant shows of its lane: a bloom for stars, dry when archived, a cutting for a fork, a seedling without counted commits. */
+function expectPlantsFollowLanes(g: Grown): void {
+  expect(g.layout.plants).toHaveLength(g.timeline.lanes.length)
+  for (const plant of g.layout.plants) {
+    const lane = g.timeline.lanes[plant.lane]
+    expect(plant.key).toBe(lane.repo.toLowerCase())
+    expect(plant.tip).toBe(lane.isArchived ? 'wilted' : lane.stars > 0 ? 'bloom' : 'bud')
+    expect(plant.bloom > 0).toBe(lane.stars > 0)
+    expect(plant.dry).toBe(lane.isArchived)
+    expect(plant.cutting).toBe(lane.isFork)
+    expect(plant.visiting).toBe(!lane.isOwn)
+    const seedling = g.profile.source === 'graphql' && !lane.detailed
+    expect(plant.seedling).toBe(seedling)
+    const active = lane.spans.filter((span) => span.kind === 'active').length
+    expect(plant.leaves).toHaveLength(seedling ? 0 : Math.min(active, MAX_LEAVES_PER_PLANT))
+    for (const leaf of plant.leaves) expect(leaf.t).toBeGreaterThanOrEqual(0)
+    expect(plant.x).toBeGreaterThanOrEqual(0)
+    expect(plant.x).toBeLessThanOrEqual(g.layout.days)
+  }
+}
+
+describe('kepano, with a token (GraphQL)', () => {
+  it('grows a plant per repo, each drawn as its lane says', () => {
+    const g = grow(kepano, KEPANO_NOW, dark)
+    expect(kepano.source).toBe('graphql')
+    expect(g.timeline.start.slice(0, 4)).toBe('2013')
+    expectPlantsFollowLanes(g)
+    const tips = new Set(g.layout.plants.map((p) => p.tip))
+    expect(tips).toEqual(new Set(['bloom', 'bud', 'wilted']))
+    // the starred repos GitHub counted no commits to (forks) still bloom, as seedlings
+    expect(g.layout.plants.some((p) => p.seedling && p.tip === 'bloom')).toBe(true)
+    expect(g.layout.plants.some((p) => p.visiting)).toBe(true)
+    expect(g.layout.years[0].year).toBe(2013)
+    expect(g.layout.milestones.length).toBe(g.timeline.milestones.length)
+  })
+
+  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole garden, every number finite', (_id, theme) => {
+    paintsCleanly(grow(kepano, KEPANO_NOW, theme))
+  })
+
+  it('labels the plants with their names, the owner left off', () => {
+    const g = grow(kepano, KEPANO_NOW, light)
+    const top = g.layout.plants.findIndex((p) => p.key === 'kepano/obsidian-skills')
+    const { rec } = paint(g, { hover: { kind: 'repo', key: 'kepano/obsidian-skills' } })
+    const texts = rec.calls('fillText').map((c) => String(c.args[0]))
+    expect(top).toBeGreaterThanOrEqual(0)
+    expect(texts).toContain('obsidian-skills')
+    expect(texts.some((text) => text.startsWith('kepano/'))).toBe(false)
+  })
+
+  it('shows the panel, a repo and a day in the inspector, the legend and the strip', () => {
+    const g = grow(kepano, KEPANO_NOW, dark)
+    const list = textOf(panel(g))
+    expect(list).toContain(`${g.timeline.lanes.length} repos`)
+    expect(list).toContain('kepano/obsidian-minimal')
+    // nothing private here: no lock, no toggle (the legend's limits still speak of private repos)
+    expect(list).not.toMatch(/private repo(?!s)/)
+
+    setPerson({ hover: { kind: 'repo', key: 'kepano/obsidian-minimal' } })
+    const lane = g.timeline.lanes.find((l) => l.repo === 'kepano/obsidian-minimal')!
+    const repo = textOf(inspector(g))
+    expect(repo).toContain(`born ${lane.born}`)
+    expect(repo).toContain(`${lane.commits} commits on ${lane.activeDays} days`)
+    expect(repo).toContain(`${lane.stars} stars`)
+
+    const busiest = kepano.days.reduce((a, b) => (b.count > a.count ? b : a))
+    setPerson({ hover: { kind: 'day', day: dayNumber(busiest.date), milestone: null } })
+    const day = textOf(inspector(g))
+    expect(day).toContain(busiest.date)
+    expect(day).toContain(`${busiest.count} contributions`)
+    expect(dayDetail(g.days, dayNumber(busiest.date)).repos.length).toBeGreaterThan(0)
+
+    const limits = textOf(legend(g))
+    for (const limit of dataLimits(kepano)) expect(limits).toContain(limit)
+    expect(limits).toContain('default branch')
+    expect(limits).toContain('read:user')
+
+    const strip = textOf(status(g, true))
+    expect(strip).toContain(`${g.timeline.lanes.length} repos`)
+    expect(strip).toContain('2013–2026')
+    expect(strip).toMatch(/\d+ contributions/)
+    expect(strip).not.toContain('add a token')
+  })
+
+  it('renders in PersonApp, in a dark and a light theme', () => {
+    for (const theme of [dark, light]) {
+      const html = personApp(kepano, FAKE_TOKEN, theme)
+      expect(html).toContain(`aria-label="life garden of kepano: ${kepano.repos.length} repos, 2013 to 2026"`)
+      expect(textOf(html)).toContain('what GitHub\'s data leaves out')
+      expect(textOf(html)).toMatch(/\d+ contributions/)
+      expect(html).not.toContain('person mode coming soon')
+    }
+  })
+})
+
+describe('gaearon, without a token (REST)', () => {
+  it('grows a plant per repo, each as tall as the repo was active', () => {
+    const g = grow(gaearon, GAEARON_NOW, light)
+    expect(gaearon.source).toBe('rest')
+    expect(g.layout.plants).toHaveLength(301)
+    expectPlantsFollowLanes(g)
+    expect(g.layout.plants.some((p) => p.seedling)).toBe(false)
+    expect(new Set(g.layout.plants.map((p) => p.tip))).toEqual(new Set(['bloom', 'bud', 'wilted']))
+    // tier 1: one span per repo, from its creation to its last push
+    for (const lane of g.timeline.lanes) expect(lane.detailed).toBe(false)
+  })
+
+  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole garden, every number finite', (_id, theme) => {
+    paintsCleanly(grow(gaearon, GAEARON_NOW, theme))
+  })
+
+  it('says what a profile without a token leaves out: commits, and days before the recent pushes', () => {
+    const g = grow(gaearon, GAEARON_NOW, dark)
+    const pushed = gaearon.recent.reduce((a, b) => (b.pushes > a.pushes ? b : a))
+    const lane = g.timeline.lanes.find((l) => l.repo.toLowerCase() === pushed.repo.toLowerCase())!
+    setPerson({ hover: { kind: 'repo', key: lane.repo.toLowerCase() } })
+    const repo = textOf(inspector(g))
+    expect(repo).toContain('commits are not counted without a token')
+    expect(repo).not.toMatch(/\b0 commits\b/)
+    expect(repo).toMatch(/\d+ push(es)? since 2026-10-02/)
+
+    setPerson({ hover: { kind: 'day', day: dayNumber(pushed.date), milestone: null } })
+    expect(textOf(inspector(g))).toMatch(/\d+ push(es)?/)
+    setPerson({ hover: { kind: 'day', day: dayNumber('2026-09-01'), milestone: null } })
+    expect(textOf(inspector(g))).toContain('no day detail before 2026-10-02 without a token')
+
+    const limits = textOf(legend(g))
+    for (const limit of dataLimits(gaearon)) expect(limits).toContain(limit)
+    expect(limits).toContain('no commit counts without a token')
+    expect(textOf(status(g, false))).toContain('add a token for commits')
+  })
+
+  it('renders in PersonApp, in a dark and a light theme', () => {
+    for (const theme of [dark, light]) {
+      const html = personApp(gaearon, '', theme)
+      expect(html).toContain('aria-label="life garden of gaearon: 301 repos')
+      expect(textOf(html)).toContain('add a token for commits')
+    }
+  })
+})
+
+/** A hand-made profile on today's clock. */
+function made(over: Partial<ProfileData>): ProfileData {
+  return {
+    login: 'sprout',
+    name: null,
+    avatarUrl: 'https://avatars.githubusercontent.com/u/9',
+    createdAt: '2026-10-24T18:00:00Z',
+    source: 'rest',
+    repos: [],
+    days: [],
+    recent: [],
+    recentFrom: '2026-09-25',
+    milestones: [{ kind: 'joined', date: '2026-10-24T18:00:00Z', label: 'joined GitHub' }],
+    restrictedContributions: 0,
+    truncated: false,
+    lostWindows: [],
+    fallback: null,
+    ...over,
+  }
+}
+
+/** 2026-10-25 12:00 in Los Angeles. */
+const NOW = Date.parse('2026-10-25T19:00:00Z')
+
+function repo(nameWithOwner: string, createdAt: string, over: Partial<ProfileRepo> = {}): ProfileRepo {
+  return {
+    nameWithOwner,
+    createdAt,
+    firstActiveAt: createdAt,
+    lastActiveAt: createdAt,
+    isOwn: true,
+    language: null,
+    languageColor: null,
+    stars: 0,
+    forks: 0,
+    isFork: false,
+    isArchived: false,
+    isPrivate: false,
+    activity: [],
+    ...over,
+  }
+}
+
+describe('a user with no repos', () => {
+  const empty = made({ createdAt: '2019-03-01T18:00:00Z', milestones: [{ kind: 'joined', date: '2019-03-01T18:00:00Z', label: 'joined GitHub' }] })
+  const emptyToken = { ...empty, source: 'graphql' as const, recentFrom: null, days: [{ date: '2026-10-25', count: 0 }] }
+
+  it('grows an empty garden over the years since joining, in every theme', () => {
+    for (const profile of [empty, emptyToken]) {
+      const g = grow(profile, NOW, dark)
+      expect(g.layout.plants).toEqual([])
+      expect(g.layout.years.map((y) => y.year)).toEqual([2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026])
+      expect(languagePalette(g.timeline, dark)).toEqual({})
+      expect(g.colourOf(null)).toBe(dark.fallback)
+      for (const theme of THEMES) paintsCleanly(grow(profile, NOW, theme))
+      // no labels to place, and nothing to draw for them
+      const { rec, measured } = paint(g)
+      expect(measured).toEqual([])
+      expect(rec.calls('fillText').map((c) => String(c.args[0])).every((t) => /^(\d{4}|today)$/.test(t))).toBe(true)
+    }
+  })
+
+  it('says so in the panel and the strip, and renders in PersonApp', () => {
+    expect(textOf(panel(grow(empty, NOW, dark)))).toContain('no public repos')
+    expect(textOf(panel(grow(emptyToken, NOW, dark)))).toContain('no repos')
+    expect(textOf(status(grow(empty, NOW, dark), false))).toContain('0 repos')
+    expect(personApp(empty, '', light)).toContain('aria-label="life garden of sprout: 0 repos, 2019 to 2026"')
+  })
+})
+
+describe('an account a day old', () => {
+  const young = made({ repos: [repo('sprout/hello', '2026-10-25T16:00:00Z', { lastActiveAt: '2026-10-25T17:00:00Z', language: 'Go' })] })
+
+  it('centres the short life at the closest zoom, and holds it there', () => {
+    const g = grow(young, NOW, dark)
+    expect(g.layout.days).toBe(2)
+    const camera = fitLifeCamera(g.layout.days, VIEW)
+    expect(camera.k).toBe(LIFE_MAX_K)
+    expect(camera.tx + (g.layout.days * camera.k) / 2).toBeCloseTo(VIEW.width / 2)
+    expect(zoomLifeCamera(camera, 0.5, 300, g.layout.days, VIEW)).toEqual(camera)
+    expect(zoomLifeCamera(camera, 2, 300, g.layout.days, VIEW)).toEqual(camera)
+    expect(panLifeCamera(camera, 200, g.layout.days, VIEW)).toEqual(camera)
+    expect(g.layout.plants).toHaveLength(1)
+    expect(g.layout.plants[0].x).toBe(1.5)
+    for (const theme of THEMES) paintsCleanly(grow(young, NOW, theme))
+  })
+
+  it('shows its one day in the panel, the inspector and PersonApp', () => {
+    const g = grow(young, NOW, dark)
+    const list = textOf(panel(g))
+    expect(list).toContain('on GitHub since 2026-10-24')
+    expect(list).toContain('sprout/hello')
+    setPerson({ hover: { kind: 'repo', key: 'sprout/hello' } })
+    expect(textOf(inspector(g))).toContain('born 2026-10-25')
+    setPerson({ hover: { kind: 'day', day: dayNumber('2026-10-25'), milestone: null } })
+    expect(textOf(inspector(g))).toContain(dayKey(g.timeline.todayDay))
+    expect(personApp(young, '', dark)).toContain('aria-label="life garden of sprout: 1 repo, 2026"')
+  })
+})

@@ -18,6 +18,10 @@ export interface ErrorCardProps {
   /** chunk_failed's action */
   onReload?: () => void
   onDismiss?: () => void
+  /** shown in place of the code's own title (person mode words some codes for a user) */
+  title?: string
+  /** shown in place of the code's own hint */
+  hint?: string
 }
 
 interface Copy {
@@ -98,7 +102,7 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
   }
 }
 
-export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss }: ErrorCardProps) {
+export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss, title, hint }: ErrorCardProps) {
   const copy = copyFor(code, resetAt, message)
   return (
     <div
@@ -110,8 +114,8 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
           <AlertIcon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-garden-text">{copy.title}</p>
-          <p className="mt-1 leading-snug text-garden-muted">{copy.hint}</p>
+          <p className="font-medium text-garden-text">{title ?? copy.title}</p>
+          <p className="mt-1 leading-snug text-garden-muted">{hint ?? copy.hint}</p>
           {copy.tokenAction && onAddToken && (
             <button
               type="button"

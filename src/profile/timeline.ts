@@ -75,6 +75,7 @@ export interface Lane {
   isOwn: boolean
   isFork: boolean
   isArchived: boolean
+  /** any copy of it is private (mergeRepos), as privacy.ts's privateRepoKeys reads a repo */
   isPrivate: boolean
   stars: number
   forks: number
@@ -168,7 +169,8 @@ export interface LifeTimeline {
   start: string
   todayDay: number
   startDay: number
-  /** by firstActiveAt (the instant, not only the day), then nameWithOwner; one per nameWithOwner */
+  /** by firstActiveAt (the instant, not only the day), then public before private, public ones by
+   *  nameWithOwner and private ones by what the views show of them (compareLanes); one per nameWithOwner */
   lanes: Lane[]
   /** every calendar year from the first one the profile reaches (start, or the calendar's first day) to now's */
   eras: Era[]
@@ -334,11 +336,15 @@ interface MergedRepo {
 
 interface BuiltLane {
   lane: Lane
+  /** the merged repo it was built from */
+  repo: ProfileRepo
   /** firstActiveAt as a fractional day number (never past now), which orders the lanes */
   rootAt: number
   lastActiveDay: number
   /** [day, commits] for each day with counted commits, ascending */
   activity: [number, number][]
+  /** laneSignature, made the first time compareLanes needs it */
+  signature?: string
 }
 
 /** null before any text, then code-unit order. */
@@ -368,11 +374,13 @@ function compareRepoFields(a: ProfileRepo, b: ProfileRepo): number {
  * The profile's repos, one per nameWithOwner (compared without case, as GitHub does). Within one
  * repo's activity a day listed twice adds up; copies of a repo listed twice (a fetcher's pages or
  * windows overlapping) are merged instead: each day keeps the larger of the copies' counts, and the
- * freshest copy (first in compareRepoFields's order) lends the other fields. Both rules ignore which
+ * freshest copy (first in compareRepoFields's order) lends the other fields, except that the repo is
+ * private when any copy is, as privateRepoKeys hides its name (privacy.ts). These rules ignore which
  * copy came first.
  */
 function mergeRepos(repos: ProfileRepo[], today: number): MergedRepo[] {
   const byName = new Map<string, MergedRepo>()
+  const secret = new Set<string>()
   for (const repo of repos) {
     const byDay = new Map<number, number>()
     for (const { date, commits } of repo.activity) {
@@ -380,6 +388,7 @@ function mergeRepos(repos: ProfileRepo[], today: number): MergedRepo[] {
       if (day <= today && commits > 0) byDay.set(day, (byDay.get(day) ?? 0) + commits)
     }
     const key = repo.nameWithOwner.toLowerCase()
+    if (repo.isPrivate) secret.add(key)
     const merged = byName.get(key)
     if (!merged) {
       byName.set(key, { repo, byDay })
@@ -388,7 +397,7 @@ function mergeRepos(repos: ProfileRepo[], today: number): MergedRepo[] {
     for (const [day, commits] of byDay) merged.byDay.set(day, Math.max(merged.byDay.get(day) ?? 0, commits))
     if (compareRepoFields(repo, merged.repo) < 0) merged.repo = repo
   }
-  return [...byName.values()]
+  return [...byName].map(([key, merged]) => (secret.has(key) && !merged.repo.isPrivate ? { ...merged, repo: { ...merged.repo, isPrivate: true } } : merged))
 }
 
 function toSpan(raw: RawSpan): Span {
@@ -481,12 +490,53 @@ function buildLane({ repo, byDay }: MergedRepo, today: number, nowDay: number): 
     detailed: activity.length > 0,
     spans: raw.map(toSpan),
   }
-  return { lane, rootAt, lastActiveDay, activity }
+  return { lane, repo, rootAt, lastActiveDay, activity }
 }
 
-/** By root instant, then nameWithOwner: a total order, as mergeRepos leaves one lane per name. */
+/**
+ * Everything the views can show of a lane but its name, as text: its fields, its spans and its
+ * counted days (which a day's repo list shows). Named field by field, so a field added to Lane stays
+ * out until someone decides it reveals nothing.
+ */
+function laneSignature({ lane, activity }: BuiltLane): string {
+  return JSON.stringify([
+    lane.born,
+    lane.root,
+    lane.start,
+    lane.end,
+    lane.lastActive,
+    lane.language,
+    lane.isOwn,
+    lane.isFork,
+    lane.isArchived,
+    lane.stars,
+    lane.forks,
+    lane.commits,
+    lane.activeDays,
+    lane.detailed,
+    lane.spans.map((span) => [span.kind, span.fromDay, span.toDay, span.commits, span.activeDays]),
+    activity,
+  ])
+}
+
+/**
+ * The lanes' order: by root instant; on one instant, public before private, public lanes by
+ * nameWithOwner. The order shows (the panel's rows, the garden's depth rows and twin seeds, a day's
+ * repo list), and a private repo's name may be hidden, so private lanes on one instant never compare
+ * names: they go by laneSignature, compared as text rather than hashed, so nothing collides and the
+ * order is the same whatever order the repos came in. Only private lanes alike in all of it fall back
+ * to the name; those look the same in every view, so the order between them shows nothing of which
+ * name is which. A total order, as mergeRepos leaves one lane per name.
+ */
 function compareLanes(a: BuiltLane, b: BuiltLane): number {
-  return a.rootAt - b.rootAt || compareText(a.lane.repo, b.lane.repo)
+  if (a.rootAt !== b.rootAt) return a.rootAt - b.rootAt
+  const secret = a.lane.isPrivate
+  if (secret !== b.lane.isPrivate) return secret ? 1 : -1
+  if (secret) {
+    const bySignature = compareText((a.signature ??= laneSignature(a)), (b.signature ??= laneSignature(b)))
+    if (bySignature !== 0) return bySignature
+  }
+  return compareText(a.lane.repo, b.lane.repo)
 }
 
 // ---------- language eras ----------
@@ -564,13 +614,14 @@ function plural(n: number, word: string): string {
 
 /**
  * The first of the person's own repos by createdAt, and the most starred one if any has a star.
- * Forks are left out: a fork is a copy of someone else's work, not a repo they started.
+ * Forks are left out: a fork is a copy of someone else's work, not a repo they started. The repos
+ * come in lane order, which breaks a tie, as it reads no private name (compareLanes).
  */
 function ownRepoMilestones(repos: ProfileRepo[], today: number): LifeMilestone[] {
   const own = repos
     .filter((repo) => repo.isOwn && !repo.isFork && dayOf(repo.createdAt) <= today)
-    .map((repo) => ({ repo, time: positionOf(repo.createdAt) }))
-  const byBirth = (a: (typeof own)[number], b: (typeof own)[number]) => a.time - b.time || compareText(a.repo.nameWithOwner, b.repo.nameWithOwner)
+    .map((repo, turn) => ({ repo, time: positionOf(repo.createdAt), turn }))
+  const byBirth = (a: (typeof own)[number], b: (typeof own)[number]) => a.time - b.time || a.turn - b.turn
   const out: LifeMilestone[] = []
   const first = [...own].sort(byBirth)[0]
   if (first) out.push({ kind: 'first-repo', date: first.repo.createdAt, day: githubDay(first.repo.createdAt)!, label: 'first repo', repo: first.repo.nameWithOwner })
@@ -744,7 +795,7 @@ export function buildLifeTimeline(profile: ProfileData, now: number): LifeTimeli
     const day = dayOf(milestone.date)
     if (day <= today) stated.push({ ...milestone, day: dayKey(day) })
   }
-  const derived: LifeMilestone[] = ownRepoMilestones(repos.map(({ repo }) => repo), today)
+  const derived: LifeMilestone[] = ownRepoMilestones(built.map(({ repo }) => repo), today)
   if (streaks?.longest) {
     const { from, days } = streaks.longest
     derived.push({ kind: 'longest-streak', date: dayStartIso(from), day: from, label: `longest streak: ${plural(days, 'day')}` })

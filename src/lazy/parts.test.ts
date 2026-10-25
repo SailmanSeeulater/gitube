@@ -5,6 +5,8 @@
  * (and everything only it uses) back into the entry chunk; this catches that before a build does.
  */
 import { describe, expect, it } from 'vitest'
+import { compile } from 'tailwindcss'
+import appCss from '../index.css?raw'
 
 /** Modules only the lazy chunks may use (paths relative to src/). */
 const LAZY_ONLY = [
@@ -32,6 +34,31 @@ const LAZY_ONLY = [
   'api/profileCache.ts',
   'profile/analytics.ts',
   'profile/timeline.ts',
+  'profile/lifeTypes.ts',
+  'profile/privacy.ts',
+  'profile/usePersonStore.ts',
+  'profile/useProfileData.ts',
+  'profile/usePersonAnalytics.ts',
+  'profile/dayIndex.ts',
+  // the life garden: its model, its canvas and its labels
+  'profile/lifeGardenLayout.ts',
+  'profile/lifeGeometry.ts',
+  'profile/lifeCamera.ts',
+  'profile/lifeGardenHit.ts',
+  'profile/lifeInk.ts',
+  'profile/lifeGardenPaint.ts',
+  'profile/useLifeCanvas.ts',
+  'profile/useLifeLabels.ts',
+  'profile/lifePaint.ts',
+  'profile/personRequests.ts',
+  'profile/LifeGarden.tsx',
+  // the panel, inspector, legend, status strip, error copy and icons
+  'profile/PersonPanel.tsx',
+  'profile/PersonInspector.tsx',
+  'profile/PersonLegend.tsx',
+  'profile/PersonStatus.tsx',
+  'profile/personErrors.ts',
+  'profile/personIcons.tsx',
   // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
   'api/graphql.ts',
   'api/profileGraphql.ts',
@@ -137,5 +164,195 @@ describe('lazy parts', () => {
         'lazy/pullsPart.ts',
       ].sort(),
     )
+  })
+})
+
+// ---------- person mode and the first download ----------
+
+/** Person mode's own modules: PersonApp and everything under profile/. */
+function isPersonModule(file: string): boolean {
+  return file === 'PersonApp.tsx' || file.startsWith('profile/')
+}
+
+/** The tests, by their path from the repo root: Tailwind reads them too for the one stylesheet. */
+const testSources = new Map<string, string>(
+  Object.entries(import.meta.glob<string>('../../tests/**/*.ts', { query: '?raw', import: 'default', eager: true })).map(([key, text]) => [
+    key.replace(/^\.\.\/\.\.\//, ''),
+    text,
+  ]),
+)
+
+/** Person mode's tests: those that import its modules, or the helpers only they use. */
+function isPersonTest(path: string, text: string): boolean {
+  const helpers = /helpers\/(?:personScene|profileReplay|recordingCtx)/
+  return (path.startsWith('tests/helpers/') && helpers.test(path)) || /from '\.\.\/src\/(?:profile\/|PersonApp)/.test(text) || helpers.test(text)
+}
+
+/** Every word Tailwind may take for a class name: the text split where no class name can go, with trailing punctuation off too. */
+function words(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const raw of text.split(/[\s'"`{}<>;=]+/)) {
+    if (!raw) continue
+    out.add(raw)
+    const bare = raw.replace(/^[(*!]+/, '').replace(/[.,:;!?)*]+$/, '')
+    if (bare) out.add(bare)
+  }
+  return out
+}
+
+/** The string literals in code: quoted ones, and a template's text outside its ${} parts. */
+function literals(code: string): string[] {
+  const out: string[] = []
+  for (const m of code.matchAll(/'([^'\n]*)'|"([^"\n]*)"/g)) out.push(m[1] ?? m[2])
+  for (const m of code.matchAll(/`([^`]*)`/g)) out.push(m[1].replace(/\$\{[^}]*\}/g, ' '))
+  return out
+}
+
+/** The class names a module writes: in className strings and expressions, and in the constants those name. */
+function classNames(text: string): string[] {
+  const strings: string[] = []
+  for (const m of text.matchAll(/className=(?:"([^"]*)"|\{)/g)) {
+    if (m[1] !== undefined) {
+      strings.push(m[1])
+      continue
+    }
+    // the expression, up to its closing brace
+    let depth = 1
+    let end = m.index + m[0].length
+    for (; end < text.length && depth > 0; end++) {
+      if (text[end] === '{') depth++
+      else if (text[end] === '}') depth--
+    }
+    const expression = text.slice(m.index + m[0].length, end - 1)
+    strings.push(...literals(expression))
+    for (const [id] of expression.matchAll(/\b[A-Za-z_]\w*\b/g)) {
+      const constant = new RegExp(`\\bconst ${id}\\s*=\\s*([^\\n]*(?:\\n\\s+['"\`][^\\n]*)*)`).exec(text)
+      if (constant) strings.push(...literals(constant[1]))
+    }
+  }
+  return strings.flatMap((s) => s.split(/\s+/)).filter(Boolean)
+}
+
+/** Source without its comments, which the bundler drops. */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
+}
+
+/** The names a module value-imports from every module whose specifier from matches: 'default' for a default import. */
+function namedImports(text: string, from: RegExp): string[] {
+  const out: string[] = []
+  for (const m of text.matchAll(/^import\s+(?!type\s)([^'";]*?)\s*from\s*['"]([^'"]+)['"]/gm)) {
+    if (!from.test(m[2])) continue
+    const braces = /\{([^}]*)\}/.exec(m[1])
+    for (const part of braces?.[1].split(',') ?? []) {
+      const name = part.trim()
+      if (name && !name.startsWith('type ')) out.push(name.split(/\s+as\s+/)[0])
+    }
+    if (m[1].replace(braces?.[0] ?? '', '').replace(/,/g, '').trim()) out.push('default')
+  }
+  return out
+}
+
+/** Tailwind's own stylesheet, read from disk: Vitest serves a .css import other than src/index.css as ''. */
+async function tailwindCss(): Promise<string> {
+  const fsModule = 'node:fs/promises'
+  const fs = (await import(/* @vite-ignore */ fsModule)) as { readFile: (path: URL, encoding: 'utf8') => Promise<string> }
+  return fs.readFile(new URL('../../node_modules/tailwindcss/index.css', import.meta.url), 'utf8')
+}
+
+/** A Tailwind compiler for the app's stylesheet, as the build runs it. */
+async function tailwind() {
+  const content = await tailwindCss()
+  return compile(appCss, { base: '/', loadStylesheet: async (_id, base) => ({ path: 'tailwindcss/index.css', base, content }) })
+}
+
+describe('person mode and the first download', () => {
+  const person = [...sources].filter(([file]) => isPersonModule(file))
+
+  it('lists every person module as lazy', () => {
+    expect(person.length).toBeGreaterThan(20)
+    expect(person.map(([file]) => file).filter((file) => !LAZY_ONLY.includes(file))).toEqual([])
+  })
+
+  it('reaches person modules only from PersonApp, each by its own file, never a directory index', () => {
+    const strays: string[] = []
+    for (const file of sources.keys()) {
+      for (const target of staticImports(file)) if (isPersonModule(target) && !isPersonModule(file)) strays.push(`${file} -> ${target}`)
+    }
+    for (const [file, text] of person) {
+      for (const m of text.matchAll(/from\s*['"](\.[^'"]+)['"]/g)) {
+        const target = resolve(file, m[1])
+        if (target === null || target.endsWith('/index.ts')) strays.push(`${file} -> ${m[1]}`)
+      }
+    }
+    expect(strays).toEqual([])
+  })
+
+  it('writes no class name that the rest of the app does not', () => {
+    const known = new Set<string>()
+    for (const [file, text] of sources) if (!isPersonModule(file)) for (const word of words(text)) known.add(word)
+    const novel = person.flatMap(([file, text]) => classNames(text).filter((name) => !known.has(name)).map((name) => `${file}: ${name}`))
+    expect(person.flatMap(([, text]) => classNames(text)).length).toBeGreaterThan(100)
+    expect(novel).toEqual([])
+  })
+
+  it('adds no rule to the stylesheet of the first download, from its modules or its tests', async () => {
+    // the check can see one: a utility no source writes (spelled in two parts, or Tailwind would read it here)
+    const probe = await tailwind()
+    const before = probe.build([])
+    expect(probe.build([['re', 'size'].join('')])).not.toBe(before)
+
+    const known = new Set<string>()
+    for (const [file, text] of sources) if (!isPersonModule(file)) for (const word of words(text)) known.add(word)
+    const scanned = [
+      ...person.map(([file, text]) => [`src/${file}`, text] as const),
+      ...[...testSources].filter(([path, text]) => isPersonTest(path, text)),
+    ]
+    expect(scanned.length).toBeGreaterThan(person.length + 10)
+    /** each word only person mode writes, with the first file that writes it */
+    const novel = new Map<string, string>()
+    for (const [file, text] of scanned) for (const word of words(text)) if (!known.has(word) && !novel.has(word)) novel.set(word, file)
+
+    const compiler = await tailwind()
+    const css = compiler.build([...known])
+    if (compiler.build([...novel.keys()]) === css) return
+    // something adds a rule: find what, one word at a time
+    const finder = await tailwind()
+    let last = finder.build([...known])
+    const added: string[] = []
+    for (const [word, file] of novel) {
+      const next = finder.build([word])
+      if (next !== last) added.push(`${file}: ${word}`)
+      last = next
+    }
+    expect(added).toEqual([])
+  }, 60_000)
+
+  it("keeps person mode's words out of the first download", () => {
+    const said = [/user not found/, /private repo(?!s)/, /names hidden/, /life garden/, /showing the public profile/, /add a token for commits/, /data leaves out/]
+    const found: string[] = []
+    for (const file of eagerModules().keys()) {
+      const text = withoutComments(sources.get(file) ?? '')
+      for (const words of said) if (words.test(text)) found.push(`${file}: ${words.source}`)
+    }
+    expect(found).toEqual([])
+  })
+
+  it('takes no new name from the state libraries, and from the theme only what the first download exports', () => {
+    const state = /^(?:@tanstack\/react-query|zustand)(?:\/|$)/
+    const byPackage = (text: string) =>
+      [...text.matchAll(/^import\s+(?!type\s)[^'";]*?from\s*['"]((?:@tanstack\/react-query|zustand)[^'"]*)['"]/gm)].flatMap((m) =>
+        namedImports(m[0], state).map((name) => `${m[1]} ${name}`),
+      )
+    const used = new Set([...sources].filter(([file]) => !isPersonModule(file)).flatMap(([, text]) => byPackage(text)))
+    const taken = person.flatMap(([, text]) => byPackage(text))
+    expect(taken.length).toBeGreaterThan(0)
+    expect(taken.filter((name) => !used.has(name))).toEqual([])
+    expect(taken.filter((name) => name.includes('/') && !name.startsWith('@tanstack/react-query '))).toEqual([])
+
+    const theme = person.flatMap(([file, text]) => namedImports(text, /(?:^|\/)theme\//).map((name) => `${file}: ${name}`))
+    expect(theme.filter((entry) => !/: (?:blendHex|getTheme|THEMES|useTheme)$/.test(entry))).toEqual([])
+    // it renames the theme chunk, and gardenUtils passes it on
+    expect(person.flatMap(([file, text]) => (namedImports(text, /./).includes('hexToRgba') ? [file] : []))).toEqual([])
   })
 })

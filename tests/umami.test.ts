@@ -49,6 +49,12 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   grow: [
     { mode: 'repo', branches: '2-5', cached: false, token: false, repo: 'expressjs/express' },
     ...['1', '2-5', '6-20', '21-50', '51-100', '101+'].map((branches) => ({ mode: 'repo', branches, cached: true, token: true })),
+    // person mode: the login only for a live fetch without a token; rest after a GraphQL fallback
+    { mode: 'person', source: 'rest', cached: false, token: false, login: 'octocat' },
+    { mode: 'person', source: 'rest', cached: true, token: false },
+    { mode: 'person', source: 'graphql', cached: false, token: true },
+    { mode: 'person', source: 'graphql', cached: true, token: true },
+    { mode: 'person', source: 'rest', cached: false, token: true },
   ],
   'layout-switch': LAYOUTS.map((layout) => ({ layout })),
   'theme-switch': THEME_IDS.map((theme) => ({ theme })),

@@ -196,6 +196,51 @@ describe('life timeline: lanes', () => {
     expect(laneOf(tl, 'z')).toMatchObject({ born: '2021-04-01', root: '2021-04-01', start: '2021-04-01' })
   })
 
+  it('puts public lanes before private ones on one instant, and orders private ones without their names', () => {
+    const born = iso('2021-04-01')
+    // what each private repo is, whatever it is called
+    const one = { createdAt: born, isPrivate: true, stars: 5, activity: commitsOn({ '2021-04-01': 2, '2021-04-09': 3 }) }
+    const two = { createdAt: born, isPrivate: true, stars: 5, activity: commitsOn({ '2021-04-01': 2, '2021-05-20': 1 }) }
+    const three = { createdAt: born, isPrivate: true, activity: commitsOn({ '2021-04-01': 1 }) }
+    const order = (names: [string, string, string]) => {
+      const tl = buildLifeTimeline(
+        profile({ repos: [repo(names[0], one), repo(names[1], two), repo(names[2], three), repo('zz-public', { createdAt: born }), repo('public', { createdAt: born })] }),
+        NOW,
+      )
+      return tl.lanes.map(({ repo: name, ...rest }) => ({ ...rest, name: rest.isPrivate ? 'hidden' : name }))
+    }
+    const lanes = order(['apple', 'kiwi', 'plum'])
+    // the public ones first, by name
+    expect(lanes.map((lane) => lane.name)).toEqual(['me/public', 'me/zz-public', 'hidden', 'hidden', 'hidden'])
+    // a name moved to the other end of the alphabet, or two names swapped, moves no lane
+    expect(order(['zest', 'kiwi', 'plum'])).toEqual(lanes)
+    expect(order(['kiwi', 'apple', 'plum'])).toEqual(lanes)
+    expect(order(['plum', 'kiwi', 'apple'])).toEqual(lanes)
+  })
+
+  it('orders private lanes alike in everything the views show by name, whatever order they came in', () => {
+    const twin = { createdAt: iso('2021-04-01'), isPrivate: true }
+    for (const repos of [
+      [repo('b', twin), repo('a', twin)],
+      [repo('a', twin), repo('b', twin)],
+    ]) {
+      expect(buildLifeTimeline(profile({ repos }), NOW).lanes.map((lane) => lane.repo)).toEqual(['me/a', 'me/b'])
+    }
+  })
+
+  it('names the first and the most starred of private repos born together without reading their names', () => {
+    const born = iso('2021-04-01')
+    const early = { createdAt: born, firstActiveAt: born, isPrivate: true, stars: 4, language: 'Go' }
+    const late = { createdAt: born, firstActiveAt: born, isPrivate: true, stars: 4, language: 'Rust' }
+    const picked = (names: [string, string]) => {
+      const tl = buildLifeTimeline(profile({ repos: [repo(names[0], early), repo(names[1], late)] }), NOW)
+      return tl.milestones.filter((m) => m.repo).map((m) => [m.kind, tl.lanes.find((lane) => lane.repo === m.repo)!.language])
+    }
+    const milestones = picked(['apple', 'kiwi'])
+    expect(milestones).toHaveLength(2)
+    expect(picked(['kiwi', 'apple'])).toEqual(milestones)
+  })
+
   it('keeps a lane at its root when commits are backdated before it: they draw spans, not a new order or birth year', () => {
     const tl = buildLifeTimeline(
       profile({
@@ -745,6 +790,21 @@ describe('life timeline: determinism', () => {
       expect(tl.lanes).toHaveLength(1)
       expect(tl.lanes[0]).toMatchObject({ repo: 'me/Twin', stars: 12, lastActive: '2024-06-14' })
     }
+  })
+
+  it('makes a merged repo private when any copy of it is, the same in either order', () => {
+    const stale = repo('Twin', { lastActiveAt: iso('2024-03-01'), stars: 10, isPrivate: true })
+    const fresh = repo('twin', { lastActiveAt: iso('2024-06-14'), stars: 12 })
+    for (const repos of [
+      [stale, fresh],
+      [fresh, stale],
+    ]) {
+      const tl = buildLifeTimeline(profile({ repos }), NOW)
+      expect(tl.lanes).toHaveLength(1)
+      // the fresh copy's fields, but private, as privateRepoKeys hides its name
+      expect(tl.lanes[0]).toMatchObject({ repo: 'me/twin', stars: 12, isPrivate: true })
+    }
+    expect(buildLifeTimeline(profile({ repos: [fresh, { ...stale, isPrivate: false }] }), NOW).lanes[0].isPrivate).toBe(false)
   })
 
   it("roots a repo they only contributed to at their first counted day when firstActiveAt cannot be read", () => {
