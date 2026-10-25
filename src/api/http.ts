@@ -52,7 +52,9 @@ export function readHeader(headers: HeaderBag | undefined, name: string): string
 /**
  * An Octokit that counts every HTTP request it sends in state.requestsUsed, failed ones included,
  * and remembers the most recent rate-limit headers, also from a failed response (a 403 rate-limit
- * response carries the headers wanted). This hook is the only code that counts requests.
+ * response carries the headers wanted). This hook is the only code that counts requests. It notes
+ * only the core (REST) budget: a GraphQL answer is counted, but its points are a separate budget
+ * and never reach state.remaining or state.resetAt.
  */
 export function createCountingClient(
   opts: { token?: string; fetch?: typeof globalThis.fetch; signal?: AbortSignal },
@@ -66,12 +68,13 @@ export function createCountingClient(
     try {
       const response = await request(options)
       state.requestsUsed += 1
-      noteRateLimit(state, response.headers as HeaderBag)
+      const headers = response.headers as HeaderBag
+      if (reportsCore(headers)) noteRateLimit(state, headers)
       return response
     } catch (err) {
       state.requestsUsed += 1
       const headers = (err as { response?: { headers?: HeaderBag } }).response?.headers
-      if (headers) noteRateLimit(state, headers)
+      if (headers && reportsCore(headers)) noteRateLimit(state, headers)
       throw err
     }
   })
@@ -88,14 +91,19 @@ export function noteRateLimit(state: RateState, headers: HeaderBag | undefined):
   if (reset !== null) state.resetAt = reset
 }
 
+/** True when a response's rate headers are about the core (REST) budget: x-ratelimit-resource is 'core' or absent. */
+function reportsCore(headers: HeaderBag | undefined): boolean {
+  const resource = readHeader(headers, 'x-ratelimit-resource')
+  return resource === undefined || resource.trim().toLowerCase() === 'core'
+}
+
 /**
  * The core (REST) budget a response reports, or null when it reports another one (GraphQL points
  * are a separate budget, and "N requests left" means the core one) or none at all. A response
  * without x-ratelimit-resource counts as core: the REST endpoints always sent it that way.
  */
 export function coreRateFromHeaders(headers: HeaderBag | undefined): RateInfo | null {
-  const resource = readHeader(headers, 'x-ratelimit-resource')
-  if (resource !== undefined && resource.trim().toLowerCase() !== 'core') return null
+  if (!reportsCore(headers)) return null
   const remaining = Number(readHeader(headers, 'x-ratelimit-remaining'))
   if (readHeader(headers, 'x-ratelimit-remaining') === undefined || !Number.isFinite(remaining)) return null
   const limitText = readHeader(headers, 'x-ratelimit-limit')

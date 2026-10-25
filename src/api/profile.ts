@@ -1,10 +1,13 @@
 /**
- * Person mode's fetchers: one GitHub user's own repos over time, as ProfileData (PROFILE_SPEC.md
+ * Person mode's fetchers: one GitHub user's repos over time, as ProfileData (PROFILE_SPEC.md
  * sections 2 and 3). Tier 1, here, needs no token: the REST identity call, the user's own repos
  * and their recent public pushes, 3 to 9 requests out of the same hourly budget repo mode spends.
+ * Tier 2 (api/profileGraphql.ts) reads contributions over GraphQL with a token; both start from the
+ * same identity call here, and fetchProfile picks the tier and falls back from GraphQL to REST.
  *
  * Days are GitHub's: a day key is the date in US Pacific time, never the viewer's time zone.
  */
+import type { Octokit } from '@octokit/rest'
 import { GitHubFetchError } from '../types'
 import type { FetchProgress, ProfileData, ProfileFetchStage, ProfileRepo } from '../types'
 import {
@@ -18,6 +21,7 @@ import {
   type RateState,
 } from './http'
 import { readProfile, rememberProfile, type ProfileStore, type ProfileTier } from './profileCache'
+import { UseRest, graphqlProfile } from './profileGraphql'
 
 export interface ProfileFetchOptions {
   token?: string
@@ -29,8 +33,8 @@ export interface ProfileFetchOptions {
   now?: number
 }
 
-/** At most this many pages of 100 repos (500 repos); a page beyond them sets truncated. */
-const MAX_REPO_PAGES = 5
+/** At most this many pages of 100 repos (500 repos), in either tier; a page beyond them sets truncated. */
+export const MAX_REPO_PAGES = 5
 /** GitHub keeps 300 public events and answers a 4th page of 100 with HTTP 422. */
 const MAX_EVENT_PAGES = 3
 /** GitHub keeps this many days of public events. */
@@ -72,58 +76,141 @@ interface RawEvent {
 }
 
 /**
+ * One profile fetch's shared machinery, whichever tier fills it: the client (which counts every
+ * request, GraphQL ones included), the clock, progress, and the error context about the user.
+ */
+export interface ProfileSession {
+  octokit: Octokit
+  state: RateState
+  /** the login as typed, trimmed */
+  typed: string
+  /** whom errors name: the typed login until the identity call has answered, then GitHub's spelling */
+  subject: string
+  token: string | undefined
+  signal: AbortSignal | undefined
+  now: number
+  emit: (stage: ProfileFetchStage, done: number, total: number, message: string) => void
+  throwIfAborted: () => void
+  /** An error context about the user (session.subject). */
+  ctx: (what: string) => ErrorContext
+}
+
+/** What the identity call says of a user. */
+export interface ProfileIdentity {
+  /** as GitHub spells it */
+  login: string
+  name: string | null
+  avatarUrl: string
+  createdAt: string
+}
+
+/** Sets up one fetch for login: refuses an empty login, and creates the counting client and progress. */
+export function openProfileSession(login: string, opts: ProfileFetchOptions): ProfileSession {
+  const typed = login.trim()
+  if (!typed) throw new GitHubFetchError('No GitHub user given', 'invalid_url')
+  const signal = opts.signal
+  const token = opts.token?.trim() || undefined
+  const state: RateState = { requestsUsed: 0, remaining: null, resetAt: null }
+  const octokit = createCountingClient({ token, fetch: opts.fetch, signal }, state)
+  const session: ProfileSession = {
+    octokit,
+    state,
+    typed,
+    subject: typed,
+    token,
+    signal,
+    now: opts.now ?? Date.now(),
+    emit: (stage, done, total, message) => {
+      if (!opts.onProgress) return
+      opts.onProgress({
+        stage,
+        done,
+        total,
+        message,
+        requestsUsed: state.requestsUsed,
+        rateLimitRemaining: state.remaining,
+        rateLimitResetAt: state.resetAt,
+      })
+    },
+    throwIfAborted: () => {
+      if (signal?.aborted) throw new GitHubFetchError('Fetch aborted', 'aborted')
+    },
+    ctx: (what) => ({ what, signal, token, subject: { login: session.subject } }),
+  }
+  return session
+}
+
+/**
+ * The identity call both tiers start with (1 core request): it settles not_found and not_a_user
+ * (an organization or a bot) before any other request, so no GraphQL refusal or limit can hide them.
+ */
+export async function fetchIdentity(session: ProfileSession): Promise<ProfileIdentity> {
+  session.throwIfAborted()
+  let user: RawUser
+  try {
+    user = (await session.octokit.users.getByUsername({ username: session.typed })).data
+  } catch (err) {
+    throw toFetchError(err, session.ctx(`looking up ${session.typed}`))
+  }
+  if (user.type !== 'User') {
+    const message = `${user.login} is a GitHub ${String(user.type)} account, not a user.`
+    throw new GitHubFetchError(scrub(message, session.token), 'not_a_user')
+  }
+  session.subject = user.login
+  session.emit('user', 1, 1, `Found ${user.login}, on GitHub since ${user.created_at.slice(0, 10)}`)
+  return { login: user.login, name: user.name ?? null, avatarUrl: user.avatar_url, createdAt: user.created_at }
+}
+
+/**
  * Tier 1: a user's profile from REST alone, no token needed. One identity call settles not_found
  * and not_a_user first; then the user's own repos, oldest first (up to 500), and their public
  * push events of about the last 30 days, which are optional: if they fail the profile stands with
  * no recent pushes. Only an abort stops the whole fetch from there.
  */
 export async function fetchProfileRest(login: string, opts: ProfileFetchOptions = {}): Promise<ProfileData> {
-  const typed = login.trim()
-  if (!typed) throw new GitHubFetchError('No GitHub user given', 'invalid_url')
-  const signal = opts.signal
-  const token = opts.token?.trim() || undefined
-  const now = opts.now ?? Date.now()
+  const session = openProfileSession(login, opts)
+  return restProfile(session, await fetchIdentity(session))
+}
 
-  const state: RateState = { requestsUsed: 0, remaining: null, resetAt: null }
-  const octokit = createCountingClient({ token, fetch: opts.fetch, signal }, state)
-
-  const emit = (stage: ProfileFetchStage, done: number, total: number, message: string): void => {
-    if (!opts.onProgress) return
-    opts.onProgress({
-      stage,
-      done,
-      total,
-      message,
-      requestsUsed: state.requestsUsed,
-      rateLimitRemaining: state.remaining,
-      rateLimitResetAt: state.resetAt,
-    })
-  }
-
-  const throwIfAborted = (): void => {
-    if (signal?.aborted) throw new GitHubFetchError('Fetch aborted', 'aborted')
-  }
-
-  // The typed login until GitHub has spelled it, then GitHub's spelling.
-  let subject = typed
-  const ctx = (what: string): ErrorContext => ({ what, signal, token, subject: { login: subject } })
-
-  // ---------- 1. identity ----------
-  throwIfAborted()
-  let user: RawUser
+/**
+ * The profile of a token run: GraphQL (tier 2) when it answers, else REST (tier 1) with the reason
+ * in fallback. Without a token, REST alone. The identity call comes first and is made once: an
+ * abort, a network error, a core rate limit on it (REST would hit the same wall), not_found and
+ * not_a_user end the fetch there. After it, GraphQL falls back to REST on a refusal, a GraphQL rate
+ * limit (primary or secondary: the core budget REST spends is separate), a timeout after the
+ * halving ladder, a schema error or anything unknown, but never on an abort or a network error.
+ */
+export async function fetchProfile(login: string, opts: ProfileFetchOptions = {}): Promise<ProfileData> {
+  if (!opts.token?.trim()) return fetchProfileRest(login, opts)
+  const session = openProfileSession(login, opts)
+  const identity = await fetchIdentity(session)
   try {
-    user = (await octokit.users.getByUsername({ username: typed })).data
+    return await graphqlProfile(session, identity)
   } catch (err) {
-    throw toFetchError(err, ctx(`looking up ${typed}`))
+    if (!(err instanceof UseRest)) throw err
+    const fallback = describeFallback(err)
+    session.emit('repos', 0, 0, `GraphQL failed, reading the public profile over REST: ${fallback.message}`)
+    const profile = await restProfile(session, identity)
+    return { ...profile, fallback }
   }
-  if (user.type !== 'User') {
-    const message = `${user.login} is a GitHub ${String(user.type)} account, not a user.`
-    throw new GitHubFetchError(scrub(message, token), 'not_a_user')
-  }
-  subject = user.login
-  emit('user', 1, 1, `Found ${user.login}, on GitHub since ${user.created_at.slice(0, 10)}`)
+}
 
-  // ---------- 2. own repos, oldest first ----------
+/**
+ * Why REST filled a token run's profile, in describePullsError's shape (hooks/usePulls.ts, which
+ * this lazy module does not import): which limit a rate limit hit, read from its message the same
+ * way. The GraphQL path's messages never hold the login, so a login cannot flip the reading.
+ */
+export function describeFallback(err: GitHubFetchError): NonNullable<ProfileData['fallback']> {
+  const limit = err.code !== 'rate_limited' ? null : /secondary/i.test(err.message) ? 'secondary' : /GraphQL/i.test(err.message) ? 'graphql' : null
+  return { message: err.message, limit, resetAt: err.resetAt ?? null }
+}
+
+/** Tier 1 after the identity call: the user's own repos, then their recent public pushes. */
+async function restProfile(session: ProfileSession, user: ProfileIdentity): Promise<ProfileData> {
+  const { octokit, emit, throwIfAborted, now } = session
+  const ctx = session.ctx
+
+  // ---------- own repos, oldest first ----------
   // direction=asc because sort=created defaults to newest first, which would make the cap drop
   // the start of the career rather than its end.
   const repos: ProfileRepo[] = []
@@ -156,7 +243,7 @@ export async function fetchProfileRest(login: string, opts: ProfileFetchOptions 
     throw toFetchError(err, ctx(`listing the repos of ${user.login}`))
   }
 
-  // ---------- 3. recent pushes (optional) ----------
+  // ---------- recent pushes (optional) ----------
   // Until the events come back whole, recent stays empty and recentFrom says 30 days ago.
   let recent: ProfileData['recent'] = []
   let recentFrom = pacificDay(now - EVENT_DAYS * DAY_MS)
@@ -192,19 +279,19 @@ export async function fetchProfileRest(login: string, opts: ProfileFetchOptions 
     emit('events', MAX_EVENT_PAGES, MAX_EVENT_PAGES, `Skipped recent pushes: ${failure.message}`)
   }
 
-  emit('done', 1, 1, `Done: ${repos.length} repos, ${state.requestsUsed} requests`)
+  emit('done', 1, 1, `Done: ${repos.length} repos, ${session.state.requestsUsed} requests`)
 
   return {
     login: user.login,
-    name: user.name ?? null,
-    avatarUrl: user.avatar_url,
-    createdAt: user.created_at,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt,
     source: 'rest',
     repos,
     days: [],
     recent,
     recentFrom,
-    milestones: [{ kind: 'joined', date: user.created_at, label: 'Joined GitHub' }],
+    milestones: [{ kind: 'joined', date: user.createdAt, label: 'Joined GitHub' }],
     restrictedContributions: 0,
     truncated,
     lostWindows: [],
@@ -229,9 +316,9 @@ export async function loadProfile(
     const hit = await readProfile(store, login, tier, opts.now ?? Date.now()).catch(() => null)
     if (hit) return { profile: hit.data, cachedAt: hit.savedAt }
   }
-  // Phase 2 tries GraphQL here when a token is set. Until then REST fills every profile, and
-  // rememberProfile stores a profile only under the tier that filled it, so a token run caches none.
-  const profile = await fetchProfileRest(login, fetchOpts)
+  // With a token GraphQL fills the profile, or REST after a fallback; rememberProfile stores a
+  // profile only under the tier that filled it, and never one with a fallback.
+  const profile = await fetchProfile(login, fetchOpts)
   if (store) {
     // The profile is in hand: failing to remember it must not lose it.
     await rememberProfile(store, profile, tier, opts.now ?? Date.now()).catch(() => undefined)
@@ -280,7 +367,7 @@ function normaliseRepo(raw: RawRepo): ProfileRepo | null {
 }
 
 /** The later of two ISO times; a when b does not parse or is not later. */
-function laterOf(a: string, b: string): string {
+export function laterOf(a: string, b: string): string {
   const ta = Date.parse(a)
   const tb = Date.parse(b)
   return Number.isFinite(tb) && (!Number.isFinite(ta) || tb > ta) ? b : a

@@ -335,6 +335,45 @@ describe('createCountingClient', () => {
     expect(state).toEqual({ requestsUsed: 4, remaining: 0, resetAt: new Date(1760007200 * 1000).toISOString() })
   })
 
+  it('counts a GraphQL answer but notes only core (or unnamed) rate headers', async () => {
+    // GitHub names the budget on every answer; /graphql spends points, a budget RateState never shows.
+    const graphqlHeaders = (remaining: string) => ({
+      'x-ratelimit-resource': 'graphql',
+      'x-ratelimit-remaining': remaining,
+      'x-ratelimit-reset': '1760009999',
+    })
+    const answers: Answer[] = [
+      { body: { login: LOGIN }, headers: { 'x-ratelimit-resource': 'core', 'x-ratelimit-remaining': '4999' } },
+      { body: { data: { rateLimit: { remaining: 4990 } } }, headers: graphqlHeaders('4990') },
+      { status: 403, body: { message: 'API rate limit exceeded' }, headers: graphqlHeaders('0') },
+      { body: { login: LOGIN }, headers: { 'x-ratelimit-remaining': '4998', 'x-ratelimit-reset': '1760007300' } },
+      { body: { login: LOGIN }, headers: { 'x-ratelimit-resource': ' Core ', 'x-ratelimit-remaining': '4997' } },
+    ]
+    const { fetch, calls } = fakeFetch((_url, n) => answers[n])
+    const state = freshState()
+    const octokit = createCountingClient({ fetch, token: TOKEN }, state)
+    const graphql = () => octokit.graphql('query { rateLimit { remaining } }')
+
+    await octokit.users.getByUsername({ username: LOGIN })
+    expect(state).toEqual({ requestsUsed: 1, remaining: 4999, resetAt: RESET_ISO })
+
+    await graphql()
+    expect(state).toEqual({ requestsUsed: 2, remaining: 4999, resetAt: RESET_ISO })
+
+    // Not even a GraphQL refusal with 0 left touches the core budget.
+    await expect(graphql()).rejects.toMatchObject({ status: 403 })
+    expect(state).toEqual({ requestsUsed: 3, remaining: 4999, resetAt: RESET_ISO })
+
+    // No x-ratelimit-resource at all counts as core, as coreRateFromHeaders reads it.
+    await octokit.users.getByUsername({ username: LOGIN })
+    expect(state).toEqual({ requestsUsed: 4, remaining: 4998, resetAt: new Date(1760007300 * 1000).toISOString() })
+
+    await octokit.users.getByUsername({ username: LOGIN })
+    expect(state.remaining).toBe(4997)
+    expect(state.requestsUsed).toBe(5)
+    expect(calls.map((c) => new URL(c.url).pathname)).toEqual(['/users/octocat', '/graphql', '/graphql', '/users/octocat', '/users/octocat'])
+  })
+
   it('counts each page of a paginated listing', async () => {
     const next = '<https://api.github.com/users/octocat/repos?per_page=100&page=2>; rel="next"'
     const { fetch, calls } = fakeFetch((url) =>

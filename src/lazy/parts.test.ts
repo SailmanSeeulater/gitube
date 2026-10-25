@@ -31,6 +31,9 @@ const LAZY_ONLY = [
   'api/profile.ts',
   'api/profileCache.ts',
   'profile/analytics.ts',
+  // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
+  'api/graphql.ts',
+  'api/profileGraphql.ts',
 ]
 
 /** specifier ('./x', '../y/z') taken from the module at path from ('components/A.tsx'), relative to src/ */

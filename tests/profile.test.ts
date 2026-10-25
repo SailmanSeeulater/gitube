@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fetchProfileRest, loadProfile, pacificDay } from '../src/api/profile'
+import { fetchProfile, fetchProfileRest, loadProfile, pacificDay } from '../src/api/profile'
 import { profileCacheKey, type ProfileStore } from '../src/api/profileCache'
 import type { CacheEntry } from '../src/api/cachePolicy'
 import { GitHubFetchError } from '../src/types'
@@ -543,6 +543,26 @@ describe('fetchProfileRest', () => {
   })
 })
 
+// ---------- fetchProfile ----------
+
+describe('fetchProfile', () => {
+  it('is tier 1 alone without a token: no GraphQL request', async () => {
+    const { fetch, calls } = makeFetch(gaearonRouter)
+    const profile = await fetchProfile('gaearon', { fetch, now: NOW })
+    expect(profile).toEqual(await fetchProfileRest('gaearon', { fetch: makeFetch(gaearonRouter).fetch, now: NOW }))
+    expect(calls).toHaveLength(8)
+    expect(calls.every((c) => c.method === 'GET' && c.url.pathname !== '/graphql')).toBe(true)
+  })
+
+  it('makes the identity call once with a token, before GraphQL, and REST reuses it after a fallback', async () => {
+    const { fetch, calls } = makeFetch((url) => (url.pathname === '/graphql' ? { status: 401, body: { message: 'Bad credentials' } } : gaearonRouter(url)))
+    const profile = await fetchProfile('gaearon', { fetch, token: 'ghp_example_token', now: NOW })
+    expect(calls.filter((c) => c.url.pathname === '/users/gaearon')).toHaveLength(1)
+    expect(calls[0].url.pathname).toBe('/users/gaearon')
+    expect(profile).toMatchObject({ login: 'gaearon', source: 'rest', fallback: { limit: null } })
+  })
+})
+
 // ---------- loadProfile ----------
 
 function memoryStore(): ProfileStore & { map: Map<string, CacheEntry<ProfileData>> } {
@@ -578,26 +598,41 @@ describe('loadProfile', () => {
     expect(calls).toHaveLength(16)
   })
 
-  it('does not read a rest entry once a token is set, nor store a REST profile as a token one', async () => {
+  it('does not read a rest entry once a token is set: a token run goes through GraphQL and caches no fallback', async () => {
     const store = memoryStore()
-    const { fetch, calls } = makeFetch(gaearonRouter)
+    // GraphQL refuses this token, so REST fills the profile (tests/profileGraphql.test.ts covers
+    // the GraphQL profiles themselves, and that they are cached under 'graphql').
+    const refused: Route = {
+      body: { data: null, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by personal access token' }] },
+      headers: { 'x-ratelimit-resource': 'graphql' },
+    }
+    const { fetch, calls } = makeFetch((url) => (url.pathname === '/graphql' ? refused : gaearonRouter(url)))
     await loadProfile('gaearon', { fetch, store, now: NOW })
     expect(calls).toHaveLength(8)
 
     const token = 'ghp_example_token'
     const withToken = await loadProfile('gaearon', { fetch, store, token, now: NOW + 1000 })
     expect(withToken.cachedAt).toBeNull()
-    expect(calls).toHaveLength(16)
-    expect(calls[8].headers.get('authorization')).toBe(`token ${token}`)
-    // Until Phase 2, REST fills a token run's profile, and only a GraphQL one is kept under 'graphql'.
+    // One identity call, the GraphQL query it refused, then REST: 1 + 1 + 4 + 3 requests, all with the token.
+    expect(calls).toHaveLength(17)
+    expect(calls.slice(8, 10).map((c) => `${c.method} ${c.url.pathname}`)).toEqual(['GET /users/gaearon', 'POST /graphql'])
+    expect(calls.slice(8).every((c) => c.headers.get('authorization') === `token ${token}`)).toBe(true)
+    expect(withToken.profile.source).toBe('rest')
+    expect(withToken.profile.fallback).toEqual({
+      message: 'GitHub refused the GraphQL query while listing repos: Resource not accessible by personal access token',
+      limit: null,
+      resetAt: null,
+    })
+    // A profile REST filled after a fallback is not kept, so the next token run asks GraphQL again.
     expect([...store.map.keys()]).toEqual([profileCacheKey('gaearon', 'rest')])
     await loadProfile('gaearon', { fetch, store, token, now: NOW + 2000 })
-    expect(calls).toHaveLength(24)
+    expect(calls).toHaveLength(26)
+    expect(calls[18].url.pathname).toBe('/graphql')
 
     // Without the token the rest entry still serves.
     const anon = await loadProfile('gaearon', { fetch, store, now: NOW + 3000 })
     expect(anon.cachedAt).toBe(new Date(NOW).toISOString())
-    expect(calls).toHaveLength(24)
+    expect(calls).toHaveLength(26)
   })
 
   it('skips the cache when live, and remembers the new fetch', async () => {

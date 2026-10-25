@@ -112,6 +112,10 @@ Known limits to surface in the UI legend, not hide:
 - Days are GitHub's: a contribution's `occurredAt` is midnight US Pacific time. Day keys come from
   the calendar's `date` strings (or `occurredAt` read in `America/Los_Angeles`), never the viewer's
   time zone.
+- GitHub's GraphQL calendar can differ from the github.com heading by a few contributions a year,
+  and a day's count can vary with the span of the query window that read it. Seen live: torvalds
+  was short by 1 to 3 in 3 of 16 years; kepano's 2019 sums to 145 over quarter windows against 147
+  over a whole-year window (2019-04-08 reads 1 in its quarter, 3 in its year).
 - CSP needs no change: GraphQL is `https://api.github.com/graphql`, already allowed by
   `connect-src`. The poster draws the avatar through an `<img crossOrigin="anonymous">` (the avatar
   host sends `access-control-allow-origin: *`); a `fetch()` of it would be blocked.
