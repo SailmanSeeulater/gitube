@@ -28,6 +28,9 @@ const LAZY_ONLY = [
   'components/PrBlock.tsx',
   // person mode (?user=)
   'PersonApp.tsx',
+  'api/profile.ts',
+  'api/profileCache.ts',
+  'profile/analytics.ts',
 ]
 
 /** specifier ('./x', '../y/z') taken from the module at path from ('components/A.tsx'), relative to src/ */

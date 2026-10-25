@@ -1,8 +1,10 @@
 /**
  * HTTP helpers shared by the GitHub clients (api/github.ts for the graph, api/pulls.ts for the pull
- * request overlay): reading response headers, the rate limit they report, Link paging, and mapping
- * whatever Octokit throws to a GitHubFetchError that never carries the token.
+ * request overlay, api/profile.ts for person mode): the counting Octokit, reading response headers,
+ * the rate limit they report, Link paging, and mapping whatever Octokit throws to a GitHubFetchError
+ * that never carries the token.
  */
+import { Octokit } from '@octokit/rest'
 import { GitHubFetchError } from '../types'
 
 export type HeaderBag = Record<string, string | number | undefined>
@@ -17,8 +19,8 @@ export interface ErrorContext {
   what: string
   signal?: AbortSignal
   token?: string
-  owner: string
-  repo: string
+  /** What the request was about: a repo (repo mode) or a user (person mode). It words the 404. */
+  subject: { owner: string; repo: string } | { login: string }
 }
 
 /** GitHub's hourly core (REST) budget as one response reported it. */
@@ -45,6 +47,35 @@ export function readHeader(headers: HeaderBag | undefined, name: string): string
     }
   }
   return undefined
+}
+
+/**
+ * An Octokit that counts every HTTP request it sends in state.requestsUsed, failed ones included,
+ * and remembers the most recent rate-limit headers, also from a failed response (a 403 rate-limit
+ * response carries the headers wanted). This hook is the only code that counts requests.
+ */
+export function createCountingClient(
+  opts: { token?: string; fetch?: typeof globalThis.fetch; signal?: AbortSignal },
+  state: RateState,
+): Octokit {
+  const octokit = new Octokit({
+    auth: opts.token?.trim() || undefined,
+    request: { fetch: opts.fetch, signal: opts.signal },
+  })
+  octokit.hook.wrap('request', async (request, options) => {
+    try {
+      const response = await request(options)
+      state.requestsUsed += 1
+      noteRateLimit(state, response.headers as HeaderBag)
+      return response
+    } catch (err) {
+      state.requestsUsed += 1
+      const headers = (err as { response?: { headers?: HeaderBag } }).response?.headers
+      if (headers) noteRateLimit(state, headers)
+      throw err
+    }
+  })
+  return octokit
 }
 
 export function noteRateLimit(state: RateState, headers: HeaderBag | undefined): void {
@@ -187,9 +218,11 @@ export function toFetchError(err: unknown, ctx: ErrorContext): GitHubFetchError 
     return new GitHubFetchError(`Network error while ${ctx.what}: ${message}`, 'network')
   }
 
+  const subject = ctx.subject
   if (status === 404) {
+    if ('login' in subject) return new GitHubFetchError(`${subject.login} was not found. Check the spelling.`, 'not_found')
     return new GitHubFetchError(
-      `${ctx.owner}/${ctx.repo} was not found while ${ctx.what}. It may be private, renamed or misspelled.`,
+      `${subject.owner}/${subject.repo} was not found while ${ctx.what}. It may be private, renamed or misspelled.`,
       'not_found',
     )
   }
@@ -220,11 +253,12 @@ export function toFetchError(err: unknown, ctx: ErrorContext): GitHubFetchError 
     return new GitHubFetchError(`GitHub rejected the credentials (401) while ${ctx.what}. ${hint}`, 'unauthorized')
   }
 
-  // On the endpoints wrapped here (repos.get, listBranches, compare, listCommits) the only
-  // documented 409 is "Git Repository is empty.", a deterministic state no retry can fix.
-  if (status === 409) {
+  // On the repo endpoints wrapped here (repos.get, listBranches, compare, listCommits) the only
+  // documented 409 is "Git Repository is empty.", a deterministic state no retry can fix. A user
+  // has no such state, so a 409 about one stays unexpected.
+  if (status === 409 && 'repo' in subject) {
     return new GitHubFetchError(
-      `${ctx.owner}/${ctx.repo} has no commits yet (GitHub answered 409 while ${ctx.what}).`,
+      `${subject.owner}/${subject.repo} has no commits yet (GitHub answered 409 while ${ctx.what}).`,
       'empty_repo',
     )
   }

@@ -604,14 +604,14 @@ async function runGraphql(
     }
     const status = errorStatus(err)
     if (status === 401 || status === 403) {
-      const failure = toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+      const failure = toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, subject: ref })
       if (failure.code === 'rate_limited') return { kind: 'fail', error: failure }
       return { kind: 'rest', reason: `HTTP ${status}` }
     }
     if (status === 502 || status === 504 || (hasHttpResponse(err) && status !== undefined && status >= 500)) return { kind: 'transient' }
     return {
       kind: 'fail',
-      error: toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo }),
+      error: toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, subject: ref }),
     }
   }
 }
@@ -865,7 +865,7 @@ export async function listOpenPulls(octokit: Octokit, ref: RepoRef, budget: { re
         page,
       })
     } catch (err) {
-      throw toFetchError(err, { what: 'listing pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+      throw toFetchError(err, { what: 'listing pull requests', signal: opts.signal, token: opts.token, subject: ref })
     }
     const headers = res.headers as HeaderBag
     for (const raw of res.data as unknown as RawRestPull[]) pulls.push(slimRestPull(raw))
@@ -1021,7 +1021,7 @@ async function lookupWith(
 
     return { review, checks, checkCounts, requests }
   } catch (err) {
-    throw toFetchError(err, { what: `looking up pull request #${pr.number}`, signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+    throw toFetchError(err, { what: `looking up pull request #${pr.number}`, signal: opts.signal, token: opts.token, subject: ref })
   }
 }
 

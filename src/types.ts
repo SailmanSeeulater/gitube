@@ -49,7 +49,8 @@ export interface RepoData {
 export type FetchStage = 'repo' | 'branches' | 'compare' | 'trunk' | 'done'
 
 export interface FetchProgress {
-  stage: FetchStage
+  /** a repo fetch's stage, or a person fetch's (api/profile.ts) */
+  stage: FetchStage | ProfileFetchStage
   done: number
   total: number
   message: string
@@ -284,8 +285,9 @@ export interface ProfileData {
   days: { date: string; count: number }[]
   /** Tier 1: pushes per repo per day, from recentFrom to now. Tier 2: empty. */
   recent: { date: string; repo: string; pushes: number }[]
-  /** Tier 1: the first day `recent` covers: the oldest event's day when all 300 events came back,
-   *  else 30 days ago. Days before it are unknown, not zero. null in tier 2. */
+  /** Tier 1: the first day `recent` covers: the oldest event's day when the third (last) page of
+   *  events was served (GitHub keeps 300, but live pages ran 99, 100 and 80, so the count cannot
+   *  tell), else 30 days ago. Days before it are unknown, not zero. null in tier 2. */
   recentFrom: string | null
   /** the ones the API states directly; derived ones come from the timeline model */
   milestones: ProfileMilestone[]
