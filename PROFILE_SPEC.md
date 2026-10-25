@@ -314,7 +314,7 @@ union keys exhaustive tables, and a name nothing sends would be documented as se
   one segment (trailing slash, `?query` and `#hash` ignored). Login grammar
   `/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/`: 1 to 39 characters, no leading hyphen; doubled and trailing
   hyphens allowed on purpose for legacy accounts (a wrongly accepted login costs one 404, a wrongly
-  rejected one locks that person out). A short fixed set of github.com routes is rejected
+  rejected one locks that person out). A short list of github.com routes is rejected
   case-insensitively (about, account, apps, codespaces, collections, contact, dashboard, enterprise,
   enterprises, explore, features, issues, join, login, logout, marketplace, new, notifications,
   organizations, orgs, pricing, pulls, search, sessions, settings, signup, site, sponsors, topics,

@@ -34,6 +34,7 @@ const LAYOUTS = Object.keys({ organic: 1, metro: 1, garden: 1 } satisfies Record
 const VIEWS = Object.keys({ skeleton: 1, full: 1 } satisfies Record<ViewMode, 1>)
 const FETCH_ERROR_CODES = Object.keys({
   not_found: 1,
+  not_a_user: 1,
   rate_limited: 1,
   unauthorized: 1,
   network: 1,

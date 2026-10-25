@@ -7,12 +7,12 @@ export interface RepoRef {
 const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9]))*$/
 /** GitHub repo names: alphanumerics, '.', '-', '_'. */
 const REPO_RE = /^[A-Za-z0-9_.-]+$/
-const GITHUB_HOSTS = new Set(['github.com', 'www.github.com'])
-const SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
+export const GITHUB_HOSTS = new Set(['github.com', 'www.github.com'])
+export const SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//
 /** scp-like ssh form: git@github.com:owner/repo.git (optionally without the user). */
 const SCP_RE = /^(?:[\w.-]+@)?(?:www\.)?github\.com:(.+)$/i
 /** host-only form without a scheme: github.com/owner/repo or www.github.com/owner/repo. */
-const BARE_HOST_RE = /^(?:www\.)?github\.com(?=[/?#]|$)/i
+export const BARE_HOST_RE = /^(?:www\.)?github\.com(?=[/?#]|$)/i
 
 /**
  * Accepts "owner/repo", "github.com/owner/repo", "https://github.com/owner/repo(.git)(/tree/...)",
@@ -42,7 +42,7 @@ export function parseRepoUrl(input: string): RepoRef | null {
   return fromPath(s, true)
 }
 
-function tryUrl(s: string): URL | null {
+export function tryUrl(s: string): URL | null {
   try {
     return new URL(s)
   } catch {
@@ -76,7 +76,7 @@ function fromPath(path: string, strictTwoSegments: boolean): RepoRef | null {
   return { owner, repo }
 }
 
-function safeDecode(seg: string): string {
+export function safeDecode(seg: string): string {
   try {
     return decodeURIComponent(seg)
   } catch {

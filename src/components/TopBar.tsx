@@ -191,8 +191,8 @@ export default function TopBar({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="github.com/owner/repo"
-          aria-label="GitHub repository URL"
+          placeholder="owner/repo or a GitHub user"
+          aria-label="GitHub repository or user"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"

@@ -51,3 +51,9 @@ export const metroChunk = defineChunk(() => import('../graph/metro'))
  * one chunk, loaded as soon as a repo's data is in (usePulls), so it is there before a tip is opened.
  */
 export const pullsChunk = defineChunk(() => import('./pullsPart'))
+
+/**
+ * Person mode (?user=), loaded when a login is grown or a ?user= link is opened. The repo garden's
+ * first load carries only the routing that picks it (App, api/parseSubject and the share link).
+ */
+export const personAppChunk = defineChunk(() => import('../PersonApp'))

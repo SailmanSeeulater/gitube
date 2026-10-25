@@ -26,6 +26,8 @@ const LAZY_ONLY = [
   'lazy/pullsPart.ts',
   'api/pulls.ts',
   'components/PrBlock.tsx',
+  // person mode (?user=)
+  'PersonApp.tsx',
 ]
 
 /** specifier ('./x', '../y/z') taken from the module at path from ('components/A.tsx'), relative to src/ */
@@ -100,7 +102,7 @@ describe('lazy parts', () => {
     for (const file of LAZY_ONLY) expect(sources.has(file), file).toBe(true)
     // the walk follows the app's real imports
     const eager = eagerModules()
-    for (const file of ['App.tsx', 'components/Garden.tsx', 'theme/themes.ts', 'api/github.ts', 'lazy/parts.ts']) {
+    for (const file of ['App.tsx', 'RepoApp.tsx', 'components/Garden.tsx', 'theme/themes.ts', 'api/github.ts', 'lazy/parts.ts']) {
       expect(eager.has(file), file).toBe(true)
     }
   })
@@ -116,6 +118,7 @@ describe('lazy parts', () => {
     const dynamic = [...parts.matchAll(/import\(\s*['"](\.[^'"]+)['"]\s*\)/g)].map((m) => resolve('lazy/parts.ts', m[1]))
     expect(dynamic.sort()).toEqual(
       [
+        'PersonApp.tsx',
         'components/ContributorsTab.tsx',
         'components/ExportMenu.tsx',
         'components/GardenBattle.tsx',

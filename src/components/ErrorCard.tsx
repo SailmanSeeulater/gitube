@@ -32,14 +32,20 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
   switch (code) {
     case 'invalid_url':
       return {
-        title: "that doesn't look like a GitHub repo",
-        hint: 'try owner/repo, github.com/owner/repo, or a full https URL.',
+        title: "that doesn't look like a GitHub repo or user",
+        hint: 'try owner/repo, a login, or a github.com link.',
       }
     case 'not_found':
       return {
         title: 'repo not found',
         hint: 'check the spelling. private repos only appear with a token that can read them.',
         tokenAction: 'add a token',
+      }
+    case 'not_a_user':
+      // No token action: a token cannot turn an organization into a user.
+      return {
+        title: "that's an organization",
+        hint: 'person mode shows users: try one of its repos as owner/repo.',
       }
     case 'rate_limited':
       return {
