@@ -1,14 +1,13 @@
-import { Octokit } from '@octokit/rest'
 import { GitHubFetchError } from '../types'
 import type { Branch, Commit, FetchOptions, FetchProgress, FetchStage, RepoData } from '../types'
 import type { RepoRef } from './parseRepoUrl'
 import {
   PER_PAGE,
+  createCountingClient,
   errorStatus,
   hasHttpResponse,
   hasNextLink,
   isServerErrorResponse,
-  noteRateLimit,
   runPool,
   toFetchError,
   type ErrorContext,
@@ -78,28 +77,9 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
   const signal = opts.signal
   const token = opts.token?.trim() || undefined
 
-  const octokit = new Octokit({
-    auth: token,
-    request: { fetch: opts.fetch, signal },
-  })
-
+  // Every request is counted, and the latest rate-limit headers noted, in state (api/http.ts).
   const state: RateState = { requestsUsed: 0, remaining: null, resetAt: null }
-
-  // Count every HTTP request and remember the most recent rate-limit headers, including
-  // on failed responses (a 403 rate-limit response carries the headers we want).
-  octokit.hook.wrap('request', async (request, options) => {
-    try {
-      const response = await request(options)
-      state.requestsUsed += 1
-      noteRateLimit(state, response.headers as HeaderBag)
-      return response
-    } catch (err) {
-      state.requestsUsed += 1
-      const headers = (err as { response?: { headers?: HeaderBag } }).response?.headers
-      if (headers) noteRateLimit(state, headers)
-      throw err
-    }
-  })
+  const octokit = createCountingClient({ token, fetch: opts.fetch, signal }, state)
 
   const emit = (stage: FetchStage, done: number, total: number, message: string): void => {
     if (!opts.onProgress) return
@@ -131,7 +111,7 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
     return normalised
   }
 
-  const ctx = (what: string): ErrorContext => ({ what, signal, token, owner, repo })
+  const ctx = (what: string): ErrorContext => ({ what, signal, token, subject: { owner, repo } })
 
   // ---------- 1. repo ----------
   throwIfAborted()

@@ -1,35 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { parseRepoUrl } from '../src/api/parseRepoUrl'
+import { ACCEPTED_REPO_URLS } from './fixtures/repoUrls'
 
 const REF = { owner: 'owner', repo: 'repo' }
 
 describe('parseRepoUrl', () => {
   describe('accepts', () => {
-    it.each([
-      ['owner/repo', REF],
-      ['github.com/owner/repo', REF],
-      ['www.github.com/owner/repo', REF],
-      ['https://github.com/owner/repo', REF],
-      ['http://github.com/owner/repo', REF],
-      ['https://www.github.com/owner/repo', REF],
-      ['https://GitHub.com/owner/repo', REF],
-      ['https://github.com/owner/repo.git', REF],
-      ['https://github.com/owner/repo/', REF],
-      ['https://github.com/owner/repo.git/', REF],
-      ['https://github.com/owner/repo/tree/main/some/path', REF],
-      ['https://github.com/owner/repo/blob/main/README.md', REF],
-      ['https://github.com/owner/repo/pull/12', REF],
-      ['https://github.com/owner/repo/issues?q=is%3Aopen', REF],
-      ['https://github.com/owner/repo#readme', REF],
-      ['git@github.com:owner/repo.git', REF],
-      ['git@github.com:owner/repo', REF],
-      ['ssh://git@github.com/owner/repo.git', REF],
-      ['   https://github.com/owner/repo   ', REF],
-      ['\n\towner/repo\n', REF],
-      ['github.com/owner/repo/tree/main', REF],
-      ['my-org/my.repo_name', { owner: 'my-org', repo: 'my.repo_name' }],
-      ['https://github.com/octocat/Hello-World', { owner: 'octocat', repo: 'Hello-World' }],
-    ])('%j', (input, expected) => {
+    it.each(ACCEPTED_REPO_URLS)('%j', (input, expected) => {
       expect(parseRepoUrl(input)).toEqual(expected)
     })
 

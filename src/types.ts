@@ -49,7 +49,8 @@ export interface RepoData {
 export type FetchStage = 'repo' | 'branches' | 'compare' | 'trunk' | 'done'
 
 export interface FetchProgress {
-  stage: FetchStage
+  /** a repo fetch's stage, or a person fetch's (api/profile.ts) */
+  stage: FetchStage | ProfileFetchStage
   done: number
   total: number
   message: string
@@ -77,6 +78,7 @@ export class GitHubFetchError extends Error {
     message: string,
     public readonly code:
       | 'not_found'
+      | 'not_a_user'
       | 'rate_limited'
       | 'unauthorized'
       | 'network'
@@ -236,3 +238,68 @@ export interface PrMark {
   /** how many pull requests the mark stands for */
   count: number
 }
+
+// ---------- Person mode (a GitHub user's repos over time) ----------
+
+export interface ProfileRepo {
+  nameWithOwner: string
+  /** ISO: when the repo was created on GitHub */
+  createdAt: string
+  /** ISO: when this person's part in it starts: createdAt for their own repos, their first counted day otherwise */
+  firstActiveAt: string
+  /** ISO: max(createdAt, pushedAt) in tier 1; the last contribution day (or pushedAt) in tier 2 */
+  lastActiveAt: string
+  /** owned by the user; false for a repo they only contributed to (tier 2) */
+  isOwn: boolean
+  language: string | null
+  /** GitHub's linguist colour, tier 2 only. Not painted: views colour languages from the theme. */
+  languageColor: string | null
+  stars: number
+  forks: number
+  isFork: boolean
+  isArchived: boolean
+  isPrivate: boolean
+  /** Tier 2: commits per day, ascending. Tier 1: empty. */
+  activity: { date: string; commits: number }[]
+}
+
+export interface ProfileMilestone {
+  kind: 'joined' | 'first-repo' | 'first-pr' | 'first-issue' | 'top-repo' | 'longest-streak' | 'language-switch'
+  /** ISO */
+  date: string
+  label: string
+  repo?: string
+}
+
+export interface ProfileData {
+  /** as GitHub spells it */
+  login: string
+  name: string | null
+  avatarUrl: string
+  /** ISO */
+  createdAt: string
+  source: 'rest' | 'graphql'
+  repos: ProfileRepo[]
+  /** Tier 2: the contribution calendar, one entry per day from the first window's start (which can
+   *  precede createdAt) through today, in GitHub's days; never a future day. Tier 1: empty. */
+  days: { date: string; count: number }[]
+  /** Tier 1: pushes per repo per day, from recentFrom to now. Tier 2: empty. */
+  recent: { date: string; repo: string; pushes: number }[]
+  /** Tier 1: the first day `recent` covers: the oldest event's day when the third (last) page of
+   *  events was served (GitHub keeps 300, but live pages ran 99, 100 and 80, so the count cannot
+   *  tell), else 30 days ago. Days before it are unknown, not zero. null in tier 2. */
+  recentFrom: string | null
+  /** the ones the API states directly; derived ones come from the timeline model */
+  milestones: ProfileMilestone[]
+  /** Tier 2 only (0 in tier 1) */
+  restrictedContributions: number
+  /** a repo cap (500, or 100 in a window), a window still paging, or a window lost to an error */
+  truncated: boolean
+  /** Tier 2: windows lost to errors after their retry, as 'YYYYqN', for the legend. [] otherwise. */
+  lostWindows: string[]
+  /** a token was set but GraphQL failed and REST filled the profile: why, for the status strip */
+  fallback: { message: string; limit: 'graphql' | 'secondary' | null; resetAt: string | null } | null
+}
+
+/** The person fetchers' stages. */
+export type ProfileFetchStage = 'user' | 'repos' | 'events' | 'windows' | 'done'

@@ -5,6 +5,8 @@ export interface ExportMenuProps {
   id: string
   /** false while no repo is loaded: only opening a file is offered */
   canExport: boolean
+  /** the data (JSON) can be saved too; canExport when left out (person mode saves only the image) */
+  canExportData?: boolean
   onExportImage: () => void
   onExportData: () => void
   onOpenFile: () => void
@@ -45,7 +47,7 @@ function Item({ icon, label, hint, disabled = false, onSelect }: ItemProps) {
  * file. Up/Down move between items; tabbing away closes it. Escape and a click outside close it
  * too, through TopBar (which also covers the menu's placeholder while it loads).
  */
-export default function ExportMenu({ id, canExport, onExportImage, onExportData, onOpenFile, onClose, buttonRef }: ExportMenuProps) {
+export default function ExportMenu({ id, canExport, canExportData = canExport, onExportImage, onExportData, onOpenFile, onClose, buttonRef }: ExportMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const items = (): HTMLButtonElement[] =>
@@ -102,7 +104,7 @@ export default function ExportMenu({ id, canExport, onExportImage, onExportData,
         icon={<FileIcon size={14} />}
         label="Save data (JSON)"
         hint="reopen it later without any GitHub requests"
-        disabled={!canExport}
+        disabled={!canExportData}
         onSelect={run(onExportData)}
       />
       <div className="mx-2 my-1 h-px bg-garden-border" role="separator" />

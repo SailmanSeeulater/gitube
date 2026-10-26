@@ -18,6 +18,10 @@ export interface ErrorCardProps {
   /** chunk_failed's action */
   onReload?: () => void
   onDismiss?: () => void
+  /** shown in place of the code's own title (person mode words some codes for a user) */
+  title?: string
+  /** shown in place of the code's own hint */
+  hint?: string
 }
 
 interface Copy {
@@ -32,14 +36,20 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
   switch (code) {
     case 'invalid_url':
       return {
-        title: "that doesn't look like a GitHub repo",
-        hint: 'try owner/repo, github.com/owner/repo, or a full https URL.',
+        title: "that doesn't look like a GitHub repo or user",
+        hint: 'try owner/repo, a login, or a github.com link.',
       }
     case 'not_found':
       return {
         title: 'repo not found',
         hint: 'check the spelling. private repos only appear with a token that can read them.',
         tokenAction: 'add a token',
+      }
+    case 'not_a_user':
+      // No token action: a token cannot turn an organization into a user.
+      return {
+        title: "that's an organization",
+        hint: 'person mode shows users: try one of its repos as owner/repo.',
       }
     case 'rate_limited':
       return {
@@ -92,7 +102,7 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
   }
 }
 
-export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss }: ErrorCardProps) {
+export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss, title, hint }: ErrorCardProps) {
   const copy = copyFor(code, resetAt, message)
   return (
     <div
@@ -104,8 +114,8 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
           <AlertIcon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-garden-text">{copy.title}</p>
-          <p className="mt-1 leading-snug text-garden-muted">{copy.hint}</p>
+          <p className="font-medium text-garden-text">{title ?? copy.title}</p>
+          <p className="mt-1 leading-snug text-garden-muted">{hint ?? copy.hint}</p>
           {copy.tokenAction && onAddToken && (
             <button
               type="button"

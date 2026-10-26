@@ -40,6 +40,7 @@ export type AnalyticsEvent =
   | 'share-copy'
   | 'token-added'
   | 'fetch-error'
+  | 'poster-export'
 
 export type EventData = Record<string, string | number | boolean>
 

@@ -1,11 +1,15 @@
 /**
- * Share links: the page URL names the repo on show and what is selected in it, so a copied link
- * opens the same garden. ?repo=owner/repo, plus &branch=<name> or &by=<login> (a contributor
- * without a GitHub account: &by=name:<author name>), and &vs=owner/repo for a garden battle.
+ * Share links: the page URL names what is on show, so a copied link opens the same garden.
+ *
+ * Repo mode: ?repo=owner/repo, plus &branch=<name> or &by=<login> (a contributor without a GitHub
+ * account: &by=name:<author name>), and &vs=owner/repo for a garden battle.
+ * Person mode: ?user=<login>, plus &view=garden, lines or constellation for the chosen view. A repo
+ * wins when a link names both.
  *
  * Pure: reads and writes query strings only.
  */
 import { parseRepoUrl, type RepoRef } from '../api/parseRepoUrl'
+import { parseLogin } from '../api/parseSubject'
 
 export interface ShareState {
   repo: RepoRef | null
@@ -16,8 +20,12 @@ export interface ShareState {
   vs?: RepoRef | null
 }
 
+/** The person mode views a share link can name. */
+export type PersonView = 'garden' | 'lines' | 'constellation'
+
 const NAME_PREFIX = 'name:'
 const LOGIN_PREFIX = 'login:'
+const PERSON_VIEWS = new Set(['garden', 'lines', 'constellation'])
 
 /** Reads a location.search string. Anything malformed is dropped, never thrown. */
 export function readShareState(search: string): ShareState {
@@ -36,6 +44,26 @@ export function readShareState(search: string): ShareState {
 }
 
 /**
+ * What a location.search string opens: a repo with its share state, a user with their view, or
+ * null for neither. A ?repo= that parses wins, and user and view are then ignored; otherwise a
+ * ?user= that parses as a login (so @login and github.com URLs work, as ?repo= takes URLs) is the
+ * subject, and branch, by and vs are ignored. &view= counts only when it names a view exactly.
+ */
+export function readSubject(
+  search: string,
+): { kind: 'repo'; share: ShareState } | { kind: 'user'; login: string; view: PersonView | null } | null {
+  const share = readShareState(search)
+  if (share.repo) return { kind: 'repo', share }
+  const params = new URLSearchParams(search)
+  const userParam = params.get('user')
+  const login = userParam ? parseLogin(userParam) : null
+  if (!login) return null
+  const viewParam = params.get('view')
+  const view = viewParam !== null && PERSON_VIEWS.has(viewParam) ? (viewParam as PersonView) : null
+  return { kind: 'user', login, view }
+}
+
+/**
  * The query string for a state, '' when no repo is on show. Other parameters in `current` are kept,
  * so links carrying something else (a campaign tag, say) still work.
  */
@@ -45,6 +73,8 @@ export function writeShareState(state: ShareState, current = ''): string {
   params.delete('branch')
   params.delete('by')
   params.delete('vs')
+  params.delete('user')
+  params.delete('view')
   if (state.repo) {
     params.set('repo', `${state.repo.owner}/${state.repo.repo}`)
     if (state.branch !== null) params.set('branch', state.branch)
@@ -53,6 +83,27 @@ export function writeShareState(state: ShareState, current = ''): string {
     }
     if (state.vs) params.set('vs', `${state.vs.owner}/${state.vs.repo}`)
   }
+  return toQuery(params)
+}
+
+/**
+ * The query string for a user on show, with &view= when a view is given. The repo's own parameters
+ * go; every other parameter in `current` is kept, as in writeShareState.
+ */
+export function writeUserShare(state: { login: string; view: PersonView | null }, current = ''): string {
+  const params = new URLSearchParams(current)
+  params.delete('repo')
+  params.delete('branch')
+  params.delete('by')
+  params.delete('vs')
+  params.delete('user')
+  params.delete('view')
+  params.set('user', state.login)
+  if (state.view !== null) params.set('view', state.view)
+  return toQuery(params)
+}
+
+function toQuery(params: URLSearchParams): string {
   // owner/repo and branch names read better with their slashes left alone
   const query = params.toString().replace(/%2F/gi, '/').replace(/%3A/gi, ':')
   return query ? `?${query}` : ''

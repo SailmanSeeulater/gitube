@@ -79,5 +79,8 @@ export default defineConfig({
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     // Vitest stubs CSS imports to '' by default; src/theme/themes.test.ts reads index.css?raw.
     css: { include: [/src[\\/]index\.css/] },
+    // The person-mode privacy sweeps render or paint every view many times over (1-3 s locally);
+    // CI runners are about three times slower, so the 5 s default timed them out there.
+    testTimeout: 20_000,
   },
 })

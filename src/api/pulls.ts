@@ -17,6 +17,7 @@ import { Octokit } from '@octokit/rest'
 import { GitHubFetchError } from '../types'
 import type { Branch, CheckCounts, ChecksState, PullIndex, PullSummary, RepoData, ReviewState } from '../types'
 import type { RepoRef } from './parseRepoUrl'
+import { GRAPHQL_TIMEOUT_MS, withTimeout } from './graphql'
 import {
   PER_PAGE,
   coreRateFromHeaders,
@@ -41,8 +42,9 @@ const PRS_PER_PAGE = 100
 export const GRAPHQL_MAX_ROUNDS = 3
 /** Branches a partial answer left unchecked are asked again in one query up to this many, else in halves. */
 const UNCHECKED_RETRY_MAX = 20
-/** A GraphQL query slower than this is given up on (then retried in halves). */
-export const GRAPHQL_TIMEOUT_MS = 15_000
+// The query timeout is defined in api/graphql.ts, which person mode imports without loading this
+// module; it is re-exported here so importers of pulls.ts keep finding it.
+export { GRAPHQL_TIMEOUT_MS }
 /** Pages of 100 the REST listing reads at most (the most recently updated first). */
 export const REST_MAX_PAGES = 3
 /** Without a token the listing is skipped, or stops paging, below this many core requests left. */
@@ -556,16 +558,6 @@ type GqlOutcome =
   | { kind: 'rest'; reason: string }
   | { kind: 'fail'; error: GitHubFetchError }
 
-/** The caller's signal joined with a timeout; the timeout half tells the two apart. */
-function withTimeout(signal: AbortSignal | undefined, ms: number): { signal: AbortSignal | undefined; timedOut: () => boolean } {
-  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any
-  const timeoutFn = (AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal }).timeout
-  if (!timeoutFn) return { signal, timedOut: () => false }
-  const timeout = timeoutFn(ms)
-  const joined = signal && anyFn ? anyFn([signal, timeout]) : signal ? signal : timeout
-  return { signal: joined, timedOut: () => timeout.aborted && !signal?.aborted }
-}
-
 async function runGraphql(
   octokit: Octokit,
   query: string,
@@ -604,14 +596,14 @@ async function runGraphql(
     }
     const status = errorStatus(err)
     if (status === 401 || status === 403) {
-      const failure = toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+      const failure = toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, subject: ref })
       if (failure.code === 'rate_limited') return { kind: 'fail', error: failure }
       return { kind: 'rest', reason: `HTTP ${status}` }
     }
     if (status === 502 || status === 504 || (hasHttpResponse(err) && status !== undefined && status >= 500)) return { kind: 'transient' }
     return {
       kind: 'fail',
-      error: toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo }),
+      error: toFetchError(err, { what: 'reading pull requests', signal: opts.signal, token: opts.token, subject: ref }),
     }
   }
 }
@@ -865,7 +857,7 @@ export async function listOpenPulls(octokit: Octokit, ref: RepoRef, budget: { re
         page,
       })
     } catch (err) {
-      throw toFetchError(err, { what: 'listing pull requests', signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+      throw toFetchError(err, { what: 'listing pull requests', signal: opts.signal, token: opts.token, subject: ref })
     }
     const headers = res.headers as HeaderBag
     for (const raw of res.data as unknown as RawRestPull[]) pulls.push(slimRestPull(raw))
@@ -1021,7 +1013,7 @@ async function lookupWith(
 
     return { review, checks, checkCounts, requests }
   } catch (err) {
-    throw toFetchError(err, { what: `looking up pull request #${pr.number}`, signal: opts.signal, token: opts.token, owner: ref.owner, repo: ref.repo })
+    throw toFetchError(err, { what: `looking up pull request #${pr.number}`, signal: opts.signal, token: opts.token, subject: ref })
   }
 }
 

@@ -36,6 +36,9 @@ export const themePickerChunk = defineChunk(() => import('../components/ThemePic
 /** The time-lapse controls with the music box and the video recorder. */
 export const timelapseChunk = defineChunk(() => import('../components/TimelapseBar'))
 
+/** The canvas recorder (export/video) for person mode's time-lapse; TimelapseBar imports it itself. */
+export const videoChunk = defineChunk(() => import('../export/video'))
+
 /** The garden battle overlay and its scoring. */
 export const battleChunk = defineChunk(() => import('../components/GardenBattle'))
 
@@ -51,3 +54,9 @@ export const metroChunk = defineChunk(() => import('../graph/metro'))
  * one chunk, loaded as soon as a repo's data is in (usePulls), so it is there before a tip is opened.
  */
 export const pullsChunk = defineChunk(() => import('./pullsPart'))
+
+/**
+ * Person mode (?user=), loaded when a login is grown or a ?user= link is opened. The repo garden's
+ * first load carries only the routing that picks it (App, api/parseSubject and the share link).
+ */
+export const personAppChunk = defineChunk(() => import('../PersonApp'))

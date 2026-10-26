@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readShareState, writeShareState } from '../src/share/shareUrl'
+import { readShareState, readSubject, writeShareState, writeUserShare, type PersonView } from '../src/share/shareUrl'
 
 const express = { owner: 'expressjs', repo: 'express' }
 
@@ -51,5 +51,63 @@ describe('share links', () => {
     expect(readShareState('')).toEqual({ repo: null, branch: null, person: null })
     // a branch wins over a person, as only one can be selected
     expect(readShareState('?repo=expressjs/express&branch=main&by=ann')).toEqual({ repo: express, branch: 'main', person: null })
+  })
+})
+
+describe('person share links', () => {
+  it('writes the user and the view, and reads them back', () => {
+    expect(writeUserShare({ login: 'octocat', view: 'garden' })).toBe('?user=octocat&view=garden')
+    expect(writeUserShare({ login: 'octocat', view: null })).toBe('?user=octocat')
+    for (const view of ['garden', 'lines', 'constellation', null] satisfies (PersonView | null)[]) {
+      for (const login of ['octocat', 'SailmanSeeulater', 'foo--bar-']) {
+        expect(readSubject(writeUserShare({ login, view }))).toEqual({ kind: 'user', login, view })
+      }
+    }
+  })
+
+  it('accepts @login and a GitHub profile URL as the user, keeping its case', () => {
+    expect(readSubject('?user=@octocat')).toEqual({ kind: 'user', login: 'octocat', view: null })
+    expect(readSubject('?user=https://github.com/octocat')).toEqual({ kind: 'user', login: 'octocat', view: null })
+    expect(readSubject('?user=OctoCat&view=lines')).toEqual({ kind: 'user', login: 'OctoCat', view: 'lines' })
+  })
+
+  it('reads a view only when it names one exactly, and only with a user', () => {
+    for (const bad of ['&view=LINES', '&view=skeleton', '&view=']) {
+      expect(readSubject(`?user=octocat${bad}`)).toEqual({ kind: 'user', login: 'octocat', view: null })
+    }
+    expect(readSubject('?view=lines')).toBeNull()
+    expect(readSubject('?view=')).toBeNull()
+  })
+
+  it('drops a user that is not a login', () => {
+    for (const search of ['?user=octo+cat', '?user=-x', '?user=login', '?user=', '']) {
+      expect(readSubject(search)).toBeNull()
+    }
+  })
+
+  it('lets a repo win, and falls back to the user when the repo does not parse', () => {
+    expect(readSubject('?repo=a/b&user=x&view=lines')).toEqual({
+      kind: 'repo',
+      share: { repo: { owner: 'a', repo: 'b' }, branch: null, person: null },
+    })
+    expect(readSubject('?repo=expressjs/express&branch=main')).toEqual({
+      kind: 'repo',
+      share: { repo: express, branch: 'main', person: null },
+    })
+    expect(readSubject('?repo=not a repo&user=octocat&view=garden')).toEqual({ kind: 'user', login: 'octocat', view: 'garden' })
+    // a repo's selection means nothing to a user
+    expect(readSubject('?user=x&branch=m&by=a&vs=c/d')).toEqual({ kind: 'user', login: 'x', view: null })
+  })
+
+  it('replaces the repo parameters with the user ones and keeps the rest', () => {
+    expect(writeUserShare({ login: 'octocat', view: 'lines' }, '?utm_source=x&repo=a/b&branch=m&by=z&vs=c/d')).toBe(
+      '?utm_source=x&user=octocat&view=lines',
+    )
+    expect(writeUserShare({ login: 'octocat', view: null }, '?utm_source=x&user=y&view=garden')).toBe('?utm_source=x&user=octocat')
+  })
+
+  it('drops the user and the view when a repo is written', () => {
+    expect(writeShareState({ repo: express, branch: null, person: null }, '?user=x&view=lines')).toBe('?repo=expressjs/express')
+    expect(writeShareState({ repo: null, branch: null, person: null }, '?utm_source=x&user=x&view=lines')).toBe('?utm_source=x')
   })
 })

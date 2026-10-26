@@ -1,7 +1,7 @@
 /**
  * Pure helpers for the garden UI (no React, no DOM) so they can be unit-tested in node.
  */
-import type { Branch, FetchStage, GraphNode } from '../types'
+import type { Branch, FetchStage, GraphNode, ProfileFetchStage } from '../types'
 import { linkColour, linkColourDim, type ThemeTokens } from '../theme/themes'
 import type { LabelSpec } from './labelPlacement'
 
@@ -301,7 +301,7 @@ export function shortSha(sha: string): string {
   return sha.slice(0, 7)
 }
 
-export function stageLabel(stage: FetchStage): string {
+export function stageLabel(stage: FetchStage | ProfileFetchStage): string {
   switch (stage) {
     case 'repo':
       return 'reading repo'
@@ -311,6 +311,14 @@ export function stageLabel(stage: FetchStage): string {
       return 'comparing branches'
     case 'trunk':
       return 'walking trunk'
+    case 'user':
+      return 'reading profile'
+    case 'repos':
+      return 'listing repos'
+    case 'events':
+      return 'reading recent pushes'
+    case 'windows':
+      return 'reading contributions'
     case 'done':
       return 'done'
   }

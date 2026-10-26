@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import garden from './Garden.tsx?raw'
-import app from '../App.tsx?raw'
+import app from '../RepoApp.tsx?raw'
 
 /** The text of `const name = useMemo(` / `useCallback(` up to its closing `)` at the same depth. */
 function declaration(source: string, name: string): string {
