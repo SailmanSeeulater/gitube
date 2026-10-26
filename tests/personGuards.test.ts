@@ -2,8 +2,9 @@
  * Person mode's privacy rule, end to end (PROFILE_SPEC.md section 2, "Privacy rule", and risk 8.3):
  * on the recordings with some repos made private, one of them private only in a stale copy, no
  * private name reaches the panel, the inspector, the legend, the milestones, the status strip or
- * PersonApp's markup (text or any attribute), nor any text the canvas draws or measures, by default
- * or after a reveal for another login; and the address bar only ever names the user and the view.
+ * PersonApp's markup (text or any attribute), nor any text the canvas draws or measures, in any of
+ * the three views, by default or after a reveal for another login; and the address bar only ever
+ * names the user and the view.
  */
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -20,6 +21,7 @@ import { profileQueryFn, profileQueryKey } from '../src/profile/useProfileData'
 import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import { dayNumber } from '../src/profile/timeline'
 import { getTheme } from '../src/theme/themes'
+import type { PersonView } from '../src/share/shareUrl'
 import type { ProfileData } from '../src/types'
 import { kepanoRouter, makeFetch } from './helpers/profileReplay'
 import {
@@ -29,7 +31,7 @@ import {
   gaearonProfile,
   grow,
   kepanoProfile,
-  paint,
+  paintView,
   setGarden,
   setPerson,
   withPrivate,
@@ -38,6 +40,8 @@ import {
 
 const noop = () => {}
 const theme = getTheme('obsidian')
+/** person mode's three views */
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation']
 
 /**
  * kepano's repos made private: the top-starred one (a derived milestone names it), one of his own,
@@ -109,15 +113,15 @@ function expectNoSecret(c: Case, text: string, where: string): void {
   }
 }
 
-/** Every view's markup for one state of the store. */
+/** Every part's markup for one state of the store: the panel (with its switcher), the inspector, each view's legend and the strip. */
 function markup(g: Grown, revealed: boolean): string[] {
   const { profile, timeline, days, colourOf, name, privateKeys } = g
   return [
     renderToStaticMarkup(
-      h(PersonPanel, { profile, timeline, colourOf, name, privateCount: privateKeys.size, revealed, onReveal: noop, theme }),
+      h(PersonPanel, { profile, timeline, colourOf, name, privateCount: privateKeys.size, revealed, onReveal: noop, theme, view: 'garden', onView: noop }),
     ),
     renderToStaticMarkup(h(PersonInspector, { profile, timeline, days, colourOf, name })),
-    renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: privateKeys.size > 0 })),
+    ...VIEWS.map((view) => renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: privateKeys.size > 0, view }))),
     renderToStaticMarkup(h(PersonStatus, { profile, timeline, cachedAt: null, hasToken: profile.source === 'graphql', onRefresh: noop, onAddToken: noop })),
   ]
 }
@@ -136,12 +140,12 @@ function states(g: Grown, c: Case): Array<Partial<PersonState>> {
   return out
 }
 
-function personApp(c: Case): string {
+function personApp(c: Case, view: PersonView | null = null): string {
   setGarden({ token: c.token })
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(c.profile.login, c.token), { profile: c.profile, cachedAt: null })
   return renderToStaticMarkup(
-    h(QueryClientProvider, { client }, h(PersonApp, { login: c.profile.login, request: 0, view: null, focusInput: false, onRepo: noop, onUser: noop })),
+    h(QueryClientProvider, { client }, h(PersonApp, { login: c.profile.login, request: 0, view, focusInput: false, onRepo: noop, onUser: noop })),
   )
 }
 
@@ -204,35 +208,39 @@ describe('private repo names', () => {
     for (const message of messages) expect(message).not.toMatch(/secret-plans/)
   })
 
-  it('never reach PersonApp, whatever is hovered or selected', () => {
+  it('never reach PersonApp, whatever is hovered or selected, in any view', () => {
     for (const c of cases) {
       const keys = c.names.map(repoKey)
-      for (const state of [{}, { hover: { kind: 'repo', key: keys[0] }, selected: keys[1] ?? keys[0] }, { tab: 'milestones' }] as Array<Partial<PersonState>>) {
-        for (const revealFor of [null, 'someone-else']) {
-          setPerson({ ...state, revealFor })
-          const html = personApp(c)
-          expect(html).toContain('<canvas')
-          expectNoSecret(c, html, `${c.label} PersonApp`)
+      for (const view of [null, ...VIEWS]) {
+        for (const state of [{}, { hover: { kind: 'repo', key: keys[0] }, selected: keys[1] ?? keys[0] }, { tab: 'milestones' }] as Array<Partial<PersonState>>) {
+          for (const revealFor of [null, 'someone-else']) {
+            setPerson({ ...state, revealFor })
+            const html = personApp(c, view)
+            expect(html).toContain('<canvas')
+            expectNoSecret(c, html, `${c.label} PersonApp ${view}`)
+          }
         }
       }
     }
   })
 
-  it('never reach the canvas, drawn or measured, while hidden or revealed for another login', () => {
+  it('never reach the canvas, drawn or measured, while hidden or revealed for another login, in any view', () => {
     for (const c of cases) {
       const keys = c.names.map(repoKey)
       for (const revealFor of [null, 'someone-else']) {
         const g = grow(c.profile, c.now, theme, revealFor)
-        let shownLabel = false
-        for (const key of keys) {
-          for (const over of [{ hover: { kind: 'repo' as const, key } }, { selected: key }]) {
-            const { rec, measured } = paint(g, over)
-            for (const text of [...rec.texts(), ...measured]) expectNoSecret(c, text, `${c.label} canvas`)
-            shownLabel ||= rec.calls('fillText').some((call) => call.args[0] === PRIVATE_REPO_LABEL)
+        for (const view of VIEWS) {
+          let shownLabel = false
+          for (const key of keys) {
+            for (const over of [{ hover: { kind: 'repo' as const, key } }, { selected: key }]) {
+              const { rec, measured } = paintView(g, view, over)
+              for (const text of [...rec.texts(), ...measured]) expectNoSecret(c, text, `${c.label} ${view} canvas`)
+              shownLabel ||= rec.calls('fillText').some((call) => call.args[0] === PRIVATE_REPO_LABEL)
+            }
           }
+          // the hovered private repo's plate says what it is
+          expect(shownLabel, view).toBe(true)
         }
-        // the hovered private plant's plate says what it is
-        expect(shownLabel).toBe(true)
       }
     }
   })
@@ -246,9 +254,11 @@ describe('private repo names', () => {
       expect(panel.toLowerCase()).toContain(key)
       expect(inspector.toLowerCase()).toContain(key)
       expect(inspector.toLowerCase()).not.toContain(`href="https://github.com/${key}"`)
-      const { rec } = paint(g, { hover: { kind: 'repo', key } })
       const short = key.slice(key.indexOf('/') + 1)
-      expect(rec.texts().some((text) => text.toLowerCase().includes(short))).toBe(true)
+      for (const view of VIEWS) {
+        const { rec } = paintView(g, view, { hover: { kind: 'repo', key } })
+        expect(rec.texts().some((text) => text.toLowerCase().includes(short)), view).toBe(true)
+      }
     }
   })
 })
@@ -280,7 +290,8 @@ describe('the address bar', () => {
     expect(personAppSource.match(/replaceState\(/g)).toHaveLength(1)
     expect(personAppSource).toContain('const search = personSearch(login, view, window.location.search)')
     expect(personAppSource.match(/writeUserShare\(/g)).toHaveLength(1)
-    // the view is set once from the link and kept across logins (Phase 6 changes it)
+    // the view starts as the link's and is kept across logins; only the switcher changes it, through switchView
     expect(personAppSource).toContain("useState<PersonView>(() => linkedView ?? 'garden')")
+    expect(personAppSource).toContain('switchView(view, next, setView)')
   })
 })

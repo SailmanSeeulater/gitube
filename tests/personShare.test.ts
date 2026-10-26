@@ -246,7 +246,8 @@ describe("PersonApp's Phase 5 wiring", () => {
   })
 
   it("saves the poster with the screen's namer and the eyes' hidden repos", () => {
-    expect(code).toMatch(/saveLifePoster\(\{ profile, timeline, layout, theme, colourOf, name, hidden: usePersonStore\.getState\(\)\.hidden \}\)/)
+    // the view on show, as the canvas draws it
+    expect(code).toMatch(/saveLifePoster\(\{ profile, timeline, view: def, layout, theme, colourOf, name, hidden: usePersonStore\.getState\(\)\.hidden \}\)/)
     expect(code).toContain('onPoster={layout ? savePoster : undefined}')
   })
 

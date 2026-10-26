@@ -2,25 +2,32 @@
  * Person mode's panel, inspector, legend, status strip and error copy, rendered to HTML
  * (react-dom/server) after setting the stores, as pulls-ui does: what each shows per tier, that
  * dates are GitHub's day keys as written, and that no private repo name reaches the markup while
- * names are hidden, in text or in any attribute.
+ * names are hidden, in text or in any attribute. Also PersonApp's layouts, one per view, kept for a
+ * switch back.
  */
 import { createElement as h, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { viewLayouts } from '../src/PersonApp'
+import personAppSource from '../src/PersonApp.tsx?raw'
 import ErrorCard from '../src/components/ErrorCard'
 import { petalAngles } from '../src/components/gardenLook'
 import { formatClock } from '../src/components/gardenUtils'
 import * as icons from '../src/components/icons'
 import PersonInspector, { inspectorCard } from '../src/profile/PersonInspector'
-import PersonLegend, { LEGEND_BLOOM_PETALS, LEGEND_WILTED_PETALS, dataLimits } from '../src/profile/PersonLegend'
+import PersonLegend, { GRAPHQL_FAILED, LEGEND_BLOOM_PETALS, LEGEND_WILTED_PETALS, dataLimits } from '../src/profile/PersonLegend'
 import PersonPanel, { RepoRow, onRepoRowKey, type RepoRowProps } from '../src/profile/PersonPanel'
 import PersonStatus from '../src/profile/PersonStatus'
+import { LINKS_PER_STAR } from '../src/profile/constellationLayout'
 import { buildDayIndex } from '../src/profile/dayIndex'
+import type { LifeViewDef } from '../src/profile/lifeView'
+import { LIFE_VIEWS } from '../src/profile/lifeViews'
 import { fallbackNote, personErrorCopy } from '../src/profile/personErrors'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from '../src/profile/personIcons'
 import { PRIVATE_REPO_LABEL, isRevealed, privateRepoKeys, repoNamer } from '../src/profile/privacy'
 import { buildLifeTimeline, dayNumber } from '../src/profile/timeline'
 import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
+import type { PersonView } from '../src/share/shareUrl'
 import { useGardenStore, type GardenState } from '../src/store/useGardenStore'
 import { getTheme } from '../src/theme/themes'
 import { GitHubFetchError, type ProfileData, type ProfileRepo } from '../src/types'
@@ -181,10 +188,13 @@ function inspector(profile: ProfileData, revealed = false): string {
   return renderToStaticMarkup(h(PersonInspector, { profile, timeline, days, colourOf, name }))
 }
 
-function legend(profile: ProfileData): string {
+/** The legend of a view; the life garden's when view is left out. */
+function legend(profile: ProfileData, view?: PersonView): string {
   const { timeline, keys } = setup(profile)
-  return renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: keys.size > 0 }))
+  return renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: keys.size > 0, view }))
 }
+
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation']
 
 function status(profile: ProfileData, over: { cachedAt?: string | null; hasToken?: boolean } = {}): string {
   const { timeline } = setup(profile)
@@ -394,6 +404,59 @@ describe('PersonLegend', () => {
     expect(token).toContain('height: the commits GitHub counted')
     for (const language of ['TypeScript', 'Go', 'no language']) expect(token).toContain(language)
     expect(textOf(legend(PUBLIC))).toContain('height: how long it was active')
+  })
+
+  it("words the limits by the view's own measure, in every tier", () => {
+    /** What a repo is measured by in each view: with counted commits, and in their place without them. */
+    const MEASURES: Record<PersonView, { counted: string; uncounted: string }> = {
+      garden: { counted: "a plant's height", uncounted: "a plant's height is how long the repo was active" },
+      lines: { counted: "a line's thickness", uncounted: 'every line is drawn one thickness, and its thick run is how long the repo was active' },
+      constellation: { counted: "a star's size", uncounted: "a star's size is how long the repo was active" },
+    }
+    for (const view of VIEWS) {
+      const own = MEASURES[view]
+      const token = dataLimits(TOKEN, view)
+      const rest = dataLimits(PUBLIC, view)
+      const fallback = dataLimits(FALLBACK, view)
+      expect(token.join(' '), view).toContain(`and not in forks: ${own.counted} counts only those.`)
+      expect(rest.join(' '), view).toContain(`no commit counts without a token: ${own.uncounted}, from its creation to its last push.`)
+      expect(fallback.join(' '), view).toContain(`no commit counts: ${GRAPHQL_FAILED}. ${own.uncounted}, from its creation to its last push.`)
+      for (const [profile, limits] of [
+        [TOKEN, token],
+        [PUBLIC, rest],
+        [FALLBACK, fallback],
+      ] as const) {
+        // no other view's measure, and only the measure differs from the garden's limits
+        for (const other of VIEWS) if (other !== view) expect(limits.join(' '), `${view} ${profile.source}`).not.toContain(MEASURES[other].counted)
+        const garden = dataLimits(profile, 'garden')
+        expect(limits.filter((limit, i) => limit !== garden[i]), `${view} ${profile.source}`).toHaveLength(view === 'garden' ? 0 : 1)
+        // the view's legend lists them, and no plant outside the garden
+        const html = legend(profile, view)
+        for (const limit of limits) expect(textOf(html), `${view} ${profile.source}`).toContain(limit)
+        if (view !== 'garden') expect(html, `${view} ${profile.source}`).not.toContain('plant')
+      }
+    }
+    // left out, the view is the life garden
+    expect(dataLimits(PUBLIC)).toEqual(dataLimits(PUBLIC, 'garden'))
+    expect(dataLimits(TOKEN)).toEqual(dataLimits(TOKEN, 'garden'))
+  })
+
+  it('says what links two stars: the months they share, and the two each star shares the most with', () => {
+    /** The glyph grid's hints by label, entities read back. */
+    const hints = (html: string) =>
+      new Map(
+        [...html.matchAll(/<li class="[^"]*" title="([^"]*)">[\s\S]*?<span class="text-\[12px\] text-garden-text-dim">([^<]*)<\/span><\/li>/g)].map(
+          (m) => [m[2], textOf(m[1])] as const,
+        ),
+      )
+    for (const profile of [TOKEN, PUBLIC]) {
+      expect(hints(legend(profile, 'constellation')).get('active together')).toBe(
+        'a faint line links repos active in the same months: each star to at most the two it shares the most months with, and in a busy month only its busiest repos',
+      )
+    }
+    // "the two": the partners each star picks
+    expect(LINKS_PER_STAR).toBe(2)
+    expect(legend(TOKEN, 'constellation')).not.toContain('closest')
   })
 })
 
@@ -801,8 +864,46 @@ describe('privacy across the views', () => {
       setPerson({ tab })
       expectNoPrivateName(panel(TOKEN))
     }
-    expectNoPrivateName(legend(TOKEN))
+    for (const view of VIEWS) expectNoPrivateName(legend(TOKEN, view))
     expectNoPrivateName(status(TOKEN, { hasToken: true }))
+  })
+})
+
+describe("PersonApp's layouts", () => {
+  const code = personAppSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
+
+  it('lays each view out once per timeline, and reuses that layout on every switch back to it', () => {
+    const { profile, timeline } = setup(TOKEN)
+    const counted = (def: LifeViewDef) => ({ ...def, layout: vi.fn(def.layout) })
+    const defs = { garden: counted(LIFE_VIEWS.garden), lines: counted(LIFE_VIEWS.lines), constellation: counted(LIFE_VIEWS.constellation) }
+    const layoutOf = viewLayouts(timeline, profile.source)
+    const first = new Map(VIEWS.map((view) => [view, layoutOf(defs[view])]))
+    for (const view of ['constellation', 'garden', 'constellation', 'lines', 'garden', 'constellation'] as PersonView[]) {
+      expect(layoutOf(defs[view]), view).toBe(first.get(view))
+    }
+    for (const view of VIEWS) {
+      expect(defs[view].layout, view).toHaveBeenCalledTimes(1)
+      expect(defs[view].layout, view).toHaveBeenCalledWith(timeline, 'graphql')
+      // the view's own layout of this timeline, as it would make it again
+      expect(first.get(view), view).toEqual(LIFE_VIEWS[view].layout(timeline, profile.source))
+    }
+    // a new timeline (a new profile) lays the view out again, from its own source
+    const next = setup(PUBLIC)
+    const again = viewLayouts(next.timeline, next.profile.source)(defs.constellation)
+    expect(again).not.toBe(first.get('constellation'))
+    expect(defs.constellation.layout).toHaveBeenCalledTimes(2)
+    expect(defs.constellation.layout).toHaveBeenLastCalledWith(next.timeline, 'rest')
+  })
+
+  it('keeps one set of layouts per timeline, whatever the view, and lays a view out nowhere else', () => {
+    // the set is made per profile and timeline, never per view, so a switch keeps it
+    expect(code).toContain('const layoutOf = useMemo(() => (profile && timeline ? viewLayouts(timeline, profile.source) : null), [profile, timeline])')
+    expect(code).toContain('const layout = useMemo(() => layoutOf?.(def) ?? null, [layoutOf, def])')
+    expect(code).toContain('const def = LIFE_VIEWS[view]')
+    // a view's layout is called in viewLayouts only, and viewLayouts is used once
+    expect(code.match(/\.layout\(/g)).toHaveLength(1)
+    expect(code.match(/\bviewLayouts\(/g)).toHaveLength(2)
+    expect(code.match(/new Map<LifeViewDef, LifeViewModel>\(\)/g)).toHaveLength(1)
   })
 })
 

@@ -64,6 +64,19 @@ const LAZY_ONLY = [
   'profile/PersonTimelapse.tsx',
   // the poster (the encoder and the download are export/exporters, through exportersChunk)
   'profile/lifePoster.ts',
+  // the views: their shared contract, axis, registry and canvas host, life lines and the constellation
+  'profile/lifeView.ts',
+  'profile/lifeAxis.ts',
+  'profile/lifeViews.ts',
+  'profile/LifeViewCanvas.tsx',
+  'profile/lifeLinesLayout.ts',
+  'profile/lifeLinesGeometry.ts',
+  'profile/lifeLinesPaint.ts',
+  'profile/lifeLinesHit.ts',
+  'profile/constellationLayout.ts',
+  'profile/constellationGeometry.ts',
+  'profile/constellationPaint.ts',
+  'profile/constellationHit.ts',
   // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
   'api/graphql.ts',
   'api/profileGraphql.ts',

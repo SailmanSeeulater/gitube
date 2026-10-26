@@ -1,12 +1,13 @@
 /**
- * Person mode's time-lapse (PROFILE_SPEC.md section 6, "Time-lapse and export"): the life garden
- * grown from the timeline's start (the account's creation, or earlier backdated work) to today on
- * the life clock (timeline.ts), with play, scrub and a silent video recording of the canvas.
+ * Person mode's time-lapse (PROFILE_SPEC.md section 6, "Time-lapse and export"): the view on
+ * show (garden, lines or constellation) grown from the timeline's start (the account's creation, or
+ * earlier backdated work) to today on the life clock (timeline.ts), with play, scrub and a silent
+ * video recording of the canvas.
  *
  * Pure apart from track(), and no DOM: the pace of a play, what the clock shows at a progress, the
  * caption the canvas carries (so a recording names its person, its year and its repos so far, never
  * a repo), and a recording from rec to its download (LapseRecorder). PersonTimelapse runs the
- * controls and the frame loop with these; lifePaint.ts draws the caption over the garden while a
+ * controls and the frame loop with these; lifePaint.ts draws the caption over the view while a
  * time-lapse is set. The recorder itself (export/video) and the download (export/exporters) stay in
  * their own chunks: this module only takes their types, and the kit is handed in.
  */
@@ -14,7 +15,7 @@ import { track } from '../analytics/umami'
 import type { CanvasRecording, VideoType } from '../export/video'
 import { isChunkLoadError } from '../lazy/chunk'
 import { dayAt, dayKey, type LifeTimeline } from './timeline'
-import type { LifeGardenLayout, LifeInk, LifeViewport } from './lifeTypes'
+import type { LifeInk, LifeViewport } from './lifeTypes'
 
 /** Seconds a full play takes (the length control), and so a recording, before its hold. */
 export const LAPSE_LENGTHS = [10, 20, 40, 60] as const
@@ -74,7 +75,7 @@ export interface LapseCaption {
   /** the GitHub day the clock shows ('YYYY-MM-DD') */
   day: string
   year: string
-  /** plants drawn: sown by the clock's day (startDay <= at) and not hidden, the painter's own rule */
+  /** repos drawn: sown by the clock's day (startDay <= at) and not hidden, the painter's own rule in every view */
   sown: number
 }
 
@@ -84,8 +85,16 @@ export function lapseDay(timeline: Pick<LifeTimeline, 'clock' | 'startDay' | 'to
   return dayKey(Math.min(timeline.todayDay, Math.max(timeline.startDay, Math.floor(at))))
 }
 
-/** The caption at a progress, counting the plants drawn as paintLifeGarden decides them. */
-export function lapseCaption(timeline: LifeTimeline, layout: LifeGardenLayout, progress: number, hidden: ReadonlySet<string>): LapseCaption {
+/**
+ * The caption at a progress, counting the repos drawn as every view decides them: a view's items
+ * (a garden's plants, say) are sown on their first day, so the count is the same whichever is on show.
+ */
+export function lapseCaption(
+  timeline: LifeTimeline,
+  layout: { plants: ReadonlyArray<{ key: string; startDay: number }> },
+  progress: number,
+  hidden: ReadonlySet<string>,
+): LapseCaption {
   const p = clamp01(progress)
   const at = dayAt(timeline.clock, p)
   const day = lapseDay(timeline, p)

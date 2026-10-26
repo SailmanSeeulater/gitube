@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseSubject } from './api/parseSubject'
 import type { RepoInitial } from './RepoApp'
+import type { ProfileData } from './types'
 import { writeUserShare, type PersonView } from './share/shareUrl'
 import { useGardenStore } from './store/useGardenStore'
 import { useTheme } from './theme/useTheme'
@@ -11,14 +12,15 @@ import StatusStrip from './components/StatusStrip'
 import { useProfileData } from './profile/useProfileData'
 import { usePersonAnalytics } from './profile/usePersonAnalytics'
 import { RequestTracker, analyticsInput, refreshProfile, requestKey, startRequest } from './profile/personRequests'
-import { buildLifeTimeline } from './profile/timeline'
-import { layoutLifeGarden } from './profile/lifeGardenLayout'
+import { buildLifeTimeline, type LifeTimeline } from './profile/timeline'
 import { buildDayIndex } from './profile/dayIndex'
 import { languageColour, languagePalette } from './profile/lifeInk'
 import { isRevealed, privateRepoKeys, repoNamer } from './profile/privacy'
 import { personErrorCopy } from './profile/personErrors'
 import { usePersonStore } from './profile/usePersonStore'
-import LifeGarden from './profile/LifeGarden'
+import LifeView from './profile/LifeViewCanvas'
+import type { LifeViewDef, LifeViewModel } from './profile/lifeView'
+import { LIFE_VIEWS, switchView } from './profile/lifeViews'
 import PersonPanel from './profile/PersonPanel'
 import PersonInspector from './profile/PersonInspector'
 import PersonStatus from './profile/PersonStatus'
@@ -58,19 +60,38 @@ export function personSearch(login: string, view: PersonView, current: string): 
 }
 
 /**
- * Person mode (?user=): one GitHub user's coding life as a garden, with the side panel, the
- * inspector, the status strip and the privacy toggle, the time-lapse (with its recording), the
- * poster (from the panel or the top bar's "Save image") and the copy-link button. Every repo name
- * on show goes through one namer, so a private repo's name is hidden until the toggle reveals it
- * for this login; a recording and a poster use the same namer (the toggle waits while a recording
+ * Each view's layout of one timeline, made the first time the view is asked for and kept for every
+ * switch back to it: a layout is pure, so the kept one is the one the view would make again. A new
+ * timeline (a new profile) takes a new set.
+ */
+export function viewLayouts(timeline: LifeTimeline, source: ProfileData['source']): (def: LifeViewDef) => LifeViewModel {
+  const made = new Map<LifeViewDef, LifeViewModel>()
+  return (def) => {
+    const kept = made.get(def)
+    if (kept) return kept
+    const layout: LifeViewModel = def.layout(timeline, source)
+    made.set(def, layout)
+    return layout
+  }
+}
+
+/**
+ * Person mode (?user=): one GitHub user's coding life as a garden, life lines or a constellation
+ * (the panel's view switcher), with the side panel, the inspector, the status strip and the privacy
+ * toggle, the time-lapse (with its recording), the poster (from the panel or the top bar's "Save
+ * image") and the copy-link button, all shared by the three views. Every repo name on show goes
+ * through one namer, so a private repo's name is hidden until the toggle reveals it for this login;
+ * a recording and a poster use the same namer (the toggle and the switcher wait while a recording
  * runs), and a copied link names only the user and the view.
  */
 export default function PersonApp({ login, request, view: linkedView, focusInput, onRepo, onUser }: PersonAppProps) {
   const [input, setInput] = useState(login)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
-  // The view on show, set once from the link: a new login keeps it (App passes no view for one).
-  const [view] = useState<PersonView>(() => linkedView ?? 'garden')
+  // The view on show, first the link's: a new login keeps it (App passes no view for one), and the
+  // panel's switcher changes it (switchView, which counts it).
+  const [view, setView] = useState<PersonView>(() => linkedView ?? 'garden')
+  const pickView = useCallback((next: PersonView) => switchView(view, next, setView), [view])
   const inputRef = useRef<HTMLInputElement | null>(null)
   /** the canvas wrapper: the time-lapse records the canvas inside it */
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
@@ -100,9 +121,13 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   // grow, once per request for a profile (analytics.ts has the rules)
   const noteGrow = usePersonAnalytics(analyticsInput(login, request, fetched))
 
-  // The life is read once per profile, today being when it arrived; the garden is laid out from it.
+  // The life is read once per profile, today being when it arrived; the view on show is laid out
+  // from it, once per view: a switch back reuses that view's layout until the timeline changes. Every
+  // view spans the same days, so a switch keeps the camera and the selection in view.
   const timeline = useMemo(() => (profile ? buildLifeTimeline(profile, Date.now()) : null), [profile])
-  const layout = useMemo(() => (profile && timeline ? layoutLifeGarden(timeline, profile.source) : null), [profile, timeline])
+  const layoutOf = useMemo(() => (profile && timeline ? viewLayouts(timeline, profile.source) : null), [profile, timeline])
+  const def = LIFE_VIEWS[view]
+  const layout = useMemo(() => layoutOf?.(def) ?? null, [layoutOf, def])
   const days = useMemo(() => (profile && timeline ? buildDayIndex(profile, timeline) : null), [profile, timeline])
 
   // Language colours in the active theme: a theme switch repaints, the layout stays put.
@@ -122,9 +147,9 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
   // ---- time-lapse ----
   const [lapseOpen, setLapseOpen] = useState(false)
-  /** a recording is running: the privacy toggle waits for it to end */
+  /** a recording is running: the privacy toggle and the view switcher wait for it to end */
   const [lapseRecording, setLapseRecording] = useState(false)
-  /** 0..1; the controls write it every frame and LifeGarden reads it in every paint, without renders */
+  /** 0..1; the controls write it every frame and LifeView reads it in every paint, without renders; a view switch keeps it */
   const lapseProgress = useRef(1)
   // one identity while it is on: the painter is made per value
   // live while playing, recording or scrubbing: a paused time-lapse stops repainting (a new object
@@ -151,11 +176,12 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
       }),
     [],
   )
-  // a new login or request, or a different profile, starts with the whole garden on show (before paint, like startRequest)
+  // a new login or request, or a different profile, starts with the whole life on show (before
+  // paint, like startRequest); a view switch does not, so the time-lapse carries on in the new view
   useLayoutEffect(() => closeLapse(), [asked, profile, closeLapse])
   const getCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
 
-  // ---- poster: the garden fully grown, framed, with the names as the screen shows them now ----
+  // ---- poster: the view on show fully grown, framed, with the names as the screen shows them now ----
   const [posterBusy, setPosterBusy] = useState(false)
   const [posterError, setPosterError] = useState<string | null>(null)
   // a new login or request leaves the last one's poster error and reload card behind
@@ -167,7 +193,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     if (!profile || !timeline || !layout) return
     setPosterBusy(true)
     try {
-      await saveLifePoster({ profile, timeline, layout, theme, colourOf, name, hidden: usePersonStore.getState().hidden })
+      await saveLifePoster({ profile, timeline, view: def, layout, theme, colourOf, name, hidden: usePersonStore.getState().hidden })
       setPosterError(null)
     } catch (err) {
       // the exporters chunk could not be loaded: the reload card, not a module URL
@@ -177,7 +203,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     } finally {
       setPosterBusy(false)
     }
-  }, [profile, timeline, layout, theme, colourOf, name])
+  }, [profile, timeline, def, layout, theme, colourOf, name])
 
   // The address bar names the person and the view, so a reload or a copied link reopens them.
   useEffect(() => {
@@ -253,10 +279,11 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
-      {/* The canvas stops short of the side panel so the fitted life never hides behind it. */}
+      {/* The canvas stops short of the side panel so the fitted life never hides behind it. One canvas
+          serves every view, so a switch keeps its camera, and a recording of it keeps going. */}
       <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: shown && panelOpen ? PANEL_INSET : 0 }}>
         {profile && timeline && layout && (
-          <LifeGarden timeline={timeline} layout={layout} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
+          <LifeView def={def} layout={layout} timeline={timeline} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
         )}
       </div>
 
@@ -311,6 +338,9 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
           theme={theme}
           onPoster={layout ? savePoster : undefined}
           posterBusy={posterBusy}
+          view={view}
+          onView={pickView}
+          viewLocked={lapseRecording}
         />
       )}
 

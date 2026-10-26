@@ -14,8 +14,18 @@ import { horizonY, plantGeom } from '../src/profile/lifeGeometry'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import { lifeInk } from '../src/profile/lifeInk'
 import { PRIVATE_REPO_LABEL, isRevealed, privateRepoKeys, repoNamer } from '../src/profile/privacy'
-import { LIFE_LABEL_FONT, LOCK_PX, LifeLabelSet, labelNames, lifeLabelSpec, type LifeLabelFrame } from '../src/profile/useLifeLabels'
-import type { LifeViewport } from '../src/profile/lifeTypes'
+import {
+  LIFE_LABEL_FONT,
+  LOCK_PX,
+  LifeLabelSet,
+  gardenAnchor,
+  gardenLabelItems,
+  groundKeepOut,
+  labelNames,
+  lifeLabelSpec,
+  type LifeLabelFrame,
+} from '../src/profile/useLifeLabels'
+import type { LifeViewport, PlantGeom } from '../src/profile/lifeTypes'
 import type { ProfileData, ProfileRepo } from '../src/types'
 import { recordingCtx } from './helpers/recordingCtx'
 
@@ -85,8 +95,24 @@ const keys = privateRepoKeys(PROFILE)
 const ink = lifeInk(getTheme('paper'))
 const SECRET = layout.byKey.get('me/secret-plans')!
 
-function frame(over: Partial<LifeLabelFrame> = {}): LifeLabelFrame {
-  return { geoms, view: VIEW, dtMs: 16, cameraMoving: false, hidden: new Set(), forced: [], explore: -1, at: null, ...over }
+/** A frame of the garden's labels: each plant's head as its anchor, none for a hidden plant or one not sown by at. */
+interface GardenFrame {
+  geoms: PlantGeom[]
+  view: LifeViewport
+  dtMs: number
+  cameraMoving: boolean
+  hidden: ReadonlySet<string>
+  forced: number[]
+  explore: number
+  at: number | null
+}
+
+function frame(over: Partial<GardenFrame> = {}): LifeLabelFrame {
+  const f: GardenFrame = { geoms, view: VIEW, dtMs: 16, cameraMoving: false, hidden: new Set(), forced: [], explore: -1, at: null, ...over }
+  const plants = layout.plants
+  const anchor = (i: number, out: Float32Array) =>
+    !f.hidden.has(plants[i].key) && !(f.at !== null && plants[i].startDay > f.at) && gardenAnchor(layout, f.geoms, i, f.at, out)
+  return { anchor, keepOut: groundKeepOut(f.view), view: f.view, dtMs: f.dtMs, cameraMoving: f.cameraMoving, forced: f.forced, explore: f.explore }
 }
 
 /** Runs frames until the labels are at rest (or n frames); returns whether they are still busy. */
@@ -108,7 +134,7 @@ const dot = () => ink.accent
 function drawn(revealFor: string | null) {
   const names = labelNames(layout, timeline, repoNamer(keys, isRevealed(revealFor, PROFILE.login)), PROFILE.login)
   const { measured, measure } = recordingMeasure()
-  const labels = new LifeLabelSet(layout, names, measure)
+  const labels = new LifeLabelSet(gardenLabelItems(layout), names, measure)
   settle(labels)
   const rec = recordingCtx()
   labels.draw(rec.ctx, ink, dot)
@@ -192,7 +218,7 @@ describe('LifeLabelSet', () => {
   it('drops the label of a hidden plant, and of one the time-lapse has not sown', () => {
     const names = labelNames(layout, timeline, repoNamer(keys, true), 'Me')
     const alpha = layout.byKey.get('me/alpha')!
-    const labels = new LifeLabelSet(layout, names)
+    const labels = new LifeLabelSet(gardenLabelItems(layout), names)
     settle(labels)
     expect(labels.placer.shown[alpha]).toBe(1)
     settle(labels, frame({ hidden: new Set(['me/alpha']), forced: [alpha], explore: alpha }))
@@ -201,14 +227,14 @@ describe('LifeLabelSet', () => {
     expect(rec.calls('fillText').map((c) => c.args[0])).not.toContain('alpha')
     expect(labels.placer.forcedLabels).not.toContain(alpha)
 
-    const early = new LifeLabelSet(layout, names)
+    const early = new LifeLabelSet(gardenLabelItems(layout), names)
     settle(early, frame({ at: layout.plants[alpha].startDay - 1 }))
     expect(early.placer.shown[alpha]).toBe(0)
   })
 
   it('hits a shown label and its plate', () => {
     const names = labelNames(layout, timeline, repoNamer(keys, false), 'Me')
-    const labels = new LifeLabelSet(layout, names)
+    const labels = new LifeLabelSet(gardenLabelItems(layout), names)
     settle(labels)
     const p = labels.placer
     const i = Array.from({ length: p.n }, (_, k) => k).find((k) => p.shown[k] && p.alpha[k] >= 0.5)!
@@ -222,7 +248,7 @@ describe('LifeLabelSet', () => {
 
   it('dims every label but the selected one', () => {
     const names = labelNames(layout, timeline, repoNamer(keys, false), 'Me')
-    const labels = new LifeLabelSet(layout, names)
+    const labels = new LifeLabelSet(gardenLabelItems(layout), names)
     settle(labels)
     const rec = recordingCtx()
     labels.draw(rec.ctx, ink, dot, SECRET)
@@ -232,16 +258,16 @@ describe('LifeLabelSet', () => {
   })
 
   it('takes over the spots of the set before when the names change', () => {
-    const hidden = new LifeLabelSet(layout, labelNames(layout, timeline, repoNamer(keys, false), 'Me'))
+    const hidden = new LifeLabelSet(gardenLabelItems(layout), labelNames(layout, timeline, repoNamer(keys, false), 'Me'))
     settle(hidden)
-    const shown = new LifeLabelSet(layout, labelNames(layout, timeline, repoNamer(keys, true), 'Me'), undefined, hidden)
+    const shown = new LifeLabelSet(gardenLabelItems(layout), labelNames(layout, timeline, repoNamer(keys, true), 'Me'), undefined, hidden)
     expect(Array.from(shown.placer.shown)).toEqual(Array.from(hidden.placer.shown))
   })
 
   it('handles a profile without repos', () => {
     const empty = buildLifeTimeline({ ...PROFILE, repos: [], source: 'rest' }, NOW)
     const emptyLayout = layoutLifeGarden(empty, 'rest')
-    const labels = new LifeLabelSet(emptyLayout, [])
+    const labels = new LifeLabelSet(gardenLabelItems(emptyLayout), [])
     expect(settle(labels, frame({ geoms: [] }))).toBe(false)
     const rec = recordingCtx()
     labels.draw(rec.ctx, ink, dot)

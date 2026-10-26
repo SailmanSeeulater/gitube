@@ -17,8 +17,9 @@
 import type { ProfileData } from '../types'
 import { hash01 } from '../components/gardenLook'
 import { repoKey } from './privacy'
-import { dayNumber, progressAtDay, type Lane, type LifeTimeline, type Span } from './timeline'
+import { progressAtDay, type Lane, type LifeTimeline, type Span } from './timeline'
 import type { LifeGardenLayout, LifeLeaf, LifePlant, LifeStemPart, LifeTip } from './lifeTypes'
+import { axisOf } from './lifeView'
 
 /** Depth rows: plants rooted close together step back a row instead of overlapping. */
 export const LIFE_ROWS = 4
@@ -102,9 +103,9 @@ function comparePaint(a: LifePlant, b: LifePlant): number {
 
 /** The life garden of a timeline; source says whether lanes weigh commits (graphql) or active days (rest). */
 export function layoutLifeGarden(timeline: LifeTimeline, source: ProfileData['source']): LifeGardenLayout {
-  const { startDay, todayDay, lanes } = timeline
-  const days = todayDay - startDay + 1
-  const clampX = (x: number) => Math.min(days, Math.max(0, x))
+  const axis = axisOf(timeline)
+  const { startDay, days } = axis
+  const { lanes } = timeline
 
   const seedlingOf = (lane: Lane) => source === 'graphql' && !lane.detailed
   let maxWeight = 0
@@ -157,30 +158,5 @@ export function layoutLifeGarden(timeline: LifeTimeline, source: ProfileData['so
   })
   plants.sort(comparePaint)
 
-  // a marker sits in its day's middle, kept inside the life so every one can be hovered
-  const at = (day: number) => Math.min(days - 0.5, Math.max(0.5, day - startDay + 0.5))
-  const longest = timeline.streaks?.longest ?? null
-  const milestones: LifeGardenLayout['milestones'] = []
-  timeline.milestones.forEach((milestone, index) => {
-    const day = dayNumber(milestone.day)
-    if (!Number.isFinite(day)) return
-    const streak = milestone.kind === 'longest-streak' && longest !== null && longest.from === milestone.day
-    milestones.push({ index, kind: milestone.kind, x: at(day), x1: streak ? at(longest.toDay) : null })
-  })
-
-  return {
-    startDay,
-    todayDay,
-    days,
-    rows: LIFE_ROWS,
-    plants,
-    byKey: new Map(plants.map((plant, i) => [plant.key, i])),
-    years: timeline.eras
-      .map((era) => ({ year: era.year, x0: clampX(era.fromDay - startDay), x1: clampX(era.toDay + 1 - startDay) }))
-      .filter((year) => year.x1 > year.x0),
-    languages: timeline.languageEras
-      .map((era) => ({ language: era.language, x0: clampX(era.fromDay - startDay), x1: clampX(era.toDay + 1 - startDay) }))
-      .filter((era) => era.x1 > era.x0),
-    milestones,
-  }
+  return { ...axis, rows: LIFE_ROWS, plants, byKey: new Map(plants.map((plant, i) => [plant.key, i])) }
 }

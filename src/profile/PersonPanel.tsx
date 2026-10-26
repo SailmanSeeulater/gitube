@@ -1,11 +1,13 @@
 import { useMemo, type KeyboardEvent } from 'react'
 import type { ProfileData } from '../types'
 import type { Theme } from '../theme/themes'
+import type { PersonView } from '../share/shareUrl'
 import { useGardenStore } from '../store/useGardenStore'
 import { ImageIcon, SearchIcon } from '../components/icons'
 import { CopyLinkButton } from '../components/Panel'
 import type { RepoNamer, ShownName } from './lifeTypes'
 import PersonLegend from './PersonLegend'
+import { VIEW_OPTIONS } from './lifeViews'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LockIcon, ShownRepoName } from './personIcons'
 import { repoKey, shownMilestoneRepo } from './privacy'
 import { dayNumber, githubDay, type Lane, type LifeTimeline } from './timeline'
@@ -30,6 +32,12 @@ export interface PersonPanelProps {
   onPoster?: () => void
   /** a poster is on its way */
   posterBusy?: boolean
+  /** the view on show (the garden when left out), which the legend explains */
+  view?: PersonView
+  /** switches the view (lifeViews.ts's switchView); no switcher without it */
+  onView?: (view: PersonView) => void
+  /** a recording is running: the switcher waits for it to end, so a video shows one view */
+  viewLocked?: boolean
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -64,6 +72,36 @@ function Tabs({ value, onChange, repoCount, milestoneCount }: {
           >
             {tab.label}
             <span className="rounded bg-garden-hover px-1 font-mono text-[10px] tabular-nums text-garden-muted">{tab.count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * The view switcher: the repo garden panel's Segmented (components/Panel.tsx), copied so the first
+ * download need not export it (a test holds their classes equal), and disabled while a recording
+ * runs. It hands the option's value to onChange, which counts a real change (switchView).
+ */
+export function ViewSwitch({ value, onChange, disabled = false }: { value: PersonView; onChange: (view: PersonView) => void; disabled?: boolean }) {
+  return (
+    <div role="radiogroup" aria-label="View" className="flex rounded-lg bg-garden-field p-0.5">
+      {VIEW_OPTIONS.map((option) => {
+        const active = option.value === value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => onChange(option.value)}
+            className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
+              active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {option.label}
           </button>
         )
       })}
@@ -179,8 +217,9 @@ export function RepoRow({ lane, shown, colour, selected, hidden, hovered, onSele
 }
 
 /**
- * Person mode's side panel: who it is (with the poster and the copy-link buttons), the privacy
- * toggle, the repo list (search, hide, select) and the milestones, with the legend at the foot.
+ * Person mode's side panel: who it is (with the poster and the copy-link buttons), the view
+ * switcher, the privacy toggle, the repo list (search, hide, select) and the milestones, with the
+ * legend for the view at the foot. Every view shares it, and a switch leaves all of it as it was.
  * Every repo name comes through the namer, and search matches only what is shown, so a hidden
  * private name cannot be found by guessing it. The copied link is the address bar, which names
  * only the user and the view.
@@ -197,6 +236,9 @@ export default function PersonPanel({
   theme,
   onPoster,
   posterBusy = false,
+  view = 'garden',
+  onView,
+  viewLocked = false,
 }: PersonPanelProps) {
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
@@ -262,7 +304,7 @@ export default function PersonPanel({
             type="button"
             onClick={() => onPoster()}
             disabled={posterBusy}
-            title="save a poster of this life as a PNG: the garden, the avatar, the years and three milestones"
+            title="save a poster of this view as a PNG: the view, the avatar, the years and three milestones"
             aria-label="Save a poster"
             className={`rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text disabled:opacity-40 ${posterBusy ? 'animate-pulse' : ''}`}
           >
@@ -280,6 +322,19 @@ export default function PersonPanel({
           <ChevronRightIcon />
         </button>
       </header>
+
+      {onView && (
+        <div
+          className="border-b border-garden-border px-3 py-2.5"
+          title={
+            viewLocked
+              ? 'Waits until the recording ends, so a video shows one view.'
+              : "garden: repos grown as plants. lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row"
+          }
+        >
+          <ViewSwitch value={view} onChange={onView} disabled={viewLocked} />
+        </div>
+      )}
 
       {privateCount > 0 && <PrivacyToggle count={privateCount} revealed={revealed} locked={revealLocked} onReveal={onReveal} />}
 
@@ -384,7 +439,7 @@ export default function PersonPanel({
 
       {/* the legend scrolls on its own past this share of the panel, so the list keeps its room */}
       <footer className="garden-scroll min-h-0 overflow-y-auto border-t border-garden-border px-3 py-2.5" style={{ maxHeight: '45%' }}>
-        <PersonLegend profile={profile} timeline={timeline} colourOf={colourOf} theme={theme} hasPrivate={privateCount > 0} />
+        <PersonLegend profile={profile} timeline={timeline} colourOf={colourOf} theme={theme} hasPrivate={privateCount > 0} view={view} />
       </footer>
     </aside>
   )
