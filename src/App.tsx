@@ -3,7 +3,8 @@ import RepoApp from './RepoApp'
 // makes the bundler split the first download into one more chunk.
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import type { RepoInitial } from './RepoApp'
-import { readSubject, writeUserShare, type PersonView } from './share/shareUrl'
+import { subjectOf, type Subject } from './subject'
+import { writeUserShare } from './share/shareUrl'
 import { personAppChunk } from './lazy/parts'
 import { LazySlot, lazyPart } from './components/LazyPart'
 import { useGardenStore } from './store/useGardenStore'
@@ -17,20 +18,6 @@ const PersonApp = lazyPart(personAppChunk)
 
 /** Person mode's placeholder while it loads, and its reload notice if it cannot be loaded. */
 const PERSON_FRAME = 'flex h-full w-full items-center justify-center bg-garden-bg px-4'
-
-/**
- * What the app shows: a repo garden, or a person. request counts the person's submits, so a later
- * phase can refetch the same login the way Grow refetches the same repo.
- */
-type Subject =
-  | { kind: 'repo'; initial?: RepoInitial }
-  | { kind: 'user'; login: string; request: number; view: PersonView | null; fromInput: boolean }
-
-/** The subject a page address names: a ?user= link opens person mode, anything else the repo garden. */
-function subjectOf(search: string): Subject {
-  const read = readSubject(search)
-  return read?.kind === 'user' ? { kind: 'user', login: read.login, request: 0, view: read.view, fromInput: false } : { kind: 'repo' }
-}
 
 export default function App() {
   const [subject, setSubject] = useState<Subject>(() => subjectOf(typeof window === 'undefined' ? '' : window.location.search))

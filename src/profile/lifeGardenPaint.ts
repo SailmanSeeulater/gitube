@@ -12,7 +12,8 @@
 import { BLOOM_SCALE, drawLeaf, drawRoots, drawTip } from '../components/gardenPaint'
 import type { LifeTimeline } from './timeline'
 import type { LifeCamera, LifeGardenLayout, LifeHover, LifeInk, LifePlant, LifeViewport, PlantGeom } from './lifeTypes'
-import { horizonY, leafGeom, subQuad } from './lifeGeometry'
+import { leafGeom, subQuad } from './lifeGeometry'
+import { paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from './lifeAxis'
 
 export interface LifePaintInput {
   layout: LifeGardenLayout
@@ -34,14 +35,8 @@ export interface LifePaintInput {
   at: number | null
 }
 
-/** Year labels: the repo garden's MONO_FONT at 10 px (pinned in tests/lifeGardenPaint.test.ts). */
-export const LIFE_YEAR_FONT = '10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-/** A year label closer than this to the last one drawn is skipped. */
-const YEAR_GAP_PX = 34
-const HORIZON_PX = 1.5
-/** the language ribbon under the horizon */
-const RIBBON_GAP_PX = 2
-const RIBBON_PX = 4
+/** Year labels (lifeAxis.ts draws them for every view). */
+export { LIFE_YEAR_FONT } from './lifeAxis'
 /** a dormant part of a stem, against an active one */
 const DORMANT_WIDTH = 0.45
 /** the hollow ring at the root of a repo the person only contributed to */
@@ -49,7 +44,6 @@ const VISIT_RING_PX = 2.6
 /** a fork's slanted cut at the base */
 const CUT_PX = 7
 const CUT_ANGLE = (-25 * Math.PI) / 180
-const DIAMOND_PX = 4
 /** the hover and selection rings, beyond a tip's petals */
 const RING_GAP_PX = 3
 const TWO_PI = Math.PI * 2
@@ -99,30 +93,6 @@ export function drawLock(ctx: CanvasRenderingContext2D, x: number, y: number, si
   ctx.beginPath()
   ctx.rect(x - bodyW / 2, bodyTop, bodyW, bodyH)
   ctx.fillStyle = colour
-  ctx.fill()
-}
-
-/** A diamond on (x, y), r px from its centre to each corner; two-coloured for a language switch. */
-function drawDiamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, left: string, right: string, ink: LifeInk): void {
-  ctx.beginPath()
-  ctx.moveTo(x, y - r)
-  ctx.lineTo(x + r, y)
-  ctx.lineTo(x, y + r)
-  ctx.lineTo(x - r, y)
-  ctx.closePath()
-  ctx.strokeStyle = ink.textHalo
-  ctx.lineWidth = 1.5
-  ctx.lineJoin = 'round'
-  ctx.stroke()
-  ctx.fillStyle = left
-  ctx.fill()
-  if (right === left) return
-  ctx.beginPath()
-  ctx.moveTo(x, y - r)
-  ctx.lineTo(x + r, y)
-  ctx.lineTo(x, y + r)
-  ctx.closePath()
-  ctx.fillStyle = right
   ctx.fill()
 }
 
@@ -187,75 +157,29 @@ function onScreen(g: PlantGeom, width: number): boolean {
   return Math.max(g.x0, g.cx, g.x2) + pad >= 0 && Math.min(g.x0, g.cx, g.x2) - pad <= width
 }
 
-/** Paints the whole frame. The context comes in with the device pixel transform set; it is left as it came. */
+/**
+ * Paints the whole frame: the axis's backdrop (lifeAxis.ts) with bands for alternate years, the
+ * plants, the axis's milestones and the hovered day's guide, then the rings. The context comes in
+ * with the device pixel transform set; it is left as it came.
+ */
 export function paintLifeGarden(ctx: CanvasRenderingContext2D, input: LifePaintInput): void {
-  const { layout, timeline, geoms, camera, view, ink, colourOf, hidden, hover, selected, at } = input
+  const { layout, geoms, view, ink, hidden, hover, selected, at } = input
   const W = view.width
-  const horizon = horizonY(view)
-  const sx = (x: number) => camera.tx + x * camera.k
-  /** world x of a day number's middle */
-  const dayX = (day: number) => day - layout.startDay + 0.5
+  const axis: LifeAxisPaint = {
+    axis: layout,
+    timeline: input.timeline,
+    camera: input.camera,
+    view,
+    ink,
+    colourOf: input.colourOf,
+    hover,
+    at,
+  }
 
-  // the canvas colour over the whole backing store, so image and video captures are never black
+  paintCanvasFill(ctx, ink)
   ctx.save()
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.globalAlpha = 1
-  ctx.fillStyle = ink.canvas
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-  ctx.restore()
-
-  ctx.save()
-  ctx.globalAlpha = 1
-
-  // alternate years get a faint band in the sky
-  ctx.fillStyle = ink.eraBand
-  for (const year of layout.years) {
-    if (year.year % 2 === 0) continue
-    const x0 = Math.max(0, sx(year.x0))
-    const x1 = Math.min(W, sx(year.x1))
-    if (x1 > x0) ctx.fillRect(x0, 0, x1 - x0, horizon)
-  }
-
-  // the horizon, and under it a block per language era in its colour
-  ctx.beginPath()
-  ctx.moveTo(0, horizon)
-  ctx.lineTo(W, horizon)
-  ctx.strokeStyle = ink.horizon
-  ctx.lineWidth = HORIZON_PX
-  ctx.stroke()
-  for (const era of layout.languages) {
-    const x0 = Math.max(0, sx(era.x0))
-    const x1 = Math.min(W, sx(era.x1))
-    if (x1 <= x0) continue
-    ctx.fillStyle = colourOf(era.language)
-    ctx.fillRect(x0, horizon + RIBBON_GAP_PX, x1 - x0, RIBBON_PX)
-  }
-
-  // year labels from each year's first day, thinned out when the years crowd together, and today
-  ctx.font = LIFE_YEAR_FONT
-  ctx.fillStyle = ink.muted
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-  const labelY = horizon + RIBBON_GAP_PX + RIBBON_PX + 4
-  let lastLabel = -Infinity
-  for (const year of layout.years) {
-    const x = Math.max(sx(year.x0), sx(0))
-    if (x - lastLabel < YEAR_GAP_PX || x > W) continue
-    lastLabel = x
-    if (x + YEAR_GAP_PX < 0) continue
-    ctx.fillText(String(year.year), x + 2, labelY)
-  }
-  const todayX = sx(layout.days)
-  if (todayX >= 0 && todayX <= W) {
-    ctx.beginPath()
-    ctx.moveTo(todayX, horizon - 4)
-    ctx.lineTo(todayX, horizon + RIBBON_GAP_PX + RIBBON_PX + 2)
-    ctx.strokeStyle = ink.muted
-    ctx.lineWidth = 1
-    ctx.stroke()
-    ctx.textAlign = 'right'
-    ctx.fillText('today', todayX, labelY + 13)
-  }
+  paintAxisBackdrop(ctx, axis, { yearBands: true })
 
   // the plants, back row first; a selection dims every other plant
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
@@ -269,52 +193,9 @@ export function paintLifeGarden(ctx: CanvasRenderingContext2D, input: LifePaintI
   }
   ctx.globalAlpha = 1
 
-  // milestones on the horizon: a streak's bar, then the diamonds, a language switch in both colours
-  const hoverMilestone = hover?.kind === 'day' ? hover.milestone : null
-  for (const m of layout.milestones) {
-    if (at !== null && m.x > dayX(at)) continue
-    const x = sx(m.x)
-    if (m.kind === 'longest-streak' && m.x1 !== null) {
-      const x1 = Math.min(W, sx(m.x1))
-      if (x1 > 0 && x < W) {
-        ctx.fillStyle = ink.accent
-        ctx.fillRect(Math.max(0, x), horizon - 1, x1 - Math.max(0, x), 2)
-      }
-    }
-    if (x < -DIAMOND_PX * 2 || x > W + DIAMOND_PX * 2) continue
-    let left = ink.accent
-    let right = ink.accent
-    const milestone = timeline.milestones[m.index]
-    if (m.kind === 'language-switch' && milestone) {
-      const k = timeline.languageEras.findIndex((era) => era.from === milestone.day)
-      if (k > 0) {
-        left = colourOf(timeline.languageEras[k - 1].language)
-        right = colourOf(timeline.languageEras[k].language)
-      }
-    }
-    const hovered = hoverMilestone === m.index
-    drawDiamond(ctx, x, horizon, hovered ? DIAMOND_PX + 2 : DIAMOND_PX, left, right, ink)
-    if (hovered) {
-      ctx.beginPath()
-      ctx.arc(x, horizon, DIAMOND_PX + 5, 0, TWO_PI)
-      ctx.strokeStyle = ink.hoverRing
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-    }
-  }
-
-  // the hovered day's guide, from the sky to the horizon
-  if (hover?.kind === 'day') {
-    const x = Math.round(sx(dayX(hover.day))) + 0.5
-    if (x >= 0 && x <= W) {
-      ctx.beginPath()
-      ctx.moveTo(x, 0)
-      ctx.lineTo(x, horizon)
-      ctx.strokeStyle = ink.hoverRing
-      ctx.lineWidth = 1
-      ctx.stroke()
-    }
-  }
+  // milestones on the horizon, and the hovered day's guide
+  paintAxisMilestones(ctx, axis)
+  paintDayGuide(ctx, axis)
 
   // rings round the selected and the hovered plant
   const ring = (i: number, colour: string, lineWidth: number) => {

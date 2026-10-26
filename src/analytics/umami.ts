@@ -41,6 +41,7 @@ export type AnalyticsEvent =
   | 'token-added'
   | 'fetch-error'
   | 'poster-export'
+  | 'view-switch'
 
 export type EventData = Record<string, string | number | boolean>
 

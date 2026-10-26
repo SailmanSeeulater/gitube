@@ -260,13 +260,15 @@ legend) and one inspector (hover a repo or a day for details).
   `graphql` ones, so adding a token never keeps serving a REST profile, and a profile fetched with a
   token is never served without one. A profile REST filled after a GraphQL fallback
   (`fallback !== null`) is not cached: the next token run tries GraphQL again.
-- **Time-lapse and export**: the person garden grows year by year from the account's creation date,
-  with play, scrub and WebM recording. Reused as they are: `export/video.ts`, `export/image.ts` and
-  `audio/context.ts`. `TimelapseBar` is repo-shaped (it takes a `Graph`, `RepoData` and a graph
-  timeline, scores music from branches, names files from owner/repo), so person mode gets its own
-  small controls built on those helpers. Add a PNG "poster" export framed with the user's avatar,
-  login, year span and top three milestones. No JSON save in person mode for v1: the garden-file
-  format is `RepoData`-only and would carry private names past the toggle.
+- **Time-lapse and export**: the view on show grows from the life's first day (the account's
+  creation, or earlier backdated activity) to today, at an even pace per active month, with play,
+  scrub and WebM recording. Reused as they are: `export/video.ts` and `export/image.ts`; the person
+  time-lapse is silent, so `audio/context.ts` is not used. `TimelapseBar` is repo-shaped (it takes
+  a `Graph`, `RepoData` and a graph timeline, scores music from branches, names files from
+  owner/repo), so person mode gets its own small controls built on those helpers. Add a PNG
+  "poster" export framed with the user's avatar, login, year span and top three milestones. No
+  JSON save in person mode for v1: the garden-file format is `RepoData`-only and would carry
+  private names past the toggle.
 - **Lazy loading**: person mode is its own chunk in `lazy/parts.ts`, so the repo garden's first
   load grows only by the routing code that must load first (Phase 0 has the wiring and the check). Every person-only module goes
   into `src/lazy/parts.test.ts`'s `LAZY_ONLY` as it is added. Person-mode files are imported by
@@ -282,7 +284,7 @@ union keys exhaustive tables, and a name nothing sends would be documented as se
 
 | Event | Data |
 | --- | --- |
-| `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached` and `token` as in repo mode; `login` only for a live fetch without a token |
+| `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached` as in repo mode, `token` from the fetch result (`fetchedWithToken`); `login` only for a live fetch without a token |
 | `view-switch` | `view`: `garden`, `lines` or `constellation` |
 | `poster-export` | none |
 | `timelapse-play` | none (the repo garden's event, reused) |

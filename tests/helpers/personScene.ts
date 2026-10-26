@@ -2,8 +2,9 @@
  * Person mode end to end, for tests: profiles replayed from the recordings through the real
  * fetchers, the life garden grown from one the way PersonApp grows it (timeline, layout, colours,
  * namer, fitted camera) and painted on a recording context by LifeGarden's own painter
- * (makeLifePaint) with its labels, and the stores set so react-dom/server renders what a test
- * asked for.
+ * (makeLifePaint) with its labels, any view of it the same way (growView, paintView: the view's
+ * layout of the same timeline, painted by makeViewPaint), and the stores set so react-dom/server
+ * renders what a test asked for.
  */
 import { fetchProfileRest } from '../../src/api/profile'
 import { fetchProfileGraphql } from '../../src/api/profileGraphql'
@@ -12,7 +13,10 @@ import { fitLifeCamera } from '../../src/profile/lifeCamera'
 import { layoutLifeGarden } from '../../src/profile/lifeGardenLayout'
 import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP, plantGeom } from '../../src/profile/lifeGeometry'
 import { languageColour, languagePalette, lifeInk } from '../../src/profile/lifeInk'
-import { makeLifePaint, type LifePaintOptions, type LifePaintState, type LifePainter } from '../../src/profile/lifePaint'
+import { makeLifePaint, makeViewPaint, type LifePaintOptions, type LifePaintState, type LifePainter, type ViewPaintOptions } from '../../src/profile/lifePaint'
+import type { LifeViewDef, LifeViewModel } from '../../src/profile/lifeView'
+import { LIFE_VIEWS } from '../../src/profile/lifeViews'
+import type { PersonView } from '../../src/share/shareUrl'
 import type { LifeCamera, LifeGardenLayout, LifeInk, LifeViewport, PlantGeom, RepoNamer } from '../../src/profile/lifeTypes'
 import { isRevealed, privateRepoKeys, repoKey, repoNamer } from '../../src/profile/privacy'
 import { buildLifeTimeline, type LifeTimeline } from '../../src/profile/timeline'
@@ -160,6 +164,65 @@ export function paint(g: Grown, over: Partial<LifePaintState> & { progress?: num
   const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
   painter.paint(rec.ctx, g.view, g.camera, 16)
   return { rec, measured, labels: painter.labels, painter }
+}
+
+/** A view of a grown life, as PersonApp lays it out: the view and its layout of the same timeline. */
+export interface GrownView {
+  def: LifeViewDef
+  layout: LifeViewModel
+}
+
+/** The view named, laid out from g's timeline as PersonApp lays it out (LIFE_VIEWS[view].layout). */
+export function growView(g: Grown, view: PersonView): GrownView {
+  const def = LIFE_VIEWS[view]
+  return { def, layout: def.layout(g.timeline, g.profile.source) }
+}
+
+/** A view's painter for g, as LifeView makes it, with the store's state held as given and every measured text kept. */
+export function viewPainterFor(
+  g: Grown,
+  view: PersonView,
+  state: Partial<LifePaintState> = {},
+  over: Partial<ViewPaintOptions<LifeViewModel>> = {},
+): { painter: LifePainter; measured: string[]; grown: GrownView } {
+  const grown = growView(g, view)
+  const measured: string[] = []
+  const measure = (text: string) => {
+    measured.push(text)
+    return text.length * 6.5
+  }
+  const now: LifePaintState = { hidden: new Set(), hover: null, selected: null, ...state }
+  const painter = makeViewPaint(grown.def.scene, {
+    layout: grown.layout,
+    timeline: g.timeline,
+    ink: g.ink,
+    colourOf: g.colourOf,
+    name: g.name,
+    login: g.profile.login,
+    measure,
+    state: () => now,
+    ...over,
+  })
+  return { painter, measured, grown }
+}
+
+/**
+ * One frame of a view as LifeView paints it, by its own painter, as paint() does the garden's: the
+ * view, then its labels once they have settled, with the hovered and selected repos on plates.
+ * progress is the time-lapse's (0..1), off when left out.
+ */
+export function paintView(g: Grown, view: PersonView, over: Partial<LifePaintState> & { progress?: number } = {}): Painted & { grown: GrownView } {
+  const { progress, ...state } = over
+  const timelapse = progress === undefined ? null : { progress: { current: progress } }
+  const { painter, measured, grown } = viewPainterFor(g, view, state, { timelapse })
+  const quiet = quietCtx(g.view.width * 2, g.view.height * 2)
+  for (let i = 0; i < 400; i++) {
+    painter.paint(quiet, g.view, g.camera, 16)
+    if (!painter.labels.placer.busy) break
+  }
+  const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
+  painter.paint(rec.ctx, g.view, g.camera, 16)
+  return { rec, measured, labels: painter.labels, painter, grown }
 }
 
 /**

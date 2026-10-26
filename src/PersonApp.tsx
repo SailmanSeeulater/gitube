@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseSubject } from './api/parseSubject'
 import type { RepoInitial } from './RepoApp'
+import type { GitHubFetchError, ProfileData } from './types'
 import { writeUserShare, type PersonView } from './share/shareUrl'
 import { useGardenStore } from './store/useGardenStore'
 import { useTheme } from './theme/useTheme'
@@ -11,14 +12,15 @@ import StatusStrip from './components/StatusStrip'
 import { useProfileData } from './profile/useProfileData'
 import { usePersonAnalytics } from './profile/usePersonAnalytics'
 import { RequestTracker, analyticsInput, refreshProfile, requestKey, startRequest } from './profile/personRequests'
-import { buildLifeTimeline } from './profile/timeline'
-import { layoutLifeGarden } from './profile/lifeGardenLayout'
+import { buildLifeTimeline, type LifeTimeline } from './profile/timeline'
 import { buildDayIndex } from './profile/dayIndex'
 import { languageColour, languagePalette } from './profile/lifeInk'
 import { isRevealed, privateRepoKeys, repoNamer } from './profile/privacy'
-import { personErrorCopy } from './profile/personErrors'
+import { emptyLifeNote, personErrorCopy } from './profile/personErrors'
 import { usePersonStore } from './profile/usePersonStore'
-import LifeGarden from './profile/LifeGarden'
+import LifeView from './profile/LifeViewCanvas'
+import type { LifeViewDef, LifeViewModel } from './profile/lifeView'
+import { LIFE_VIEWS, switchView } from './profile/lifeViews'
 import PersonPanel from './profile/PersonPanel'
 import PersonInspector from './profile/PersonInspector'
 import PersonStatus from './profile/PersonStatus'
@@ -49,6 +51,47 @@ const NO_KEYS: ReadonlySet<string> = new Set<string>()
 const noop = () => {}
 
 /**
+ * Whether the open side panel lies over the top bar's token field in a window this wide (CSS px):
+ * the field is 380px wide from 16px in (cut to the window less 32px in a narrow one), and the
+ * panel 300px wide, 12px from the right edge. Opening the field there folds the panel away (its
+ * button brings it back), so a nudge to add a token never opens a field the panel hides.
+ */
+export function panelCoversTokenField(width: number): boolean {
+  return 16 + Math.min(380, width - 32) + 8 > width - 312
+}
+
+/**
+ * The note over a life with nothing drawn (emptyLifeNote): no repos, or every repo hidden. Centred
+ * on the canvas, it lets the pointer through to it; only its button takes a click.
+ */
+function EmptyLife({ profile, lanes, hasToken, onAddToken }: {
+  profile: ProfileData
+  lanes: LifeTimeline['lanes']
+  hasToken: boolean
+  onAddToken: () => void
+}) {
+  const hidden = usePersonStore((s) => s.hidden)
+  const showAll = usePersonStore((s) => s.showAll)
+  const note = emptyLifeNote(profile, lanes, hidden, hasToken)
+  if (!note) return null
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4" role="status">
+      <p className="text-center text-[13px] text-garden-text-dim">{note.title}</p>
+      {note.hint && <p className="text-center text-[12px] leading-snug text-garden-muted">{note.hint}</p>}
+      {note.action && (
+        <button
+          type="button"
+          onClick={note.action.kind === 'token' ? onAddToken : showAll}
+          className="pointer-events-auto mt-1 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+        >
+          {note.action.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
  * The query string person mode writes: the login and the view, and nothing else of its own. What is
  * hidden, selected or revealed, and every repo name, stays out of the address bar (and so out of
  * every copied link).
@@ -58,19 +101,38 @@ export function personSearch(login: string, view: PersonView, current: string): 
 }
 
 /**
- * Person mode (?user=): one GitHub user's coding life as a garden, with the side panel, the
- * inspector, the status strip and the privacy toggle, the time-lapse (with its recording), the
- * poster (from the panel or the top bar's "Save image") and the copy-link button. Every repo name
- * on show goes through one namer, so a private repo's name is hidden until the toggle reveals it
- * for this login; a recording and a poster use the same namer (the toggle waits while a recording
+ * Each view's layout of one timeline, made the first time the view is asked for and kept for every
+ * switch back to it: a layout is pure, so the kept one is the one the view would make again. A new
+ * timeline (a new profile) takes a new set.
+ */
+export function viewLayouts(timeline: LifeTimeline, source: ProfileData['source']): (def: LifeViewDef) => LifeViewModel {
+  const made = new Map<LifeViewDef, LifeViewModel>()
+  return (def) => {
+    const kept = made.get(def)
+    if (kept) return kept
+    const layout: LifeViewModel = def.layout(timeline, source)
+    made.set(def, layout)
+    return layout
+  }
+}
+
+/**
+ * Person mode (?user=): one GitHub user's coding life as a garden, life lines or a constellation
+ * (the panel's view switcher), with the side panel, the inspector, the status strip and the privacy
+ * toggle, the time-lapse (with its recording), the poster (from the panel or the top bar's "Save
+ * image") and the copy-link button, all shared by the three views. Every repo name on show goes
+ * through one namer, so a private repo's name is hidden until the toggle reveals it for this login;
+ * a recording and a poster use the same namer (the toggle and the switcher wait while a recording
  * runs), and a copied link names only the user and the view.
  */
 export default function PersonApp({ login, request, view: linkedView, focusInput, onRepo, onUser }: PersonAppProps) {
   const [input, setInput] = useState(login)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
-  // The view on show, set once from the link: a new login keeps it (App passes no view for one).
-  const [view] = useState<PersonView>(() => linkedView ?? 'garden')
+  // The view on show, first the link's: a new login keeps it (App passes no view for one), and the
+  // panel's switcher changes it (switchView, which counts it).
+  const [view, setView] = useState<PersonView>(() => linkedView ?? 'garden')
+  const pickView = useCallback((next: PersonView) => switchView(view, next, setView), [view])
   const inputRef = useRef<HTMLInputElement | null>(null)
   /** the canvas wrapper: the time-lapse records the canvas inside it */
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
@@ -100,9 +162,13 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   // grow, once per request for a profile (analytics.ts has the rules)
   const noteGrow = usePersonAnalytics(analyticsInput(login, request, fetched))
 
-  // The life is read once per profile, today being when it arrived; the garden is laid out from it.
+  // The life is read once per profile, today being when it arrived; the view on show is laid out
+  // from it, once per view: a switch back reuses that view's layout until the timeline changes. Every
+  // view spans the same days, so a switch keeps the camera and the selection in view.
   const timeline = useMemo(() => (profile ? buildLifeTimeline(profile, Date.now()) : null), [profile])
-  const layout = useMemo(() => (profile && timeline ? layoutLifeGarden(timeline, profile.source) : null), [profile, timeline])
+  const layoutOf = useMemo(() => (profile && timeline ? viewLayouts(timeline, profile.source) : null), [profile, timeline])
+  const def = LIFE_VIEWS[view]
+  const layout = useMemo(() => layoutOf?.(def) ?? null, [layoutOf, def])
   const days = useMemo(() => (profile && timeline ? buildDayIndex(profile, timeline) : null), [profile, timeline])
 
   // Language colours in the active theme: a theme switch repaints, the layout stays put.
@@ -116,15 +182,21 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const name = useMemo(() => repoNamer(privateKeys, revealed), [privateKeys, revealed])
   const reveal = useCallback((on: boolean) => setReveal(shownLogin, on), [setReveal, shownLogin])
 
+  /**
+   * the fetch error whose card was closed. Only a failed refetch's card closes, as the profile it
+   * could not refresh stays on show behind it; a new error (another fetch failing) shows its own.
+   */
+  const [closedError, setClosedError] = useState<GitHubFetchError | null>(null)
+
   /** a part that loads on demand (the recorder, the exporters) could not be loaded: the reload card */
   const [chunkFailed, setChunkFailed] = useState(false)
   const showChunkFailed = useCallback(() => setChunkFailed(true), [])
 
   // ---- time-lapse ----
   const [lapseOpen, setLapseOpen] = useState(false)
-  /** a recording is running: the privacy toggle waits for it to end */
+  /** a recording is running: the privacy toggle and the view switcher wait for it to end */
   const [lapseRecording, setLapseRecording] = useState(false)
-  /** 0..1; the controls write it every frame and LifeGarden reads it in every paint, without renders */
+  /** 0..1; the controls write it every frame and LifeView reads it in every paint, without renders; a view switch keeps it */
   const lapseProgress = useRef(1)
   // one identity while it is on: the painter is made per value
   // live while playing, recording or scrubbing: a paused time-lapse stops repainting (a new object
@@ -151,11 +223,12 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
       }),
     [],
   )
-  // a new login or request, or a different profile, starts with the whole garden on show (before paint, like startRequest)
+  // a new login or request, or a different profile, starts with the whole life on show (before
+  // paint, like startRequest); a view switch does not, so the time-lapse carries on in the new view
   useLayoutEffect(() => closeLapse(), [asked, profile, closeLapse])
   const getCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
 
-  // ---- poster: the garden fully grown, framed, with the names as the screen shows them now ----
+  // ---- poster: the view on show fully grown, framed, with the names as the screen shows them now ----
   const [posterBusy, setPosterBusy] = useState(false)
   const [posterError, setPosterError] = useState<string | null>(null)
   // a new login or request leaves the last one's poster error and reload card behind
@@ -167,7 +240,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     if (!profile || !timeline || !layout) return
     setPosterBusy(true)
     try {
-      await saveLifePoster({ profile, timeline, layout, theme, colourOf, name, hidden: usePersonStore.getState().hidden })
+      await saveLifePoster({ profile, timeline, view: def, layout, theme, colourOf, name, hidden: usePersonStore.getState().hidden })
       setPosterError(null)
     } catch (err) {
       // the exporters chunk could not be loaded: the reload card, not a module URL
@@ -177,7 +250,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     } finally {
       setPosterBusy(false)
     }
-  }, [profile, timeline, layout, theme, colourOf, name])
+  }, [profile, timeline, def, layout, theme, colourOf, name])
 
   // The address bar names the person and the view, so a reload or a copied link reopens them.
   useEffect(() => {
@@ -206,8 +279,13 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const toggleToken = useCallback(() => setTokenOpen((open) => !open), [])
-  const openToken = useCallback(() => setTokenOpen(true), [])
+  const showToken = useCallback((open: boolean) => {
+    if (open && panelCoversTokenField(window.innerWidth)) useGardenStore.getState().setPanelOpen(false)
+    setTokenOpen(open)
+  }, [])
+  const toggleToken = useCallback(() => showToken(!tokenOpen), [showToken, tokenOpen])
+  /** the nudges' "add a token" (the status strip, the error card, the empty life): the token field, in sight */
+  const openToken = useCallback(() => showToken(true), [showToken])
   const openFile = useCallback((file: File) => onRepo({ file }), [onRepo])
   /** the status strip's refresh: a new request for the person on show, from GitHub */
   const refresh = useCallback(() => refreshProfile(login, { noteGrow, refetch }), [login, noteGrow, refetch])
@@ -253,11 +331,13 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
-      {/* The canvas stops short of the side panel so the fitted life never hides behind it. */}
+      {/* The canvas stops short of the side panel so the fitted life never hides behind it. One canvas
+          serves every view, so a switch keeps its camera, and a recording of it keeps going. */}
       <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: shown && panelOpen ? PANEL_INSET : 0 }}>
         {profile && timeline && layout && (
-          <LifeGarden timeline={timeline} layout={layout} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
+          <LifeView def={def} layout={layout} timeline={timeline} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
         )}
+        {profile && timeline && <EmptyLife profile={profile} lanes={timeline.lanes} hasToken={hasToken} onAddToken={openToken} />}
       </div>
 
       {!profile && isFetching && (
@@ -282,22 +362,6 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         besidePanel={shown && panelOpen}
       />
 
-      {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
-      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
-      {!invalidUrl && !chunkFailed && posterError !== null && (
-        <ErrorCard code="export_failed" title="couldn't save the poster" hint={`${posterError}. try again.`} onDismiss={() => setPosterError(null)} />
-      )}
-      {!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && (
-        <ErrorCard
-          code={error.code}
-          message={error.message}
-          resetAt={error.resetAt}
-          title={errorCopy.title}
-          hint={errorCopy.hint}
-          onAddToken={errorCopy.tokenAction ? openToken : undefined}
-        />
-      )}
-
       {profile && timeline && (
         <PersonPanel
           profile={profile}
@@ -307,10 +371,31 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
           privateCount={privateKeys.size}
           revealed={revealed}
           onReveal={reveal}
-          revealLocked={lapseRecording}
+          revealLocked={lapseRecording || posterBusy}
           theme={theme}
           onPoster={layout ? savePoster : undefined}
           posterBusy={posterBusy}
+          view={view}
+          onView={pickView}
+          viewLocked={lapseRecording}
+        />
+      )}
+
+      {/* after the panel, so a card is never under it where the two meet (a narrow window) */}
+      {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
+      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
+      {!invalidUrl && !chunkFailed && posterError !== null && (
+        <ErrorCard code="export_failed" title="couldn't save the poster" hint={`${posterError}. try again.`} onDismiss={() => setPosterError(null)} />
+      )}
+      {!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && error !== closedError && (
+        <ErrorCard
+          code={error.code}
+          message={error.message}
+          resetAt={error.resetAt}
+          title={errorCopy.title}
+          hint={errorCopy.hint}
+          onAddToken={errorCopy.tokenAction ? openToken : undefined}
+          onDismiss={profile ? () => setClosedError(error) : undefined}
         />
       )}
 

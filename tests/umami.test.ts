@@ -15,6 +15,7 @@ import {
 } from '../src/analytics/umami'
 import { useGardenStore, type LayoutMode } from '../src/store/useGardenStore'
 import { THEME_IDS } from '../src/theme/themes'
+import type { PersonView } from '../src/share/shareUrl'
 import type { GitHubFetchError, ViewMode } from '../src/types'
 
 // Token-shaped strings are put together here so that no scanner mistakes this file for a leak.
@@ -67,6 +68,8 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   'token-added': [],
   'fetch-error': FETCH_ERROR_CODES.map((code) => ({ code })),
   'poster-export': [],
+  // person mode's view switcher: the view, never a name
+  'view-switch': Object.keys({ garden: 1, lines: 1, constellation: 1 } satisfies Record<PersonView, 1>).map((view) => ({ view })),
 }
 const ALL_EVENTS = Object.keys(APP_EVENTS) as AnalyticsEvent[]
 

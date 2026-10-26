@@ -1,10 +1,15 @@
 /**
- * The life garden's repo labels. Each plant's head is a node for the repo garden's LabelPlacer
- * (labelPlacement.ts), so names settle beside their heads without covering each other or a head,
- * appear once the camera rests, fade and crossfade, and the hovered and the selected repo show
- * theirs on a plate (the hovered one's also lists the hidden names round it). It wraps the placer
- * itself, not the useLabelPlacer hook, which reads the repo store and graph nodes; the life garden's
- * painter (lifePaint.ts) builds a set per layout and names, taking over the spots of the one before.
+ * Person mode's repo labels, for every view. Each repo's anchor (a plant's head, a line's start, a
+ * star) is a node for the repo garden's LabelPlacer (labelPlacement.ts), so names settle beside
+ * their anchors without covering each other or an anchor, appear once the camera rests, fade and
+ * crossfade, and the hovered and the selected repo show theirs on a plate (the hovered one's also
+ * lists the hidden names round it). It wraps the placer itself, not the useLabelPlacer hook, which
+ * reads the repo store and graph nodes; the views' painter (lifePaint.ts) builds a set per layout
+ * and names, taking over the spots of the one before while the view is the same.
+ *
+ * A set knows its repos only by key and importance; each frame the view says where every anchor
+ * is (or that it has none: hidden, not sown yet) and which boxes labels keep off. The garden's own
+ * anchors and order are gardenLabelItems and gardenAnchor.
  *
  * Every text is a ShownName from the view's RepoNamer and is measured as it is shown, so no drawn
  * label, plate or box width carries a hidden private name or its length. A locked name keeps room
@@ -40,21 +45,24 @@ const DOT_RADIUS = 3
 
 type Measure = (text: string) => number
 
+type LaneItems = ReadonlyArray<{ lane: number }>
+
 /**
- * The names the labels show, index-aligned with the layout's plants: each lane's repo through the
- * namer, without the owner when that is the person (their own repos), which every label would
- * otherwise repeat.
+ * The names the labels show, index-aligned with a view's items (a garden layout stands for its
+ * plants): each lane's repo through the namer, without the owner when that is the person (their own
+ * repos), which every label would otherwise repeat.
  */
-export function labelNames(layout: LifeGardenLayout, timeline: Pick<LifeTimeline, 'lanes'>, name: RepoNamer, login: string): ShownName[] {
+export function labelNames(items: LaneItems | { plants: LaneItems }, timeline: Pick<LifeTimeline, 'lanes'>, name: RepoNamer, login: string): ShownName[] {
   const own = `${login.toLowerCase()}/`
-  return layout.plants.map((plant) => {
-    const shown = name(timeline.lanes[plant.lane].repo)
+  const list: LaneItems = 'plants' in items ? items.plants : items
+  return list.map((item) => {
+    const shown = name(timeline.lanes[item.lane].repo)
     const text = shown.text.toLowerCase().startsWith(own) ? shown.text.slice(own.length) : shown.text
     return text === shown.text ? shown : { text, locked: shown.locked }
   })
 }
 
-/** A plant's label: its name, cut to a wide and maybe a compact form; the full name goes on its plate. */
+/** A repo's label: its name, cut to a wide and maybe a compact form; the full name goes on its plate. */
 export function lifeLabelSpec(node: number, name: ShownName, measure: Measure): LabelSpec {
   const lock = name.locked ? LOCK_PX : 0
   const full = name.text
@@ -71,63 +79,89 @@ export function lifeLabelSpec(node: number, name: ShownName, measure: Measure): 
   return { node, texts, widths, fullText: full, fullWidth, names: [full], nameWidths: [fullWidth] }
 }
 
+/** The repos a set labels: their keys, index-aligned with a view's items, and the order labels are placed in. */
+export interface LifeLabelItems {
+  keys: readonly string[]
+  /** item indexes, the most important label first */
+  order: Int32Array
+}
+
 /** What one frame of labels needs. */
 export interface LifeLabelFrame {
-  /** index-aligned with the layout's plants */
-  geoms: ReadonlyArray<PlantGeom>
+  /**
+   * writes item i's anchor into out as [x, y, r] in screen px (the label keeps r clear round it);
+   * false for none (hidden, or not sown by the time-lapse yet): its label drops at once and blocks nothing
+   */
+  anchor: (i: number, out: Float32Array) => boolean
+  /** boxes labels keep off, as [x0, y0, x1, y1]* in screen px */
+  keepOut: Float32Array
   view: LifeViewport
   dtMs: number
   cameraMoving: boolean
-  /** repo keys; their plants have no label and block none */
-  hidden: ReadonlySet<string>
-  /** plant indexes shown on a plate: the hovered and the selected one */
+  /** item indexes shown on a plate: the hovered and the selected one */
   forced: readonly number[]
-  /** the hovered plant, whose plate also lists the hidden names round it; -1 for none */
+  /** the hovered item, whose plate also lists the hidden names round it; -1 for none */
   explore: number
-  /** the time-lapse's day: plants not sown by then have no label. null: fully grown. */
-  at: number | null
+}
+
+/** The garden's repos for a label set: the tallest plants' names first, then the most starred. */
+export function gardenLabelItems(layout: Pick<LifeGardenLayout, 'plants'>): LifeLabelItems {
+  const plants = layout.plants
+  const order = Int32Array.from(plants.keys()).sort((a, b) => plants[b].height - plants[a].height || plants[b].bloom - plants[a].bloom || a - b)
+  return { keys: plants.map((plant) => plant.key), order }
+}
+
+/** A plant's label anchor: its head as grown by the time-lapse's day, r its flower's reach. */
+export function gardenAnchor(layout: Pick<LifeGardenLayout, 'plants'>, geoms: ReadonlyArray<PlantGeom>, i: number, at: number | null, out: Float32Array): boolean {
+  const plant = layout.plants[i]
+  const g = geoms[i]
+  if (plant === undefined || g === undefined) return false
+  const [x, y] = headAt(g, grownShare(plant, at))
+  out[0] = x
+  out[1] = y
+  out[2] = g.tipR * BLOOM_SCALE
+  return true
+}
+
+/** The ground under the horizon, which labels keep off in every view. */
+export function groundKeepOut(view: LifeViewport): Float32Array {
+  return Float32Array.of(0, horizonY(view) - 1, view.width, view.height)
 }
 
 /**
- * The labels of one layout and one set of names. A new set (a new profile, or the privacy toggle
- * flipped) takes over the spots of the one before it by repo key, so labels stay where they were.
+ * The labels of one view's items and one set of names. A new set (a new profile, or the privacy
+ * toggle flipped) takes over the spots of the one before it by repo key, so labels stay where they
+ * were.
  */
 export class LifeLabelSet {
   readonly placer: LabelPlacer
-  /** repo keys, index-aligned with the plants and the labels */
+  /** repo keys, index-aligned with the view's items and the labels */
   readonly keys: readonly string[]
   private readonly locked: Uint8Array
   private readonly sx: Float32Array
   private readonly sy: Float32Array
   private readonly sr: Float32Array
   private readonly speed: Float32Array
-  /** the ground under the horizon, which labels keep off */
-  private readonly boxes = new Float32Array(4)
+  private readonly spot = new Float32Array(3)
   private readonly shortened = new Map<string, string>()
 
   constructor(
-    readonly layout: LifeGardenLayout,
+    items: LifeLabelItems,
     names: readonly ShownName[],
     private readonly measure: Measure = measureLabel,
     prev: LifeLabelSet | null = null,
   ) {
-    const n = layout.plants.length
-    this.keys = layout.plants.map((plant) => plant.key)
-    this.locked = Uint8Array.from(layout.plants, (_, i) => (names[i]?.locked ? 1 : 0))
-    const specs = layout.plants.map((_, i) => lifeLabelSpec(i, names[i] ?? { text: '', locked: false }, measure))
+    const n = items.keys.length
+    this.keys = items.keys
+    this.locked = Uint8Array.from(items.keys, (_, i) => (names[i]?.locked ? 1 : 0))
+    const specs = items.keys.map((_, i) => lifeLabelSpec(i, names[i] ?? { text: '', locked: false }, measure))
     this.placer = new LabelPlacer(specs, { measure })
     this.sx = new Float32Array(n)
     this.sy = new Float32Array(n)
     this.sr = new Float32Array(n)
-    // plants never move in the world: only the camera does
+    // items never move in the world: only the camera does
     this.speed = new Float32Array(n)
-    // the tallest plants' names first, then the most starred
-    const order = Int32Array.from(layout.plants.keys()).sort((a, b) => {
-      const pa = layout.plants[a]
-      const pb = layout.plants[b]
-      return pb.height - pa.height || pb.bloom - pa.bloom || a - b
-    })
-    this.placer.setOrder(order, [])
+    this.placer.setOrder(items.order, [])
     if (prev) {
       const before = new Map<string, number>()
       prev.keys.forEach((key, i) => before.set(key, i))
@@ -137,61 +171,54 @@ export class LifeLabelSet {
 
   /** Places the labels for a frame; true while they still need frames (appearing, fading, settling). */
   update(frame: LifeLabelFrame): boolean {
-    const { geoms, view, hidden, at } = frame
-    const plants = this.layout.plants
-    for (let i = 0; i < plants.length; i++) {
-      const plant = plants[i]
-      const g = geoms[i]
-      // a hidden plant reads as one with no position: its label drops at once and blocks nothing
-      if (g === undefined || hidden.has(plant.key) || (at !== null && plant.startDay > at)) {
+    const { view, anchor } = frame
+    const n = this.keys.length
+    const spot = this.spot
+    for (let i = 0; i < n; i++) {
+      // an item with no anchor reads as one with no position: its label drops at once and blocks nothing
+      if (!anchor(i, spot) || !Number.isFinite(spot[0]) || !Number.isFinite(spot[1])) {
         this.sx[i] = Number.NaN
         this.sy[i] = Number.NaN
         this.sr[i] = 0
         continue
       }
-      const [x, y] = headAt(g, grownShare(plant, at))
-      this.sx[i] = x
-      this.sy[i] = y
-      this.sr[i] = g.tipR * BLOOM_SCALE
+      this.sx[i] = spot[0]
+      this.sy[i] = spot[1]
+      this.sr[i] = spot[2]
     }
-    const shown = (i: number) => i >= 0 && i < plants.length && Number.isFinite(this.sx[i])
+    const shown = (i: number) => i >= 0 && i < n && Number.isFinite(this.sx[i])
     this.placer.setForced(frame.forced.filter(shown), shown(frame.explore) ? frame.explore : -1)
-    const horizon = horizonY(view)
-    this.boxes[0] = 0
-    this.boxes[1] = horizon - 1
-    this.boxes[2] = view.width
-    this.boxes[3] = view.height
     this.placer.update({
       sx: this.sx,
       sy: this.sy,
       sr: this.sr,
       speed: this.speed,
-      nodeCount: plants.length,
+      nodeCount: n,
       width: view.width,
       height: view.height,
       dtMs: frame.dtMs,
       cameraMoving: frame.cameraMoving,
-      boxes: this.boxes,
-      boxCount: 1,
+      boxes: frame.keepOut,
+      boxCount: frame.keepOut.length >> 2,
     })
     return this.placer.busy
   }
 
-  /** The plant whose label or plate is at (x, y), keeping the hovered one (current) while still on it; -1 for none. */
+  /** The item whose label or plate is at (x, y), keeping the hovered one (current) while still on it; -1 for none. */
   hit(x: number, y: number, current = -1): number {
     return this.placer.hoverTest(x, y, current)
   }
 
-  /** The plant a click at (x, y) picks: like hit, but a plate row naming another plant picks that one. */
+  /** The item a click at (x, y) picks: like hit, but a plate row naming another item picks that one. */
   click(x: number, y: number): number {
     return this.placer.clickTest(x, y)
   }
 
   /**
    * Draws the labels placed by the last update: the least important first, so the important ones
-   * end up on top, then the plates. dotOf colours a plate row's plant; selected dims every other label.
+   * end up on top, then the plates. dotOf colours a plate row's item; selected dims every other label.
    */
-  draw(ctx: CanvasRenderingContext2D, ink: LifeInk, dotOf: (plant: number) => string, selected = -1): void {
+  draw(ctx: CanvasRenderingContext2D, ink: LifeInk, dotOf: (item: number) => string, selected = -1): void {
     const placer = this.placer
     const o = placer.o
     const order = placer.order
@@ -284,7 +311,7 @@ export class LifeLabelSet {
   }
 
   /**
-   * The backing plate and leader line of a label pinned over (or nearer to) another head, so it
+   * The backing plate and leader line of a label pinned over (or nearer to) another anchor, so it
    * does not read as that one's name.
    */
   private drawLeader(ctx: CanvasRenderingContext2D, i: number, alpha: number, ink: LifeInk): void {

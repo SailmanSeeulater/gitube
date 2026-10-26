@@ -1,9 +1,9 @@
 /**
- * The life poster (PROFILE_SPEC.md section 6, "Time-lapse and export"): one PNG of a person's life
- * garden, framed with their avatar, their login, their span of years and their top three
- * milestones, in the active theme's colours.
+ * The life poster (PROFILE_SPEC.md section 6, "Time-lapse and export"): one PNG of the view on show
+ * (the life garden, life lines or the constellation), framed with the person's avatar, their login,
+ * their span of years and their top three milestones, in the active theme's colours.
  *
- * The garden is painted again off screen by LifeGarden's own painter (makeLifePaint), fully grown,
+ * The view is painted again off screen by the canvas's own painter (makeViewPaint), fully grown,
  * with the whole life fitted and no hover or selection, so the poster never carries the screen's
  * zoom, its hover rings and plates, or a half-grown time-lapse. It hides what the panel's eyes hide,
  * and every repo name comes through the screen's namer: a poster shows a private name only while
@@ -21,12 +21,13 @@ import { exportersChunk } from '../lazy/parts'
 import type { Theme } from '../theme/themes'
 import type { ProfileData } from '../types'
 import type { LifeMilestone, LifeTimeline } from './timeline'
-import type { LifeGardenLayout, LifeInk, LifeViewport, RepoNamer, ShownName } from './lifeTypes'
+import type { LifeInk, LifeViewport, RepoNamer, ShownName } from './lifeTypes'
+import type { LifeViewDef, LifeViewModel } from './lifeView'
 import { fitLifeCamera } from './lifeCamera'
 import { drawLock } from './lifeGardenPaint'
 import { GROUND_MARKS_PX, VIEW_TOP } from './lifeGeometry'
 import { lifeInk } from './lifeInk'
-import { makeLifePaint, type LifePaintState } from './lifePaint'
+import { GARDEN_SCENE, makeViewPaint, type LifePaintState } from './lifePaint'
 import { shownMilestoneRepo } from './privacy'
 
 /** The poster in CSS px... */
@@ -37,16 +38,16 @@ export const POSTER_SCALE = 2
 /** The avatar's size on the poster, in px; it is asked for at POSTER_SCALE times that. */
 export const POSTER_AVATAR_PX = 96
 
-/** The frame's margin, which the garden's sides keep too. */
+/** The frame's margin, which the view's sides keep too. */
 const PAD = 56
 const AVATAR_GAP = 28
 /** The header: the avatar, with room under it. */
 const HEADER_PX = PAD + POSTER_AVATAR_PX + 20
-/** The milestones and the credit under the garden. */
+/** The milestones and the credit under the view. */
 const FOOT_PX = 190
-/** Where the garden image goes on the poster: under the header, over the milestones. */
+/** Where the view's image goes on the poster: under the header, over the milestones. */
 export const POSTER_PLOT = Object.freeze({ x: 0, y: HEADER_PX, width: POSTER_WIDTH, height: POSTER_HEIGHT - HEADER_PX - FOOT_PX })
-/** The off-screen garden's viewport: no status strip to clear under its ground marks. */
+/** The off-screen view's viewport (every view's): no status strip to clear under its ground marks. */
 export const POSTER_GARDEN_VIEW: LifeViewport = Object.freeze({
   width: POSTER_PLOT.width,
   height: POSTER_PLOT.height,
@@ -153,7 +154,10 @@ export function loadPosterAvatar(url: string | null, timeoutMs = AVATAR_TIMEOUT_
 }
 
 export interface PosterGarden {
-  layout: LifeGardenLayout
+  /** the view's layout: a life garden's when view is left out */
+  layout: LifeViewModel
+  /** the view on show; the life garden when left out */
+  view?: LifeViewDef
   timeline: LifeTimeline
   ink: LifeInk
   colourOf: (language: string | null) => string
@@ -167,7 +171,7 @@ export interface PosterGarden {
 }
 
 /**
- * The garden as LifeGarden paints it, fully grown (no time-lapse), the whole life fitted to view,
+ * The view as the canvas paints it, fully grown (no time-lapse), the whole life fitted to view,
  * with no hover and no selection whatever the store holds. Paints until the labels have settled
  * (paint() asks for no more frames) or maxFrames, each frame over the last, under the device
  * transform the caller set.
@@ -175,7 +179,8 @@ export interface PosterGarden {
 export function paintPosterGarden(ctx: CanvasRenderingContext2D, view: LifeViewport, garden: PosterGarden, maxFrames = SETTLE_FRAMES): void {
   const { layout, timeline, ink, colourOf, name, login, hidden, measure } = garden
   const state: LifePaintState = { hidden, hover: null, selected: null }
-  const painter = makeLifePaint({ layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
+  const scene: LifeViewDef['scene'] = garden.view?.scene ?? GARDEN_SCENE
+  const painter = makeViewPaint(scene, { layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
   const camera = fitLifeCamera(layout.days, view)
   for (let frame = 0; frame < Math.max(1, maxFrames); frame++) {
     if (!painter.paint(ctx, view, camera, SETTLE_DT_MS)) break
@@ -219,7 +224,7 @@ function diamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
 /**
  * The poster's frame, in CSS px under the device transform the caller set: the canvas colour over
  * the whole backing store, the header (the avatar clipped to a circle, or a placeholder circle with
- * the login's initial; the login big and the years muted under it), the garden image in the plot,
+ * the login's initial; the login big and the years muted under it), the view's image in the plot,
  * a column per milestone (its day muted in mono, its label, and its repo as shown, with a lock when
  * locked), and the credit bottom right. Colours come from the theme only.
  */
@@ -279,7 +284,7 @@ export function paintPosterFrame(
   ctx.fillStyle = theme.muted
   ctx.fillText(fitText(ctx, text.years, room), tx, cy + 40)
 
-  // a rule under the garden, then a column per milestone
+  // a rule under the view, then a column per milestone
   const footTop = POSTER_PLOT.y + POSTER_PLOT.height
   ctx.fillStyle = theme.panelBorder
   ctx.fillRect(PAD, footTop + 12, POSTER_WIDTH - 2 * PAD, 1)
@@ -320,7 +325,10 @@ export function paintPosterFrame(
 export interface PosterInput {
   profile: ProfileData
   timeline: LifeTimeline
-  layout: LifeGardenLayout
+  /** the view's layout: a life garden's when view is left out */
+  layout: LifeViewModel
+  /** the view on show, drawn as the canvas draws it; the life garden when left out */
+  view?: LifeViewDef
   theme: Theme
   /** language -> colour in the theme, the one the canvas paints with */
   colourOf: (language: string | null) => string
@@ -360,17 +368,18 @@ function browserCanvas(width: number, height: number): HTMLCanvasElement {
   return canvas
 }
 
-/** The poster on a new canvas (POSTER_WIDTH x POSTER_HEIGHT at POSTER_SCALE): the garden off screen first, then the frame round it. */
+/** The poster on a new canvas (POSTER_WIDTH x POSTER_HEIGHT at POSTER_SCALE): the view off screen first, then the frame round it. */
 export function composeLifePoster(
   input: PosterInput,
   avatar: CanvasImageSource | null,
   deps: Pick<PosterDeps, 'makeCanvas' | 'now' | 'measure'>,
 ): HTMLCanvasElement {
-  const { profile, timeline, layout, theme, colourOf, name, hidden } = input
+  const { profile, timeline, layout, view, theme, colourOf, name, hidden } = input
   const plot = deps.makeCanvas(POSTER_PLOT.width * POSTER_SCALE, POSTER_PLOT.height * POSTER_SCALE)
   const plotCtx = context2d(plot)
   plotCtx.setTransform(POSTER_SCALE, 0, 0, POSTER_SCALE, 0, 0)
-  paintPosterGarden(plotCtx, POSTER_GARDEN_VIEW, { layout, timeline, ink: lifeInk(theme), colourOf, name, login: profile.login, hidden, measure: deps.measure })
+  const ink = lifeInk(theme)
+  paintPosterGarden(plotCtx, POSTER_GARDEN_VIEW, { layout, view, timeline, ink, colourOf, name, login: profile.login, hidden, measure: deps.measure })
 
   const poster = deps.makeCanvas(POSTER_WIDTH * POSTER_SCALE, POSTER_HEIGHT * POSTER_SCALE)
   const ctx = context2d(poster)
