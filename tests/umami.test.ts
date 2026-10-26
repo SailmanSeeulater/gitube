@@ -66,6 +66,7 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   'share-copy': [],
   'token-added': [],
   'fetch-error': FETCH_ERROR_CODES.map((code) => ({ code })),
+  'poster-export': [],
 }
 const ALL_EVENTS = Object.keys(APP_EVENTS) as AnalyticsEvent[]
 

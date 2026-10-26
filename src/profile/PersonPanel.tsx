@@ -2,7 +2,8 @@ import { useMemo, type KeyboardEvent } from 'react'
 import type { ProfileData } from '../types'
 import type { Theme } from '../theme/themes'
 import { useGardenStore } from '../store/useGardenStore'
-import { SearchIcon } from '../components/icons'
+import { ImageIcon, SearchIcon } from '../components/icons'
+import { CopyLinkButton } from '../components/Panel'
 import type { RepoNamer, ShownName } from './lifeTypes'
 import PersonLegend from './PersonLegend'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LockIcon, ShownRepoName } from './personIcons'
@@ -22,7 +23,13 @@ export interface PersonPanelProps {
   /** private names show, for this login (isRevealed) */
   revealed: boolean
   onReveal: (on: boolean) => void
+  /** a recording is running: the privacy toggle waits for it to end, so a video never changes what it names halfway */
+  revealLocked?: boolean
   theme: Theme
+  /** saves the poster (lifePoster.ts); no poster button without it */
+  onPoster?: () => void
+  /** a poster is on its way */
+  posterBusy?: boolean
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -64,15 +71,23 @@ function Tabs({ value, onChange, repoCount, milestoneCount }: {
   )
 }
 
-/** The privacy toggle (PROFILE_SPEC.md section 2, "Privacy rule"): names hidden by default, shown on this screen only. */
-function PrivacyToggle({ count, revealed, onReveal }: { count: number; revealed: boolean; onReveal: (on: boolean) => void }) {
+/**
+ * The privacy toggle (PROFILE_SPEC.md section 2, "Privacy rule"): names hidden by default, shown on
+ * this screen only. Locked while a recording runs.
+ */
+function PrivacyToggle({ count, revealed, locked, onReveal }: { count: number; revealed: boolean; locked: boolean; onReveal: (on: boolean) => void }) {
   return (
     <button
       type="button"
       aria-pressed={revealed}
+      disabled={locked}
       onClick={() => onReveal(!revealed)}
-      title="Shows private repo names on this screen only, never in links or analytics. Hidden again on reload."
-      className="flex items-center gap-2 border-b border-garden-border px-3 py-2 text-left text-[12px] text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+      title={
+        locked
+          ? 'Waits until the recording ends, so a video never changes what it names halfway.'
+          : 'Shows private repo names on this screen only, never in links or analytics. Hidden again on reload.'
+      }
+      className="flex items-center gap-2 border-b border-garden-border px-3 py-2 text-left text-[12px] text-garden-muted hover:bg-garden-hover hover:text-garden-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
     >
       <LockIcon />
       <span className="min-w-0 flex-1">
@@ -164,11 +179,25 @@ export function RepoRow({ lane, shown, colour, selected, hidden, hovered, onSele
 }
 
 /**
- * Person mode's side panel: who it is, the privacy toggle, the repo list (search, hide, select) and
- * the milestones, with the legend at the foot. Every repo name comes through the namer, and search
- * matches only what is shown, so a hidden private name cannot be found by guessing it.
+ * Person mode's side panel: who it is (with the poster and the copy-link buttons), the privacy
+ * toggle, the repo list (search, hide, select) and the milestones, with the legend at the foot.
+ * Every repo name comes through the namer, and search matches only what is shown, so a hidden
+ * private name cannot be found by guessing it. The copied link is the address bar, which names
+ * only the user and the view.
  */
-export default function PersonPanel({ profile, timeline, colourOf, name, privateCount, revealed, onReveal, theme }: PersonPanelProps) {
+export default function PersonPanel({
+  profile,
+  timeline,
+  colourOf,
+  name,
+  privateCount,
+  revealed,
+  onReveal,
+  revealLocked = false,
+  theme,
+  onPoster,
+  posterBusy = false,
+}: PersonPanelProps) {
   const panelOpen = useGardenStore((s) => s.panelOpen)
   const togglePanel = useGardenStore((s) => s.togglePanel)
   const tab = usePersonStore((s) => s.tab)
@@ -228,6 +257,19 @@ export default function PersonPanel({ profile, timeline, colourOf, name, private
             {profile.name ? `${profile.name} · ` : ''}on GitHub since {githubDay(profile.createdAt) ?? profile.createdAt.slice(0, 10)}
           </div>
         </div>
+        {onPoster && (
+          <button
+            type="button"
+            onClick={() => onPoster()}
+            disabled={posterBusy}
+            title="save a poster of this life as a PNG: the garden, the avatar, the years and three milestones"
+            aria-label="Save a poster"
+            className={`rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text disabled:opacity-40 ${posterBusy ? 'animate-pulse' : ''}`}
+          >
+            <ImageIcon />
+          </button>
+        )}
+        <CopyLinkButton />
         <button
           type="button"
           onClick={togglePanel}
@@ -239,7 +281,7 @@ export default function PersonPanel({ profile, timeline, colourOf, name, private
         </button>
       </header>
 
-      {privateCount > 0 && <PrivacyToggle count={privateCount} revealed={revealed} onReveal={onReveal} />}
+      {privateCount > 0 && <PrivacyToggle count={privateCount} revealed={revealed} locked={revealLocked} onReveal={onReveal} />}
 
       <Tabs value={tab} onChange={setTab} repoCount={total} milestoneCount={timeline.milestones.length} />
 

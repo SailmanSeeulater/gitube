@@ -32,10 +32,13 @@ export interface LifeGardenProps {
   colourOf: (language: string | null) => string
   /** the only names the canvas ever receives */
   name: RepoNamer
-  /** the person, for the canvas's label (and Phase 5's time-lapse caption) */
+  /** the person, for the canvas's label (and the time-lapse caption when it names no title) */
   login: string
-  /** Phase 5: the time-lapse grows the garden to its progress (0..1), which the controls write every frame */
-  timelapse?: { progress: RefObject<number>; title: string } | null
+  /**
+   * the time-lapse grows the garden to its progress (0..1), which the controls write every frame,
+   * under a caption naming title; keep its identity while it is on, as the painter is made per value
+   */
+  timelapse?: { progress: RefObject<number>; title: string; live?: boolean } | null
 }
 
 const setHover = (hover: LifeHover) => usePersonStore.getState().setHover(hover)
@@ -77,7 +80,15 @@ export default function LifeGarden({ timeline, layout, theme, colourOf, name, lo
     paint: painter.paint,
     fitKey: `${login.toLowerCase()} ${layout.startDay}`,
   })
-  const { invalidate, getCamera, getView, setCamera, wasDrag } = canvas
+  const { invalidate, getCamera, getView, setCamera, wasDrag, fit } = canvas
+
+  // the time-lapse opens on the whole life, so no plant grows off screen and a recording starts on the whole horizon
+  const lapsing = timelapse !== null
+  useEffect(() => {
+    if (lapsing) fit(0)
+    // only the time-lapse opening fits the camera; fit is new with every view
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lapsing])
 
   // hiding a repo, the hover and the selection repaint without a render
   useEffect(

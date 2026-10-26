@@ -59,6 +59,11 @@ const LAZY_ONLY = [
   'profile/PersonStatus.tsx',
   'profile/personErrors.ts',
   'profile/personIcons.tsx',
+  // the time-lapse: its clock, caption and controls (the recorder is export/video, through videoChunk)
+  'profile/lifeTimelapse.ts',
+  'profile/PersonTimelapse.tsx',
+  // the poster (the encoder and the download are export/exporters, through exportersChunk)
+  'profile/lifePoster.ts',
   // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
   'api/graphql.ts',
   'api/profileGraphql.ts',
@@ -117,8 +122,13 @@ function staticImports(file: string): string[] {
 
 /** Every module the entry reaches through static imports, with the path that first reached it. */
 function eagerModules(): Map<string, string[]> {
-  const seen = new Map<string, string[]>([['main.tsx', ['main.tsx']]])
-  const queue = ['main.tsx']
+  return staticReach('main.tsx')
+}
+
+/** Every module that entry (any module) reaches through static imports, itself included, with the path that first reached it. */
+function staticReach(entry: string): Map<string, string[]> {
+  const seen = new Map<string, string[]>([[entry, [entry]]])
+  const queue = [entry]
   while (queue.length > 0) {
     const file = queue.shift() as string
     for (const next of staticImports(file)) {
@@ -160,6 +170,7 @@ describe('lazy parts', () => {
         'components/TimelapseBar.tsx',
         'components/WeedsTab.tsx',
         'export/exporters.ts',
+        'export/video.ts',
         'graph/metro.ts',
         'lazy/pullsPart.ts',
       ].sort(),
@@ -286,6 +297,16 @@ describe('person mode and the first download', () => {
       }
     }
     expect(strays).toEqual([])
+  })
+
+  it('reaches the recorder, the exporters and metro only through their chunks in lazy/parts.ts', () => {
+    // a value import of one would put it (and the image code it shares) into person mode's chunk; types are fine
+    const chunked = ['export/video.ts', 'export/exporters.ts', 'export/image.ts', 'export/gardenFile.ts', 'graph/metro.ts']
+    const direct = person.flatMap(([file]) => staticImports(file).filter((target) => chunked.includes(target)).map((target) => `${file} -> ${target}`))
+    expect(direct).toEqual([])
+    // nor by way of another module
+    const reached = staticReach('PersonApp.tsx')
+    expect(chunked.filter((file) => reached.has(file)).map((file) => (reached.get(file) ?? []).join(' -> '))).toEqual([])
   })
 
   it('writes no class name that the rest of the app does not', () => {

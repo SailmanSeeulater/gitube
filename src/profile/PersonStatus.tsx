@@ -1,6 +1,7 @@
 import type { ProfileData } from '../types'
 import { useGardenStore } from '../store/useGardenStore'
 import { formatClock, relativeTime } from '../components/gardenUtils'
+import { PlayIcon } from '../components/icons'
 import type { LifeTimeline } from './timeline'
 import { cutShort } from './PersonLegend'
 import { fallbackNote } from './personErrors'
@@ -15,6 +16,8 @@ export interface PersonStatusProps {
   onRefresh: () => void
   /** opens the token form */
   onAddToken: () => void
+  /** opens the time-lapse (the strip gives way to its controls); omitted while there is no garden */
+  onTimelapse?: () => void
 }
 
 const shell =
@@ -23,11 +26,12 @@ const shell =
 const warnChip = 'rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1.5 py-px text-[11px] text-garden-warn'
 
 /**
- * The status strip once a profile is on show: its repos, its span of years and (with a token) its
- * contributions; why REST filled a token run, what was cut short, and whether it came from the
- * cache. The fetching state is StatusStrip's, which reads only the progress.
+ * The status strip once a profile is on show: the button that opens the time-lapse, its repos, its
+ * span of years and (with a token) its contributions; why REST filled a token run, what was cut
+ * short, and whether it came from the cache. The fetching state is StatusStrip's, which reads only
+ * the progress.
  */
-export default function PersonStatus({ profile, timeline, cachedAt, hasToken, onRefresh, onAddToken }: PersonStatusProps) {
+export default function PersonStatus({ profile, timeline, cachedAt, hasToken, onRefresh, onAddToken, onTimelapse }: PersonStatusProps) {
   // the core budget as the latest response put it; GraphQL points never land here
   const rate = useGardenStore((s) => s.rate)
   const repos = timeline.lanes.length
@@ -41,6 +45,17 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
 
   return (
     <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
+      {onTimelapse && (
+        <button
+          type="button"
+          onClick={onTimelapse}
+          title="Replay this life growing from its start, and record it as a video"
+          className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
+        >
+          <PlayIcon size={11} />
+          watch it grow
+        </button>
+      )}
       <span className="text-garden-text-dim">
         {repos} repo{repos === 1 ? '' : 's'}
       </span>

@@ -607,6 +607,25 @@ describe('PersonPanel', () => {
     expectNoPrivateName(html)
   })
 
+  it('locks the toggle while a recording runs, revealed or not, and says why', () => {
+    const { timeline, keys } = setup(TOKEN)
+    /** the privacy toggle's opening tag */
+    const toggle = (html: string) => /<button[^>]*aria-pressed="(?:true|false)"[^>]*>(?=(?:(?!<\/button>).)*private repos)/.exec(html)?.[0] ?? ''
+    for (const revealed of [false, true]) {
+      const props = { profile: TOKEN, timeline, colourOf, name: repoNamer(keys, revealed), privateCount: keys.size, revealed, onReveal: noop, theme }
+      const locked = toggle(renderToStaticMarkup(h(PersonPanel, { ...props, revealLocked: true })))
+      expect(locked).toMatch(/\sdisabled=""/)
+      expect(locked).toContain('Waits until the recording ends')
+      expect(locked).toContain(`aria-pressed="${revealed}"`)
+      for (const free of [renderToStaticMarkup(h(PersonPanel, props)), renderToStaticMarkup(h(PersonPanel, { ...props, revealLocked: false }))]) {
+        const tag = toggle(free)
+        expect(tag).toContain('aria-pressed=')
+        expect(tag).not.toMatch(/\sdisabled=""/)
+        expect(tag).toContain('Shows private repo names on this screen only')
+      }
+    }
+  })
+
   it('has no toggle without private repos', () => {
     const text = textOf(panel(PUBLIC))
     expect(text).not.toContain('private repo')

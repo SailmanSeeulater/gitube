@@ -36,6 +36,9 @@ export const themePickerChunk = defineChunk(() => import('../components/ThemePic
 /** The time-lapse controls with the music box and the video recorder. */
 export const timelapseChunk = defineChunk(() => import('../components/TimelapseBar'))
 
+/** The canvas recorder (export/video) for person mode's time-lapse; TimelapseBar imports it itself. */
+export const videoChunk = defineChunk(() => import('../export/video'))
+
 /** The garden battle overlay and its scoring. */
 export const battleChunk = defineChunk(() => import('../components/GardenBattle'))
 

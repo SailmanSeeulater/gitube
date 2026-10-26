@@ -26,6 +26,8 @@ export interface TopBarProps {
   busy: boolean
   /** a repo is loaded, so there is something to save */
   canExport: boolean
+  /** the data can be saved too; canExport when left out (see ExportMenu) */
+  canExportData?: boolean
   onExportImage: () => void
   onExportData: () => void
   /** a file was picked to open */
@@ -43,6 +45,7 @@ export default function TopBar({
   onToggleToken,
   busy,
   canExport,
+  canExportData,
   onExportImage,
   onExportData,
   onOpenFile,
@@ -285,6 +288,7 @@ export default function TopBar({
             <ExportMenu
               id={exportMenuId}
               canExport={canExport}
+              canExportData={canExportData}
               onExportImage={onExportImage}
               onExportData={onExportData}
               onOpenFile={pickFile}

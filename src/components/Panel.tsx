@@ -85,8 +85,8 @@ function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean
   )
 }
 
-/** Copies the page address, which App keeps naming the repo and its selection (see share/shareUrl). */
-function CopyLinkButton() {
+/** Copies the page address, which App or PersonApp keeps naming the subject (see share/shareUrl). */
+export function CopyLinkButton() {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   useEffect(() => {
     if (state === 'idle') return

@@ -6,6 +6,7 @@ import { useGardenStore } from './store/useGardenStore'
 import { useTheme } from './theme/useTheme'
 import TopBar from './components/TopBar'
 import ErrorCard from './components/ErrorCard'
+import { reloadPage } from './components/LazyPart'
 import StatusStrip from './components/StatusStrip'
 import { useProfileData } from './profile/useProfileData'
 import { usePersonAnalytics } from './profile/usePersonAnalytics'
@@ -21,6 +22,9 @@ import LifeGarden from './profile/LifeGarden'
 import PersonPanel from './profile/PersonPanel'
 import PersonInspector from './profile/PersonInspector'
 import PersonStatus from './profile/PersonStatus'
+import PersonTimelapse from './profile/PersonTimelapse'
+import { closeLifeTimelapse, openLifeTimelapse } from './profile/lifeTimelapse'
+import { posterFailure, saveLifePoster } from './profile/lifePoster'
 
 export interface PersonAppProps {
   /** as typed (GitHub compares logins case-insensitively) */
@@ -55,8 +59,11 @@ export function personSearch(login: string, view: PersonView, current: string): 
 
 /**
  * Person mode (?user=): one GitHub user's coding life as a garden, with the side panel, the
- * inspector, the status strip and the privacy toggle. Every repo name on show goes through one
- * namer, so a private repo's name is hidden until the toggle reveals it for this login.
+ * inspector, the status strip and the privacy toggle, the time-lapse (with its recording), the
+ * poster (from the panel or the top bar's "Save image") and the copy-link button. Every repo name
+ * on show goes through one namer, so a private repo's name is hidden until the toggle reveals it
+ * for this login; a recording and a poster use the same namer (the toggle waits while a recording
+ * runs), and a copied link names only the user and the view.
  */
 export default function PersonApp({ login, request, view: linkedView, focusInput, onRepo, onUser }: PersonAppProps) {
   const [input, setInput] = useState(login)
@@ -65,6 +72,8 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   // The view on show, set once from the link: a new login keeps it (App passes no view for one).
   const [view] = useState<PersonView>(() => linkedView ?? 'garden')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  /** the canvas wrapper: the time-lapse records the canvas inside it */
+  const canvasHostRef = useRef<HTMLDivElement | null>(null)
 
   const theme = useTheme()
   const panelOpen = useGardenStore((s) => s.panelOpen)
@@ -106,6 +115,69 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const revealed = isRevealed(revealFor, shownLogin)
   const name = useMemo(() => repoNamer(privateKeys, revealed), [privateKeys, revealed])
   const reveal = useCallback((on: boolean) => setReveal(shownLogin, on), [setReveal, shownLogin])
+
+  /** a part that loads on demand (the recorder, the exporters) could not be loaded: the reload card */
+  const [chunkFailed, setChunkFailed] = useState(false)
+  const showChunkFailed = useCallback(() => setChunkFailed(true), [])
+
+  // ---- time-lapse ----
+  const [lapseOpen, setLapseOpen] = useState(false)
+  /** a recording is running: the privacy toggle waits for it to end */
+  const [lapseRecording, setLapseRecording] = useState(false)
+  /** 0..1; the controls write it every frame and LifeGarden reads it in every paint, without renders */
+  const lapseProgress = useRef(1)
+  // one identity while it is on: the painter is made per value
+  // live while playing, recording or scrubbing: a paused time-lapse stops repainting (a new object
+  // each time it changes, so the garden takes up a new painter and wakes its loop)
+  const [lapseLive, setLapseLive] = useState(true)
+  const lifeLapse = useMemo(
+    () => (lapseOpen && profile ? { progress: lapseProgress, title: profile.login, live: lapseLive } : null),
+    [lapseOpen, profile, lapseLive],
+  )
+  const openLapse = useCallback(
+    () =>
+      openLifeTimelapse(lapseProgress, () => {
+        usePersonStore.getState().clearSelection()
+        setLapseLive(true)
+        setLapseOpen(true)
+      }),
+    [],
+  )
+  const closeLapse = useCallback(
+    () =>
+      closeLifeTimelapse(lapseProgress, () => {
+        setLapseOpen(false)
+        setLapseRecording(false)
+      }),
+    [],
+  )
+  // a new login or request, or a different profile, starts with the whole garden on show (before paint, like startRequest)
+  useLayoutEffect(() => closeLapse(), [asked, profile, closeLapse])
+  const getCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
+
+  // ---- poster: the garden fully grown, framed, with the names as the screen shows them now ----
+  const [posterBusy, setPosterBusy] = useState(false)
+  const [posterError, setPosterError] = useState<string | null>(null)
+  // a new login or request leaves the last one's poster error and reload card behind
+  useEffect(() => {
+    setPosterError(null)
+    setChunkFailed(false)
+  }, [asked])
+  const savePoster = useCallback(async () => {
+    if (!profile || !timeline || !layout) return
+    setPosterBusy(true)
+    try {
+      await saveLifePoster({ profile, timeline, layout, theme, colourOf, name, hidden: usePersonStore.getState().hidden })
+      setPosterError(null)
+    } catch (err) {
+      // the exporters chunk could not be loaded: the reload card, not a module URL
+      const failure = posterFailure(err)
+      if (failure.code === 'chunk_failed') setChunkFailed(true)
+      else setPosterError(failure.message)
+    } finally {
+      setPosterBusy(false)
+    }
+  }, [profile, timeline, layout, theme, colourOf, name])
 
   // The address bar names the person and the view, so a reload or a copied link reopens them.
   useEffect(() => {
@@ -167,7 +239,10 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
       if (event.key !== 'Escape') return
       usePersonStore.getState().clearSelection()
       setInvalidUrl(false)
+      setPosterError(null)
+      setChunkFailed(false)
       setTokenOpen(false)
+      // the time-lapse stays on (its controls are always in), as in the repo garden
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -179,9 +254,9 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   return (
     <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
       {/* The canvas stops short of the side panel so the fitted life never hides behind it. */}
-      <div className="absolute inset-y-0 left-0" style={{ right: shown && panelOpen ? PANEL_INSET : 0 }}>
+      <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: shown && panelOpen ? PANEL_INSET : 0 }}>
         {profile && timeline && layout && (
-          <LifeGarden timeline={timeline} layout={layout} theme={theme} colourOf={colourOf} name={name} login={profile.login} />
+          <LifeGarden timeline={timeline} layout={layout} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
         )}
       </div>
 
@@ -199,15 +274,20 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         tokenOpen={tokenOpen}
         onToggleToken={toggleToken}
         busy={isFetching}
-        canExport={false}
-        onExportImage={noop}
+        canExport={layout !== null && !posterBusy}
+        canExportData={false}
+        onExportImage={savePoster}
         onExportData={noop}
         onOpenFile={openFile}
         besidePanel={shown && panelOpen}
       />
 
       {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
-      {!invalidUrl && error && errorCopy && !isFetching && (
+      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
+      {!invalidUrl && !chunkFailed && posterError !== null && (
+        <ErrorCard code="export_failed" title="couldn't save the poster" hint={`${posterError}. try again.`} onDismiss={() => setPosterError(null)} />
+      )}
+      {!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && (
         <ErrorCard
           code={error.code}
           message={error.message}
@@ -227,16 +307,41 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
           privateCount={privateKeys.size}
           revealed={revealed}
           onReveal={reveal}
+          revealLocked={lapseRecording}
           theme={theme}
+          onPoster={layout ? savePoster : undefined}
+          posterBusy={posterBusy}
         />
       )}
 
-      {isFetching ? (
+      {/* the time-lapse controls take the status strip's place while it is on, as in the repo garden */}
+      {lapseOpen && profile && timeline && layout ? (
+        <PersonTimelapse
+          onClose={closeLapse}
+          timeline={timeline}
+          login={profile.login}
+          progress={lapseProgress}
+          getCanvas={getCanvas}
+          besidePanel={panelOpen}
+          revealed={revealed}
+          onRecordingChange={setLapseRecording}
+          onLiveChange={setLapseLive}
+          onChunkFailed={showChunkFailed}
+        />
+      ) : isFetching ? (
         <StatusStrip data={undefined} graph={null} isFetching />
       ) : (
         profile &&
         timeline && (
-          <PersonStatus profile={profile} timeline={timeline} cachedAt={cachedAt} hasToken={hasToken} onRefresh={refresh} onAddToken={openToken} />
+          <PersonStatus
+            profile={profile}
+            timeline={timeline}
+            cachedAt={cachedAt}
+            hasToken={hasToken}
+            onRefresh={refresh}
+            onAddToken={openToken}
+            onTimelapse={layout ? openLapse : undefined}
+          />
         )
       )}
 
