@@ -1,10 +1,12 @@
 /**
- * Person mode's words for a failed profile fetch, and for a token run that GraphQL could not fill.
- * ErrorCard keeps its own copy for every code; person mode overrides its title and hint only where
- * a repo's words would be wrong for a user, and says whether a token would help.
+ * Person mode's words for a failed profile fetch, for a token run that GraphQL could not fill, and
+ * for a life with nothing to draw. ErrorCard keeps its own copy for every code; person mode
+ * overrides its title and hint only where a repo's words would be wrong for a user, and says
+ * whether a token would help.
  */
 import type { GitHubFetchError, ProfileData } from '../types'
 import { formatClock } from '../components/gardenUtils'
+import { repoKey } from './privacy'
 
 export interface PersonErrorCopy {
   /** in place of ErrorCard's title; undefined keeps its own */
@@ -25,6 +27,9 @@ export function personErrorCopy(error: GitHubFetchError, login: string, hasToken
     case 'not_found':
       // Every GitHub user is public, so a token finds no one a visitor cannot.
       return { title: 'user not found', hint: `GitHub has no user called ${login}. check the spelling.`, tokenAction: false }
+    case 'not_a_user':
+      // ErrorCard's own copy is the organization's; a token cannot turn any of these into a user.
+      return { ...notAUserCopy(accountType(error.message)), tokenAction: false }
     case 'rate_limited':
       // A secondary limit is about pace, not the hourly budget: a token does not lift it.
       if (/secondary/i.test(error.message)) {
@@ -46,6 +51,64 @@ export function personErrorCopy(error: GitHubFetchError, login: string, hasToken
     default:
       return { tokenAction: false }
   }
+}
+
+/**
+ * The account type a not_a_user error names: the identity call (api/profile.ts's fetchIdentity)
+ * says "<login> is a GitHub <type> account, not a user." A login holds no space, so the type is the
+ * word before " account". null when the message says no type.
+ */
+export function accountType(message: string): string | null {
+  return / is a GitHub (\S+) account, not a user\.?$/.exec(message)?.[1] ?? null
+}
+
+/** not_a_user's title and hint by the account's type: ErrorCard's own (an organization's) unless it is something else. */
+function notAUserCopy(type: string | null): Pick<PersonErrorCopy, 'title' | 'hint'> {
+  if (type === null || type === 'Organization') return {}
+  if (type === 'Bot') return { title: "that's a bot", hint: 'person mode shows people: try a repo it works on as owner/repo.' }
+  return { title: "that's not a user account", hint: 'person mode shows users: try a login, or a repo as owner/repo.' }
+}
+
+/** What the canvas says when it has nothing to draw, and the one thing that would change that. */
+export interface EmptyLifeNote {
+  title: string
+  hint?: string
+  /** token: opens the token panel; show-all: shows every repo the eye toggles hid */
+  action?: { kind: 'token' | 'show-all'; label: string }
+}
+
+/**
+ * The note over a life with nothing drawn, or null while anything is: a profile with no repos,
+ * worded for the tier that filled it (with the token nudge only where a token would show more,
+ * never with one set), or one whose every repo the eye toggles hid. hidden holds repo keys.
+ */
+export function emptyLifeNote(
+  profile: Pick<ProfileData, 'login' | 'source' | 'fallback'>,
+  lanes: ReadonlyArray<{ repo: string }>,
+  hidden: ReadonlySet<string>,
+  hasToken: boolean,
+): EmptyLifeNote | null {
+  if (lanes.length === 0) {
+    if (profile.source === 'graphql') {
+      return { title: `${profile.login} has no repos to show yet`, hint: 'GitHub lists no repos of theirs, and counted no commits of theirs to other repos.' }
+    }
+    // a token is set, so REST filled the profile only because GraphQL failed: the strip says so
+    if (hasToken || profile.fallback !== null) return { title: `${profile.login} has no public repos yet` }
+    return {
+      title: `${profile.login} has no public repos yet`,
+      hint: 'with a token, repos they contributed to show too.',
+      action: { kind: 'token', label: 'add a token' },
+    }
+  }
+  if (lanes.every((lane) => hidden.has(repoKey(lane.repo)))) {
+    const one = lanes.length === 1
+    return {
+      title: one ? 'its only repo is hidden' : `all ${lanes.length} repos are hidden`,
+      hint: 'hidden with the eye in the repo list.',
+      action: { kind: 'show-all', label: one ? 'show it' : 'show all' },
+    }
+  }
+  return null
 }
 
 /** Anything with a slash in it: a repo is named owner/name, and links can name one too. */

@@ -111,7 +111,8 @@ export function ViewSwitch({ value, onChange, disabled = false }: { value: Perso
 
 /**
  * The privacy toggle (PROFILE_SPEC.md section 2, "Privacy rule"): names hidden by default, shown on
- * this screen only. Locked while a recording runs.
+ * this screen only. Locked while a recording runs or a poster is being made, so neither file names
+ * what the screen no longer shows.
  */
 function PrivacyToggle({ count, revealed, locked, onReveal }: { count: number; revealed: boolean; locked: boolean; onReveal: (on: boolean) => void }) {
   return (
@@ -122,7 +123,7 @@ function PrivacyToggle({ count, revealed, locked, onReveal }: { count: number; r
       onClick={() => onReveal(!revealed)}
       title={
         locked
-          ? 'Waits until the recording ends, so a video never changes what it names halfway.'
+          ? 'Waits until the recording or poster is done, so a file never names what the screen has hidden.'
           : 'Shows private repo names on this screen only, never in links or analytics. Hidden again on reload.'
       }
       className="flex items-center gap-2 border-b border-garden-border px-3 py-2 text-left text-[12px] text-garden-muted hover:bg-garden-hover hover:text-garden-text disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
@@ -409,7 +410,19 @@ export default function PersonPanel({
           <ul className="garden-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
             {rows.length === 0 && (
               <li className="px-2 py-3 text-center text-[12px] text-garden-muted">
-                {total > 0 ? 'no repos match' : profile.source === 'rest' ? 'no public repos' : 'no repos'}
+                {/* rows fall short of the lanes only under a search */}
+                {total > 0 ? (
+                  <>
+                    no repos match ·{' '}
+                    <button type="button" onClick={() => setSearch('')} className="text-garden-accent hover:underline">
+                      clear search
+                    </button>
+                  </>
+                ) : profile.source === 'rest' ? (
+                  'no public repos'
+                ) : (
+                  'no repos'
+                )}
               </li>
             )}
             {rows.map(({ lane, key, shown }) => (

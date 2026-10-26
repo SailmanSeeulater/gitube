@@ -22,7 +22,7 @@ import { LINKS_PER_STAR } from '../src/profile/constellationLayout'
 import { buildDayIndex } from '../src/profile/dayIndex'
 import type { LifeViewDef } from '../src/profile/lifeView'
 import { LIFE_VIEWS } from '../src/profile/lifeViews'
-import { fallbackNote, personErrorCopy } from '../src/profile/personErrors'
+import { accountType, emptyLifeNote, fallbackNote, personErrorCopy } from '../src/profile/personErrors'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from '../src/profile/personIcons'
 import { PRIVATE_REPO_LABEL, isRevealed, privateRepoKeys, repoNamer } from '../src/profile/privacy'
 import { buildLifeTimeline, dayNumber } from '../src/profile/timeline'
@@ -283,6 +283,43 @@ describe('personErrorCopy', () => {
     expect(personErrorCopy(error, 'me', false)).toEqual({ title: 'GitHub refused the request', hint: 'press Grow to try again in a while.', tokenAction: false })
   })
 
+  it('words not_a_user by the account type the identity call names, never offering a token', () => {
+    const said = (login: string, type: string) => new GitHubFetchError(`${login} is a GitHub ${type} account, not a user.`, 'not_a_user')
+    expect(accountType(said('vercel', 'Organization').message)).toBe('Organization')
+    expect(accountType(said('helper-bot', 'Bot').message)).toBe('Bot')
+    expect(accountType('why')).toBeNull()
+    for (const hasToken of [false, true]) {
+      // an organization keeps the card's own words, which are an organization's
+      expect(personErrorCopy(said('vercel', 'Organization'), 'vercel', hasToken)).toEqual({ tokenAction: false })
+      expect(personErrorCopy(said('helper-bot', 'Bot'), 'helper-bot', hasToken)).toEqual({
+        title: "that's a bot",
+        hint: 'person mode shows people: try a repo it works on as owner/repo.',
+        tokenAction: false,
+      })
+      // a type GitHub may add: never called an organization
+      const other = personErrorCopy(said('someone', 'Mannequin'), 'someone', hasToken)
+      expect(other.title).toBe("that's not a user account")
+      expect(other.tokenAction).toBe(false)
+    }
+    // the bot's card: its own words, no organization, no token button
+    const copy = personErrorCopy(said('helper-bot', 'Bot'), 'helper-bot', false)
+    const html = textOf(renderToStaticMarkup(h(ErrorCard, { code: 'not_a_user', title: copy.title, hint: copy.hint })))
+    expect(html).toContain("that's a bot")
+    expect(html).not.toContain('organization')
+    expect(html).not.toContain('add a token')
+  })
+
+  it('keeps the words of the network and abort cards, which fit a person as they are', () => {
+    for (const code of ['network', 'aborted'] as const) {
+      for (const hasToken of [false, true]) expect(personErrorCopy(new GitHubFetchError('why', code), 'me', hasToken)).toEqual({ tokenAction: false })
+    }
+    const offline = textOf(renderToStaticMarkup(h(ErrorCard, { code: 'network', message: 'Network error while looking up me: fetch failed' })))
+    expect(offline).toContain("couldn't reach GitHub")
+    expect(offline).toContain('press Grow again')
+    expect(offline).not.toMatch(/repo/)
+    expect(textOf(renderToStaticMarkup(h(ErrorCard, { code: 'aborted' })))).toContain('press Grow to start again')
+  })
+
   it("keeps the card's own copy for every other code", () => {
     for (const code of ['not_a_user', 'network', 'aborted', 'unknown', 'invalid_url', 'empty_repo'] as const) {
       expect(personErrorCopy(new GitHubFetchError('why', code), 'me', false)).toEqual({ tokenAction: false })
@@ -312,6 +349,51 @@ describe('fallbackNote', () => {
   })
 })
 
+describe('emptyLifeNote', () => {
+  const lanesOf = (profile: ProfileData) => buildLifeTimeline(profile, NOW).lanes
+  const none = new Set<string>()
+
+  it('says nothing while any repo is drawn', () => {
+    expect(emptyLifeNote(PUBLIC, lanesOf(PUBLIC), none, false)).toBeNull()
+    expect(emptyLifeNote(TOKEN, lanesOf(TOKEN), new Set(['me/open']), true)).toBeNull()
+  })
+
+  it('words a life with no repos by its tier, nudging toward a token only without one', () => {
+    const empty: ProfileData = { ...PUBLIC, repos: [], recent: [] }
+    expect(emptyLifeNote(empty, [], none, false)).toEqual({
+      title: 'octo has no public repos yet',
+      hint: 'with a token, repos they contributed to show too.',
+      action: { kind: 'token', label: 'add a token' },
+    })
+    // a token is set: REST filled it because GraphQL failed, so no nudge, and no hint the strip already gives
+    expect(emptyLifeNote(empty, [], none, true)).toEqual({ title: 'octo has no public repos yet' })
+    // (the note reads the lanes, not the profile's repos: no lanes is no repos)
+    expect(emptyLifeNote(FALLBACK, [], none, true)).toEqual({ title: 'octo has no public repos yet' })
+    expect(emptyLifeNote(FALLBACK, [], none, false)).toEqual({ title: 'octo has no public repos yet' })
+    const graphql = emptyLifeNote(TOKEN, [], none, true)
+    expect(graphql?.title).toBe('Me has no repos to show yet')
+    expect(graphql?.hint).toContain('counted no commits')
+    expect(graphql?.action).toBeUndefined()
+  })
+
+  it('offers to show every repo once the eyes hid them all', () => {
+    const lanes = lanesOf(PUBLIC)
+    expect(emptyLifeNote(PUBLIC, lanes, new Set(['octo/site']), false)).toBeNull()
+    expect(emptyLifeNote(PUBLIC, lanes, new Set(['octo/site', 'octo/tool']), false)).toEqual({
+      title: 'all 2 repos are hidden',
+      hint: 'hidden with the eye in the repo list.',
+      action: { kind: 'show-all', label: 'show all' },
+    })
+    // a token profile's lanes, every one hidden by its key: private ones say nothing of their names
+    const tokenLanes = lanesOf(TOKEN)
+    const note = emptyLifeNote(TOKEN, tokenLanes, new Set(tokenLanes.map((lane) => lane.repo.toLowerCase())), true)
+    expect(note?.title).toBe('all 7 repos are hidden')
+    expectNoPrivateName(JSON.stringify(note))
+    const one: ProfileData = { ...PUBLIC, repos: [PUBLIC.repos[0]] }
+    expect(emptyLifeNote(one, lanesOf(one), new Set(['octo/site']), false)).toMatchObject({ title: 'its only repo is hidden', action: { label: 'show it' } })
+  })
+})
+
 describe('PersonStatus', () => {
   it('shows the fallback note in the idle strip, with the raw message only in its title', () => {
     const message = 'GitHub GraphQL rate limit exceeded while reading contributions.'
@@ -333,6 +415,23 @@ describe('PersonStatus', () => {
     expect(text).toContain('profile truncated')
     expect(status(TOKEN, { hasToken: true })).toContain('2022q3')
     expect(text).not.toContain('requests left')
+  })
+
+  it('nudges toward a token with a button that says what a token adds, never with one set', () => {
+    const nudge = /<button[^>]*title="([^"]*)"[^>]*>add a token for commits<\/button>/.exec(status(PUBLIC))
+    expect(nudge?.[1]).toContain('the commits GitHub counted')
+    expect(nudge?.[1]).toContain('from 60 requests to 5000')
+    for (const profile of [TOKEN, FALLBACK]) expect(status(profile, { hasToken: true })).not.toContain('add a token')
+    // cached or truncated, a token still adds commit counts
+    expect(textOf(status({ ...PUBLIC, truncated: true }, { cachedAt: '2024-06-15T18:00:00Z' }))).toContain('add a token for commits')
+  })
+
+  it('counts the core budget left as the repo garden does: from the store, only for a live fetch', () => {
+    setGarden({ rate: { limit: 5000, remaining: 4990, resetAt: RESET } })
+    const live = status(TOKEN, { hasToken: true })
+    expect(live).toContain('title="GitHub API requests remaining this hour"')
+    expect(textOf(live)).toContain('4990 requests left')
+    expect(textOf(status(TOKEN, { hasToken: true, cachedAt: '2024-06-15T18:00:00Z' }))).not.toContain('requests left')
   })
 
   it('nudges a visitor without a token, and shows the cache and the budget', () => {
@@ -670,7 +769,7 @@ describe('PersonPanel', () => {
     expectNoPrivateName(html)
   })
 
-  it('locks the toggle while a recording runs, revealed or not, and says why', () => {
+  it('locks the toggle while a recording runs or a poster is made, revealed or not, and says why', () => {
     const { timeline, keys } = setup(TOKEN)
     /** the privacy toggle's opening tag */
     const toggle = (html: string) => /<button[^>]*aria-pressed="(?:true|false)"[^>]*>(?=(?:(?!<\/button>).)*private repos)/.exec(html)?.[0] ?? ''
@@ -678,7 +777,7 @@ describe('PersonPanel', () => {
       const props = { profile: TOKEN, timeline, colourOf, name: repoNamer(keys, revealed), privateCount: keys.size, revealed, onReveal: noop, theme }
       const locked = toggle(renderToStaticMarkup(h(PersonPanel, { ...props, revealLocked: true })))
       expect(locked).toMatch(/\sdisabled=""/)
-      expect(locked).toContain('Waits until the recording ends')
+      expect(locked).toContain('Waits until the recording or poster is done')
       expect(locked).toContain(`aria-pressed="${revealed}"`)
       for (const free of [renderToStaticMarkup(h(PersonPanel, props)), renderToStaticMarkup(h(PersonPanel, { ...props, revealLocked: false }))]) {
         const tag = toggle(free)
@@ -697,7 +796,8 @@ describe('PersonPanel', () => {
 
   it('searches only what is shown, so a hidden name cannot be guessed', () => {
     setPerson({ search: 'secret' })
-    expect(textOf(panel(TOKEN))).toContain('no repos match')
+    expect(textOf(panel(TOKEN))).toContain('no repos match · clear search')
+    expect(panel(TOKEN)).toMatch(/<button type="button"[^>]*>clear search<\/button>/)
     setPerson({ search: 'PRIVATE' })
     expect(textOf(panel(TOKEN))).toContain('2 of 7 repos')
     setPerson({ search: 'go' })

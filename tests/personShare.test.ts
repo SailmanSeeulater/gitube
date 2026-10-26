@@ -9,6 +9,7 @@
  * loaded, share-copy from the repo garden's CopyLinkButton, and no JSON save, no fetch() and no
  * audio.
  */
+import { subjectOf } from '../src/subject'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -66,11 +67,11 @@ function expectNoSecret(text: string, where: string): void {
   }
 }
 
-/** What App hands PersonApp for a page address: readSubject's user and view, as its subjectOf does. */
+/** What App hands PersonApp for a page address, through App's own subjectOf. */
 function propsFor(href: string) {
-  const read = readSubject(new URL(href).search)
-  if (read?.kind !== 'user') throw new Error(`${href} opens no person`)
-  return { login: read.login, request: 0, view: read.view, focusInput: false, onRepo: noop, onUser: noop }
+  const read = subjectOf(new URL(href).search)
+  if (read.kind !== 'user') throw new Error(`${href} opens no person`)
+  return { login: read.login, request: read.request, view: read.view, focusInput: read.fromInput, onRepo: noop, onUser: noop }
 }
 
 /** PersonApp's markup for a link, the profile already in the query cache as a grown one would be. */
@@ -258,7 +259,8 @@ describe("PersonApp's Phase 5 wiring", () => {
   it('tells the time-lapse what the toggle shows, and locks the toggle while it records', () => {
     expect(code).toMatch(/<PersonTimelapse\s[^>]*revealed=\{revealed\}/)
     expect(code).toMatch(/<PersonTimelapse\s[^>]*onRecordingChange=\{setLapseRecording\}/)
-    expect(code).toMatch(/<PersonPanel\s[^>]*revealLocked=\{lapseRecording\}/)
+    // a poster in the making locks it too: its namer is taken at the click
+    expect(code).toMatch(/<PersonPanel\s[^>]*revealLocked=\{lapseRecording \|\| posterBusy\}/)
     // closing the time-lapse unlocks it, whatever the controls said last
     expect(code).toMatch(/closeLifeTimelapse\(lapseProgress, \(\) => \{\s*setLapseOpen\(false\)\s*setLapseRecording\(false\)\s*\}\)/)
     expect(code.match(/setLapseRecording\b/g)).toHaveLength(3)
@@ -273,7 +275,7 @@ describe("PersonApp's Phase 5 wiring", () => {
     expect(code).toContain("if (failure.code === 'chunk_failed') setChunkFailed(true)")
     expect(code).toContain('else setPosterError(failure.message)')
     expect(code).toContain('{!invalidUrl && !chunkFailed && posterError !== null && (')
-    expect(code).toContain('{!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && (')
+    expect(code).toContain('{!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && error !== closedError && (')
   })
 
   it('sends no event of its own, and takes no exporter, recorder, fetch, JSON save or audio', () => {

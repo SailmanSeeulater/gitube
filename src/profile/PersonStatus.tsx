@@ -99,7 +99,7 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
         <button
           type="button"
           onClick={onAddToken}
-          title="With a token, person mode reads the commits GitHub counted, day by day, the contribution calendar and the first pull request and issue (GitHub's GraphQL API)."
+          title="With a token, person mode reads the commits GitHub counted, day by day, the contribution calendar and the first pull request and issue (GitHub's GraphQL API), and the hourly limit goes from 60 requests to 5000."
           className="text-[11px] text-garden-accent hover:underline"
         >
           add a token for commits

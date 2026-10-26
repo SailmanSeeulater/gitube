@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { parseSubject } from './api/parseSubject'
 import type { RepoInitial } from './RepoApp'
-import type { ProfileData } from './types'
+import type { GitHubFetchError, ProfileData } from './types'
 import { writeUserShare, type PersonView } from './share/shareUrl'
 import { useGardenStore } from './store/useGardenStore'
 import { useTheme } from './theme/useTheme'
@@ -16,7 +16,7 @@ import { buildLifeTimeline, type LifeTimeline } from './profile/timeline'
 import { buildDayIndex } from './profile/dayIndex'
 import { languageColour, languagePalette } from './profile/lifeInk'
 import { isRevealed, privateRepoKeys, repoNamer } from './profile/privacy'
-import { personErrorCopy } from './profile/personErrors'
+import { emptyLifeNote, personErrorCopy } from './profile/personErrors'
 import { usePersonStore } from './profile/usePersonStore'
 import LifeView from './profile/LifeViewCanvas'
 import type { LifeViewDef, LifeViewModel } from './profile/lifeView'
@@ -49,6 +49,47 @@ const PANEL_INSET = 324
 const NO_KEYS: ReadonlySet<string> = new Set<string>()
 
 const noop = () => {}
+
+/**
+ * Whether the open side panel lies over the top bar's token field in a window this wide (CSS px):
+ * the field is 380px wide from 16px in (cut to the window less 32px in a narrow one), and the
+ * panel 300px wide, 12px from the right edge. Opening the field there folds the panel away (its
+ * button brings it back), so a nudge to add a token never opens a field the panel hides.
+ */
+export function panelCoversTokenField(width: number): boolean {
+  return 16 + Math.min(380, width - 32) + 8 > width - 312
+}
+
+/**
+ * The note over a life with nothing drawn (emptyLifeNote): no repos, or every repo hidden. Centred
+ * on the canvas, it lets the pointer through to it; only its button takes a click.
+ */
+function EmptyLife({ profile, lanes, hasToken, onAddToken }: {
+  profile: ProfileData
+  lanes: LifeTimeline['lanes']
+  hasToken: boolean
+  onAddToken: () => void
+}) {
+  const hidden = usePersonStore((s) => s.hidden)
+  const showAll = usePersonStore((s) => s.showAll)
+  const note = emptyLifeNote(profile, lanes, hidden, hasToken)
+  if (!note) return null
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4" role="status">
+      <p className="text-center text-[13px] text-garden-text-dim">{note.title}</p>
+      {note.hint && <p className="text-center text-[12px] leading-snug text-garden-muted">{note.hint}</p>}
+      {note.action && (
+        <button
+          type="button"
+          onClick={note.action.kind === 'token' ? onAddToken : showAll}
+          className="pointer-events-auto mt-1 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+        >
+          {note.action.label}
+        </button>
+      )}
+    </div>
+  )
+}
 
 /**
  * The query string person mode writes: the login and the view, and nothing else of its own. What is
@@ -141,6 +182,12 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const name = useMemo(() => repoNamer(privateKeys, revealed), [privateKeys, revealed])
   const reveal = useCallback((on: boolean) => setReveal(shownLogin, on), [setReveal, shownLogin])
 
+  /**
+   * the fetch error whose card was closed. Only a failed refetch's card closes, as the profile it
+   * could not refresh stays on show behind it; a new error (another fetch failing) shows its own.
+   */
+  const [closedError, setClosedError] = useState<GitHubFetchError | null>(null)
+
   /** a part that loads on demand (the recorder, the exporters) could not be loaded: the reload card */
   const [chunkFailed, setChunkFailed] = useState(false)
   const showChunkFailed = useCallback(() => setChunkFailed(true), [])
@@ -232,8 +279,13 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const toggleToken = useCallback(() => setTokenOpen((open) => !open), [])
-  const openToken = useCallback(() => setTokenOpen(true), [])
+  const showToken = useCallback((open: boolean) => {
+    if (open && panelCoversTokenField(window.innerWidth)) useGardenStore.getState().setPanelOpen(false)
+    setTokenOpen(open)
+  }, [])
+  const toggleToken = useCallback(() => showToken(!tokenOpen), [showToken, tokenOpen])
+  /** the nudges' "add a token" (the status strip, the error card, the empty life): the token field, in sight */
+  const openToken = useCallback(() => showToken(true), [showToken])
   const openFile = useCallback((file: File) => onRepo({ file }), [onRepo])
   /** the status strip's refresh: a new request for the person on show, from GitHub */
   const refresh = useCallback(() => refreshProfile(login, { noteGrow, refetch }), [login, noteGrow, refetch])
@@ -285,6 +337,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         {profile && timeline && layout && (
           <LifeView def={def} layout={layout} timeline={timeline} theme={theme} colourOf={colourOf} name={name} login={profile.login} timelapse={lifeLapse} />
         )}
+        {profile && timeline && <EmptyLife profile={profile} lanes={timeline.lanes} hasToken={hasToken} onAddToken={openToken} />}
       </div>
 
       {!profile && isFetching && (
@@ -309,22 +362,6 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         besidePanel={shown && panelOpen}
       />
 
-      {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
-      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
-      {!invalidUrl && !chunkFailed && posterError !== null && (
-        <ErrorCard code="export_failed" title="couldn't save the poster" hint={`${posterError}. try again.`} onDismiss={() => setPosterError(null)} />
-      )}
-      {!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && (
-        <ErrorCard
-          code={error.code}
-          message={error.message}
-          resetAt={error.resetAt}
-          title={errorCopy.title}
-          hint={errorCopy.hint}
-          onAddToken={errorCopy.tokenAction ? openToken : undefined}
-        />
-      )}
-
       {profile && timeline && (
         <PersonPanel
           profile={profile}
@@ -334,13 +371,31 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
           privateCount={privateKeys.size}
           revealed={revealed}
           onReveal={reveal}
-          revealLocked={lapseRecording}
+          revealLocked={lapseRecording || posterBusy}
           theme={theme}
           onPoster={layout ? savePoster : undefined}
           posterBusy={posterBusy}
           view={view}
           onView={pickView}
           viewLocked={lapseRecording}
+        />
+      )}
+
+      {/* after the panel, so a card is never under it where the two meet (a narrow window) */}
+      {invalidUrl && <ErrorCard code="invalid_url" onDismiss={() => setInvalidUrl(false)} />}
+      {!invalidUrl && chunkFailed && <ErrorCard code="chunk_failed" onReload={reloadPage} onDismiss={() => setChunkFailed(false)} />}
+      {!invalidUrl && !chunkFailed && posterError !== null && (
+        <ErrorCard code="export_failed" title="couldn't save the poster" hint={`${posterError}. try again.`} onDismiss={() => setPosterError(null)} />
+      )}
+      {!invalidUrl && !chunkFailed && posterError === null && error && errorCopy && !isFetching && error !== closedError && (
+        <ErrorCard
+          code={error.code}
+          message={error.message}
+          resetAt={error.resetAt}
+          title={errorCopy.title}
+          hint={errorCopy.hint}
+          onAddToken={errorCopy.tokenAction ? openToken : undefined}
+          onDismiss={profile ? () => setClosedError(error) : undefined}
         />
       )}
 

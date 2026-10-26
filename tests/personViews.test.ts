@@ -419,7 +419,8 @@ describe('the recording', () => {
     expect(code.match(/<LifeView\b/g)).toHaveLength(1)
     expect(code).toContain("const getCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])")
     expect(code).toMatch(/<PersonPanel\s[^>]*viewLocked=\{lapseRecording\}/)
-    expect(code).toMatch(/<PersonPanel\s[^>]*revealLocked=\{lapseRecording\}/)
+    // a poster in the making locks it too: its namer is taken at the click
+    expect(code).toMatch(/<PersonPanel\s[^>]*revealLocked=\{lapseRecording \|\| posterBusy\}/)
   })
 
   it('paints the caption over every view while the time-lapse is on, and keeps asking for frames while it is live', () => {
