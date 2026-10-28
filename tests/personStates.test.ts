@@ -16,6 +16,7 @@ import personAppSource from '../src/PersonApp.tsx?raw'
 import { formatClock } from '../src/components/gardenUtils'
 import { profileQueryKey, type ProfileResult } from '../src/profile/useProfileData'
 import { usePersonStore } from '../src/profile/usePersonStore'
+import { LIFE_VIEWS } from '../src/profile/lifeViews'
 import type { PersonView } from '../src/share/shareUrl'
 import { GitHubFetchError, type FetchProgress, type ProfileData, type ProfileRepo } from '../src/types'
 import { FAKE_TOKEN, setGarden, setPerson, textOf } from './helpers/personScene'
@@ -303,9 +304,9 @@ describe('a life with nothing to draw', () => {
 
 describe('a profile of only repos they contributed to', () => {
   it('shows in every view, with each repo marked and no empty note', () => {
-    for (const view of ['garden', 'lines', 'constellation'] as const) {
+    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap'] as const) {
       const html = personApp('helper', FAKE_TOKEN, { profile: VISITOR }, view)
-      const title = view === 'garden' ? 'life garden' : view === 'lines' ? 'life lines' : 'constellation'
+      const title = LIFE_VIEWS[view].title
       expect(html).toContain(`aria-label="${title} of helper: 2 repos, 2018 to `)
       const text = textOf(html)
       expect(text.match(/\bcontributed\b/g)?.length).toBeGreaterThanOrEqual(2)
@@ -321,7 +322,7 @@ describe('very old and very young lives', () => {
     // one of GitHub's first accounts, with a repo a year from 2008 on and the 500-repo cap reached
     const repos = Array.from({ length: 17 }, (_, i) => repo(`pioneer/r${2008 + i}`, { createdAt: iso(`${2008 + i}-03-01`), lastActiveAt: iso(`${2008 + i}-09-01`), language: i % 2 ? 'Ruby' : 'C' }))
     const pioneer: ProfileData = { ...PUBLIC, login: 'pioneer', createdAt: iso('2007-10-20'), repos, truncated: true, milestones: [{ kind: 'joined', date: iso('2007-10-20'), label: 'joined GitHub' }] }
-    for (const view of ['garden', 'lines', 'constellation'] as const) {
+    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap'] as const) {
       const html = personApp('pioneer', '', { profile: pioneer }, view)
       expect(html).toMatch(/aria-label="[a-z ]+ of pioneer: 17 repos, 2007 to 20\d\d"/)
       const text = textOf(html)

@@ -14,7 +14,7 @@ import { layoutLifeGarden } from '../../src/profile/lifeGardenLayout'
 import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP, plantGeom } from '../../src/profile/lifeGeometry'
 import { languageColour, languagePalette, lifeInk } from '../../src/profile/lifeInk'
 import { makeLifePaint, makeViewPaint, type LifePaintOptions, type LifePaintState, type LifePainter, type ViewPaintOptions } from '../../src/profile/lifePaint'
-import type { LifeViewDef, LifeViewModel } from '../../src/profile/lifeView'
+import { viewInk, type LifeViewDef, type LifeViewModel } from '../../src/profile/lifeView'
 import { LIFE_VIEWS } from '../../src/profile/lifeViews'
 import type { PersonView } from '../../src/share/shareUrl'
 import type { LifeCamera, LifeGardenLayout, LifeInk, LifeViewport, PlantGeom, RepoNamer } from '../../src/profile/lifeTypes'
@@ -195,7 +195,7 @@ export function viewPainterFor(
   const painter = makeViewPaint(grown.def.scene, {
     layout: grown.layout,
     timeline: g.timeline,
-    ink: g.ink,
+    ink: viewInk(g.ink, grown.def),
     colourOf: g.colourOf,
     name: g.name,
     login: g.profile.login,

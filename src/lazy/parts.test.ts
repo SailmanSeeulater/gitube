@@ -77,6 +77,31 @@ const LAZY_ONLY = [
   'profile/constellationGeometry.ts',
   'profile/constellationPaint.ts',
   'profile/constellationHit.ts',
+  // the console views (a terminal's look whatever the theme): phosphor, htop, the git log and the minimap
+  'profile/phosphorLayout.ts',
+  'profile/phosphorGeometry.ts',
+  'profile/phosphorPaint.ts',
+  'profile/phosphorHit.ts',
+  'profile/phosphorView.ts',
+  'profile/htopLayout.ts',
+  'profile/htopGeometry.ts',
+  'profile/htopPaint.ts',
+  'profile/htopHit.ts',
+  'profile/htopView.ts',
+  'profile/gitLogLayout.ts',
+  'profile/gitLogGeometry.ts',
+  'profile/gitLogPaint.ts',
+  'profile/gitLogHit.ts',
+  'profile/gitLogView.ts',
+  'profile/minimapLayout.ts',
+  'profile/minimapPaint.ts',
+  'profile/minimapHit.ts',
+  'profile/minimapView.ts',
+  // ...and their fixed palettes, which only they (and the legend) read: no theme of the first download
+  'theme/console/phosphor.ts',
+  'theme/console/htop.ts',
+  'theme/console/gitlog.ts',
+  'theme/console/minimap.ts',
   // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
   'api/graphql.ts',
   'api/profileGraphql.ts',
@@ -198,6 +223,11 @@ function isPersonModule(file: string): boolean {
   return file === 'PersonApp.tsx' || file.startsWith('profile/')
 }
 
+/** A console view's fixed palette (theme/console/): person mode's own, lazy, never a theme of the first download. */
+function isConsolePalette(file: string): boolean {
+  return file.startsWith('theme/console/')
+}
+
 /** The tests, by their path from the repo root: Tailwind reads them too for the one stylesheet. */
 const testSources = new Map<string, string>(
   Object.entries(import.meta.glob<string>('../../tests/**/*.ts', { query: '?raw', import: 'default', eager: true })).map(([key, text]) => [
@@ -296,6 +326,10 @@ describe('person mode and the first download', () => {
   it('lists every person module as lazy', () => {
     expect(person.length).toBeGreaterThan(20)
     expect(person.map(([file]) => file).filter((file) => !LAZY_ONLY.includes(file))).toEqual([])
+    // the console views' palettes too, which live under theme/ but belong to person mode alone
+    const consoles = [...sources.keys()].filter(isConsolePalette)
+    expect(consoles.length).toBeGreaterThanOrEqual(4)
+    expect(consoles.filter((file) => !LAZY_ONLY.includes(file))).toEqual([])
   })
 
   it('reaches person modules only from PersonApp, each by its own file, never a directory index', () => {
@@ -384,8 +418,15 @@ describe('person mode and the first download', () => {
     expect(taken.filter((name) => !used.has(name))).toEqual([])
     expect(taken.filter((name) => name.includes('/') && !name.startsWith('@tanstack/react-query '))).toEqual([])
 
-    const theme = person.flatMap(([file, text]) => namedImports(text, /(?:^|\/)theme\//).map((name) => `${file}: ${name}`))
+    // the console palettes (theme/console/) are lazy and person mode's own, so any name of theirs is fine...
+    const theme = person.flatMap(([file, text]) => namedImports(text, /(?:^|\/)theme\/(?!console\/)/).map((name) => `${file}: ${name}`))
     expect(theme.filter((entry) => !/: (?:blendHex|getTheme|THEMES|useTheme)$/.test(entry))).toEqual([])
+    expect(person.flatMap(([, text]) => namedImports(text, /(?:^|\/)theme\/console\//)).length).toBeGreaterThan(0)
+    // ...as long as only person mode reads them, and they take no value from any module, the eager themes included
+    const consoles = [...sources.keys()].filter(isConsolePalette)
+    const readers = [...sources.keys()].filter((file) => !isPersonModule(file) && staticImports(file).some(isConsolePalette))
+    expect(readers).toEqual([])
+    expect(consoles.flatMap((file) => staticImports(file).map((target) => `${file} -> ${target}`))).toEqual([])
     // it renames the theme chunk, and gardenUtils passes it on
     expect(person.flatMap(([file, text]) => (namedImports(text, /./).includes('hexToRgba') ? [file] : []))).toEqual([])
   })

@@ -4,6 +4,12 @@ import type { PersonView } from '../share/shareUrl'
 import { gardenInk, leafColour } from '../components/gardenPaint'
 import { DORMANT_DAYS, githubDay, type LifeTimeline } from './timeline'
 import { LockIcon } from './personIcons'
+import { htopLanguageSlots } from './htopLayout'
+import { htopRowColour } from './htopPaint'
+import { gitLogSlots } from './gitLogLayout'
+import { branchColour } from './gitLogPaint'
+import { minimapTones } from './minimapLayout'
+import { toneColour } from './minimapPaint'
 
 type GlyphKind =
   // the life garden's
@@ -33,6 +39,28 @@ type GlyphKind =
   | 'dry-star'
   | 'link'
   | 'faint'
+  // phosphor's
+  | 'blocks'
+  | 'head'
+  | 'hollow-head'
+  | 'dim-stack'
+  | 'faint-stack'
+  // htop's
+  | 'meter'
+  | 'busy'
+  | 'idle'
+  | 'dry-meter'
+  | 'half-meter'
+  // the git log's
+  | 'branch'
+  | 'hollow-commit'
+  | 'end'
+  | 'tag'
+  // the minimap's
+  | 'token'
+  | 'whitespace'
+  | 'comment'
+  | 'hollow-token'
 
 // The petal directions gardenLook's petalAngles gives an open bloom at turn 0.1 and a wilted head at
 // turn 0.5, as the repo garden's legend draws them; written out, so the first-load entry need not
@@ -247,6 +275,150 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <circle cx="9" cy="9" r="1.6" fill={colour} opacity="0.55" />
         </svg>
       )
+    // phosphor: a stack of blocks, brighter toward its head
+    case 'blocks':
+      return (
+        <svg {...common}>
+          {horizon}
+          <rect x="7" y="10.5" width="4" height="2.5" fill={colour} opacity="0.4" />
+          <rect x="7" y="7" width="4" height="2.5" fill={colour} opacity="0.65" />
+          <rect x="7" y="3.5" width="4" height="2.5" fill={colour} />
+        </svg>
+      )
+    // a starred repo's head block, bigger, in a halo
+    case 'head':
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="12" height="12" fill={colour} opacity="0.25" />
+          <rect x="5.5" y="5.5" width="7" height="7" fill={colour} />
+        </svg>
+      )
+    case 'hollow-head':
+      return (
+        <svg {...common}>
+          <rect x="5.5" y="5.5" width="7" height="7" fill="none" stroke={colour} strokeWidth="1.2" />
+        </svg>
+      )
+    case 'dim-stack':
+      return (
+        <svg {...common}>
+          {horizon}
+          <rect x="7" y="10.5" width="4" height="2.5" fill={ink.wilt} />
+          <rect x="7" y="7" width="4" height="2.5" fill={ink.wilt} />
+        </svg>
+      )
+    case 'faint-stack':
+      return (
+        <svg {...common}>
+          {horizon}
+          <rect x="7" y="10.5" width="4" height="2.5" fill={colour} opacity="0.45" />
+        </svg>
+      )
+    // htop: a meter of ticks between brackets, brighter the busier
+    case 'meter':
+      return (
+        <svg {...common}>
+          <path d="M3 5H1.5V13H3 M15 5H16.5V13H15" fill="none" stroke={theme.muted} strokeWidth="1" />
+          {[4, 6, 8, 10, 12].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={colour} />
+          ))}
+        </svg>
+      )
+    case 'busy':
+      return (
+        <svg {...common}>
+          {[2, 4, 6].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={colour} opacity="0.45" />
+          ))}
+          {[10, 12, 14].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={colour} />
+          ))}
+        </svg>
+      )
+    case 'idle':
+      return (
+        <svg {...common}>
+          <rect x="1" y="8.5" width="16" height="1" fill={colour} opacity="0.5" />
+        </svg>
+      )
+    case 'half-meter':
+      return (
+        <svg {...common}>
+          {[3, 5, 7, 9, 11, 13].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={colour} opacity="0.5" />
+          ))}
+        </svg>
+      )
+    case 'dry-meter':
+      return (
+        <svg {...common}>
+          {[3, 5, 7, 9, 11].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={ink.wilt} />
+          ))}
+        </svg>
+      )
+    // the git log: a branch forking off the trunk, with its commits
+    case 'branch':
+      return (
+        <svg {...common}>
+          <line x1="1" y1="15" x2="17" y2="15" stroke={theme.muted} strokeWidth="1.2" />
+          <path d="M3 15V9L6 6H17" fill="none" stroke={colour} strokeWidth="1.4" />
+          <circle cx="9" cy="6" r="1.8" fill={colour} />
+          <circle cx="14" cy="6" r="1.8" fill={colour} />
+        </svg>
+      )
+    case 'hollow-commit':
+      return (
+        <svg {...common}>
+          <line x1="1" y1="9" x2="17" y2="9" stroke={colour} strokeWidth="1.4" />
+          <circle cx="9" cy="9" r="2.6" fill={theme.canvas} stroke={colour} strokeWidth="1.2" />
+        </svg>
+      )
+    // an archived branch ends in a "*"
+    case 'end':
+      return (
+        <svg {...common}>
+          <line x1="1" y1="9" x2="9" y2="9" stroke={colour} strokeWidth="1.4" />
+          <circle cx="12" cy="9" r="4.5" fill={theme.canvas} stroke={colour} strokeWidth="1" />
+          <path d="M12 6V12 M9.4 7.5L14.6 10.5 M9.4 10.5L14.6 7.5" stroke={colour} strokeWidth="1.2" />
+        </svg>
+      )
+    // a milestone: a tag on the trunk
+    case 'tag':
+      return (
+        <svg {...common}>
+          <line x1="1" y1="14" x2="17" y2="14" stroke={theme.muted} strokeWidth="1.2" />
+          <path d="M5 5H11L14 8L11 11H5Z" fill={theme.accent} />
+        </svg>
+      )
+    // the minimap: a line of code, its tokens where active and whitespace dots where dormant
+    case 'token':
+      return (
+        <svg {...common}>
+          <rect x="1" y="7" width="7" height="4" rx="1.5" fill={colour} />
+          <rect x="10" y="7" width="7" height="4" rx="1.5" fill={colour} />
+        </svg>
+      )
+    case 'whitespace':
+      return (
+        <svg {...common}>
+          {[3, 7, 11, 15].map((x) => (
+            <circle key={x} cx={x} cy="9" r="0.9" fill={theme.muted} />
+          ))}
+        </svg>
+      )
+    case 'comment':
+      return (
+        <svg {...common}>
+          <rect x="1" y="7" width="16" height="4" rx="1.5" fill={ink.wilt} />
+        </svg>
+      )
+    case 'hollow-token':
+      return (
+        <svg {...common}>
+          <rect x="2.5" y="6.5" width="13" height="5" rx="1.5" fill="none" stroke={colour} strokeWidth="1" />
+        </svg>
+      )
   }
 }
 
@@ -280,6 +452,10 @@ const MEASURES: { readonly [V in PersonView]: { counted: string; uncounted: stri
   garden: { counted: "a plant's height", uncounted: "a plant's height is how long the repo was active" },
   lines: { counted: "a line's thickness", uncounted: 'every line is drawn one thickness, and its thick run is how long the repo was active' },
   constellation: { counted: "a star's size", uncounted: "a star's size is how long the repo was active" },
+  phosphor: { counted: "a stack's height", uncounted: "a stack's height is how long the repo was active" },
+  htop: { counted: "a meter's brightness", uncounted: "every active stretch of a meter is lit full, and a meter's length is how long the repo was active" },
+  gitlog: { counted: "a branch's run of commits", uncounted: "a branch has a commit at its start and at its last push, and its length is how long the repo was active" },
+  minimap: { counted: "a token's length", uncounted: "a token's length is how long the repo was active" },
 }
 
 /**
@@ -356,6 +532,11 @@ interface ViewLegend {
   intro: string
   items: LegendItem[]
   colours: string
+  /**
+   * a language's swatch: a console view's own colour for it, as its canvas paints it whatever the
+   * theme; null for a view that colours no language; the theme's (colourOf) when left out
+   */
+  swatch?: ((language: string | null) => string) | null
 }
 
 const PRIVATE_ITEM: LegendItem = { kind: 'lock', label: 'private repo', hint: 'its name stays hidden until shown with the toggle at the top of the panel' }
@@ -446,16 +627,139 @@ function constellationLegend(timeline: LifeTimeline, graphql: boolean, hasPrivat
   }
 }
 
+/** The console views' line on their colours: a terminal's own, whatever the theme. */
+const CONSOLE_COLOURS = 'its own colours, whatever the theme'
+
+/** Phosphor's intro, glyphs and colours. */
+function phosphorLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
+  const items: LegendItem[] = [
+    {
+      kind: 'blocks',
+      label: 'stack',
+      hint: `a stack of blocks, brighter toward its head, dimmer through stretches the repo lay dormant; ${
+        graphql ? 'the more commits GitHub counted, the taller' : 'the longer it was active, the taller'
+      }`,
+    },
+    { kind: 'head', label: 'stars', hint: 'a repo with stars has a bigger head block in a glow: the more stars, the bigger' },
+  ]
+  if (timeline.lanes.some((lane) => !lane.isOwn)) {
+    items.push({ kind: 'hollow-head', label: 'contributed', hint: 'a repo they only contributed to has a hollow head, rising on the day of their first counted commit' })
+  }
+  items.push(
+    { kind: 'dim-stack', label: 'archived', hint: 'an archived repo is drawn dim' },
+    { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
+  )
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-stack', label: 'seedling', hint: `a faint stack: ${SEEDLING_HINT}` })
+  if (hasPrivate) items.push(PRIVATE_ITEM)
+  return {
+    intro: `time runs left to right on a green phosphor screen; each stack of blocks is a repo, rising where their part in it starts. ${
+      graphql ? 'height: the commits GitHub counted.' : 'height: how long it was active.'
+    }`,
+    items,
+    colours: `one green for every repo, ${CONSOLE_COLOURS}: hover a repo and the inspector names its language.`,
+    swatch: null,
+  }
+}
+
+/** htop's intro, glyphs and colours. */
+function htopLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
+  const slots = htopLanguageSlots(timeline.lanes)
+  const items: LegendItem[] = [
+    { kind: 'meter', label: 'meter', hint: 'a row per repo, its meter running from where their part in it starts to today, or to an archived repo\'s last activity' },
+    {
+      kind: 'busy',
+      label: graphql ? 'busy' : 'active',
+      hint: graphql
+        ? 'an active stretch is lit by how busy it was: the more of its days with counted commits, the brighter'
+        : 'every active stretch is lit full: without a token there are no commit counts to light it by',
+    },
+    { kind: 'idle', label: 'dormant', hint: 'where the repo lay dormant, its meter is a dim baseline' },
+    { kind: 'dry-meter', label: 'archived', hint: 'an archived repo\'s meter is drawn dry and ends at its last activity' },
+    { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
+  ]
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'half-meter', label: 'seedling', hint: `a meter lit at half: ${SEEDLING_HINT}` })
+  if (hasPrivate) items.push(PRIVATE_ITEM)
+  return {
+    intro: `time runs left to right on a system monitor; each row is a repo, its meter lit where it was active. ${
+      graphql ? 'brightness: the share of days with counted commits.' : 'brightness: every active stretch lit full.'
+    }`,
+    items,
+    colours: `colour = a repo's main language, in the monitor's ${CONSOLE_COLOURS}; the strip under the horizon, the leading one each quarter.`,
+    swatch: (language) => htopRowColour({ dry: false, slot: language === null ? -1 : (slots.get(language) ?? -1) }),
+  }
+}
+
+/** The git log's intro, glyphs and colours. */
+function gitLogLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
+  const slots = gitLogSlots(timeline.lanes)
+  const items: LegendItem[] = [
+    {
+      kind: 'branch',
+      label: 'branch',
+      hint: graphql
+        ? 'a repo forks off the trunk where their part in it starts and runs to its last activity, with a commit on its active days'
+        : 'a repo forks off the trunk where it was created and runs to its last push, with a commit at each end',
+    },
+  ]
+  if (timeline.lanes.some((lane) => !lane.isOwn)) {
+    items.push({ kind: 'hollow-commit', label: 'contributed', hint: 'a repo they only contributed to has hollow commits, and forks off on the day of their first counted commit' })
+  }
+  items.push(
+    { kind: 'end', label: 'archived', hint: 'an archived branch ends in a "*" on its last commit' },
+    { kind: 'tag', label: 'milestone', hint: 'a milestone is a tag on the trunk: hover it, or see the milestones tab' },
+  )
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'seedling', hint: `a branch with only two commits, at its start and its last push: ${SEEDLING_HINT}` })
+  if (hasPrivate) items.push(PRIVATE_ITEM)
+  return {
+    intro: `time runs left to right, as git log --graph; each branch is a repo, forking off the trunk where their part in it starts. ${
+      graphql ? 'commits: on its active days, as GitHub counted them.' : 'commits: one at its creation and one at its last push.'
+    }`,
+    items,
+    colours: `colour = a repo's main language, in the terminal's ${CONSOLE_COLOURS} (five, so languages may share one); the strip under the horizon, the leading one each quarter.`,
+    swatch: (language) => branchColour({ slot: language === null ? -1 : (slots.get(language) ?? -1) }),
+  }
+}
+
+/** The minimap's intro, glyphs and colours. */
+function minimapLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
+  const tones = minimapTones(timeline.lanes)
+  const items: LegendItem[] = [
+    {
+      kind: 'token',
+      label: 'token',
+      hint: `a run of activity is a syntax token; quiet gaps under ${DORMANT_DAYS} days stay in one token, so ${graphql ? 'its length is the days GitHub counted commits on' : 'its length is how long it was active'}`,
+    },
+    { kind: 'whitespace', label: 'dormant', hint: 'where the repo lay dormant, its line is whitespace' },
+    { kind: 'comment', label: 'archived', hint: 'an archived repo is drawn as a comment' },
+    { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
+  ]
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'hollow-token', label: 'seedling', hint: `a hollow token: ${SEEDLING_HINT}` })
+  if (hasPrivate) items.push(PRIVATE_ITEM)
+  return {
+    intro: `time runs left to right in a code editor; each line of code is a repo, in the order they started, its tokens where it was active. ${
+      graphql ? 'tokens: the days GitHub counted commits on.' : 'tokens: how long it was active.'
+    }`,
+    items,
+    colours: `colour = a repo's main language as a syntax colour, in the editor's ${CONSOLE_COLOURS}; the minimap strip at the right edge shows every line at once.`,
+    swatch: (language) => toneColour(language === null ? -1 : (tones.get(language) ?? -1)),
+  }
+}
+
 const LEGENDS: { readonly [V in PersonView]: (timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean) => ViewLegend } = {
   garden: gardenLegend,
   lines: linesLegend,
   constellation: constellationLegend,
+  phosphor: phosphorLegend,
+  htop: htopLegend,
+  gitlog: gitLogLegend,
+  minimap: minimapLegend,
 }
 
 /** The legend of the view on show: its glyphs, its language colours and the limits of GitHub's data. */
 export default function PersonLegend({ profile, timeline, colourOf, theme, hasPrivate, view = 'garden' }: PersonLegendProps) {
   const graphql = profile.source === 'graphql'
-  const { intro, items, colours } = LEGENDS[view](timeline, graphql, hasPrivate)
+  const { intro, items, colours, swatch } = LEGENDS[view](timeline, graphql, hasPrivate)
+  const swatchOf = swatch === undefined ? colourOf : swatch
 
   const languages = languagesOf(timeline)
   const shown = languages.slice(0, MAX_LANGUAGES)
@@ -471,13 +775,14 @@ export default function PersonLegend({ profile, timeline, colourOf, theme, hasPr
           </li>
         ))}
       </ul>
-      {languages.length > 0 && (
+      {languages.length > 0 && swatchOf === null && <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>}
+      {languages.length > 0 && swatchOf !== null && (
         <>
           <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>
           <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
             {shown.map((language) => (
               <li key={language ?? ''} className="flex items-center gap-1.5 text-[11px] text-garden-text-dim">
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: colourOf(language) }} />
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatchOf(language) }} />
                 {language ?? 'no language'}
               </li>
             ))}

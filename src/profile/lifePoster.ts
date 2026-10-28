@@ -1,7 +1,8 @@
 /**
  * The life poster (PROFILE_SPEC.md section 6, "Time-lapse and export"): one PNG of the view on show
- * (the life garden, life lines or the constellation), framed with the person's avatar, their login,
- * their span of years and their top three milestones, in the active theme's colours.
+ * (any of person mode's views), framed with the person's avatar, their login, their span of years
+ * and their top three milestones, in the active theme's colours (a console view's own, on its dark
+ * screen, for a console view).
  *
  * The view is painted again off screen by the canvas's own painter (makeViewPaint), fully grown,
  * with the whole life fitted and no hover or selection, so the poster never carries the screen's
@@ -22,7 +23,7 @@ import type { Theme } from '../theme/themes'
 import type { ProfileData } from '../types'
 import type { LifeMilestone, LifeTimeline } from './timeline'
 import type { LifeInk, LifeViewport, RepoNamer, ShownName } from './lifeTypes'
-import type { LifeViewDef, LifeViewModel } from './lifeView'
+import { viewInk, type LifeViewDef, type LifeViewModel } from './lifeView'
 import { fitLifeCamera } from './lifeCamera'
 import { drawLock } from './lifeGardenPaint'
 import { GROUND_MARKS_PX, VIEW_TOP } from './lifeGeometry'
@@ -322,6 +323,22 @@ export function paintPosterFrame(
   ctx.restore()
 }
 
+/**
+ * The frame round a console view: the theme with every colour paintPosterFrame reads taken from the
+ * console's ink, so the avatar, the login, the years and the milestones read on its dark screen.
+ */
+function consoleFrame(theme: Theme, ink: LifeInk): Theme {
+  return {
+    ...theme,
+    canvas: ink.canvas,
+    text: ink.text,
+    muted: ink.muted,
+    accent: ink.accent,
+    hover: ink.labelPlateFill,
+    panelBorder: ink.labelPlateRing,
+  }
+}
+
 export interface PosterInput {
   profile: ProfileData
   timeline: LifeTimeline
@@ -378,7 +395,7 @@ export function composeLifePoster(
   const plot = deps.makeCanvas(POSTER_PLOT.width * POSTER_SCALE, POSTER_PLOT.height * POSTER_SCALE)
   const plotCtx = context2d(plot)
   plotCtx.setTransform(POSTER_SCALE, 0, 0, POSTER_SCALE, 0, 0)
-  const ink = lifeInk(theme)
+  const ink = viewInk(lifeInk(theme), view)
   paintPosterGarden(plotCtx, POSTER_GARDEN_VIEW, { layout, view, timeline, ink, colourOf, name, login: profile.login, hidden, measure: deps.measure })
 
   const poster = deps.makeCanvas(POSTER_WIDTH * POSTER_SCALE, POSTER_HEIGHT * POSTER_SCALE)
@@ -390,7 +407,7 @@ export function composeLifePoster(
     milestones: posterMilestones(timeline.milestones, name),
     credit: posterCredit(deps.now()),
   }
-  paintPosterFrame(ctx, text, theme, plot, avatar)
+  paintPosterFrame(ctx, text, view?.ink ? consoleFrame(theme, ink) : theme, plot, avatar)
   return poster
 }
 

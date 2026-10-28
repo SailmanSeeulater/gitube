@@ -21,11 +21,11 @@ export interface ShareState {
 }
 
 /** The person mode views a share link can name. */
-export type PersonView = 'garden' | 'lines' | 'constellation'
+export type PersonView = 'garden' | 'lines' | 'constellation' | 'phosphor' | 'htop' | 'gitlog' | 'minimap'
 
 const NAME_PREFIX = 'name:'
 const LOGIN_PREFIX = 'login:'
-const PERSON_VIEWS = new Set(['garden', 'lines', 'constellation'])
+const PERSON_VIEWS = new Set(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap'])
 
 /** Reads a location.search string. Anything malformed is dropped, never thrown. */
 export function readShareState(search: string): ShareState {

@@ -7,7 +7,7 @@ import { ImageIcon, SearchIcon } from '../components/icons'
 import { CopyLinkButton } from '../components/Panel'
 import type { RepoNamer, ShownName } from './lifeTypes'
 import PersonLegend from './PersonLegend'
-import { VIEW_OPTIONS } from './lifeViews'
+import { VIEW_ROWS } from './lifeViews'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LockIcon, ShownRepoName } from './personIcons'
 import { repoKey, shownMilestoneRepo } from './privacy'
 import { dayNumber, githubDay, type Lane, type LifeTimeline } from './timeline'
@@ -86,25 +86,29 @@ function Tabs({ value, onChange, repoCount, milestoneCount }: {
  */
 export function ViewSwitch({ value, onChange, disabled = false }: { value: PersonView; onChange: (view: PersonView) => void; disabled?: boolean }) {
   return (
-    <div role="radiogroup" aria-label="View" className="flex rounded-lg bg-garden-field p-0.5">
-      {VIEW_OPTIONS.map((option) => {
-        const active = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onChange(option.value)}
-            className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
-              active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
-            } disabled:cursor-not-allowed disabled:opacity-40`}
-          >
-            {option.label}
-          </button>
-        )
-      })}
+    <div role="radiogroup" aria-label="View" className="flex flex-col gap-0.5 rounded-lg bg-garden-field p-0.5">
+      {VIEW_ROWS.map((row) => (
+        <div key={row[0].value} className="flex">
+          {row.map((option) => {
+            const active = option.value === value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={disabled}
+                onClick={() => onChange(option.value)}
+                className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
+                  active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
+                } disabled:cursor-not-allowed disabled:opacity-40`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
@@ -330,7 +334,8 @@ export default function PersonPanel({
           title={
             viewLocked
               ? 'Waits until the recording ends, so a video shows one view.'
-              : "garden: repos grown as plants. lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row"
+              : "garden: repos grown as plants. lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row. " +
+                'phosphor, htop, git log and minimap: the same life on a terminal screen, in its own colours whatever the theme'
           }
         >
           <ViewSwitch value={view} onChange={onView} disabled={viewLocked} />

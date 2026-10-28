@@ -20,7 +20,8 @@ import PersonPanel, { RepoRow, onRepoRowKey, type RepoRowProps } from '../src/pr
 import PersonStatus from '../src/profile/PersonStatus'
 import { LINKS_PER_STAR } from '../src/profile/constellationLayout'
 import { buildDayIndex } from '../src/profile/dayIndex'
-import type { LifeViewDef } from '../src/profile/lifeView'
+import { viewInk, type LifeViewDef } from '../src/profile/lifeView'
+import { lifeInk } from '../src/profile/lifeInk'
 import { LIFE_VIEWS } from '../src/profile/lifeViews'
 import { accountType, emptyLifeNote, fallbackNote, personErrorCopy } from '../src/profile/personErrors'
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon } from '../src/profile/personIcons'
@@ -194,7 +195,7 @@ function legend(profile: ProfileData, view?: PersonView): string {
   return renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: keys.size > 0, view }))
 }
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
 
 function status(profile: ProfileData, over: { cachedAt?: string | null; hasToken?: boolean } = {}): string {
   const { timeline } = setup(profile)
@@ -511,6 +512,10 @@ describe('PersonLegend', () => {
       garden: { counted: "a plant's height", uncounted: "a plant's height is how long the repo was active" },
       lines: { counted: "a line's thickness", uncounted: 'every line is drawn one thickness, and its thick run is how long the repo was active' },
       constellation: { counted: "a star's size", uncounted: "a star's size is how long the repo was active" },
+      phosphor: { counted: "a stack's height", uncounted: "a stack's height is how long the repo was active" },
+      htop: { counted: "a meter's brightness", uncounted: "every active stretch of a meter is lit full, and a meter's length is how long the repo was active" },
+      gitlog: { counted: "a branch's run of commits", uncounted: "a branch has a commit at its start and at its last push, and its length is how long the repo was active" },
+      minimap: { counted: "a token's length", uncounted: "a token's length is how long the repo was active" },
     }
     for (const view of VIEWS) {
       const own = MEASURES[view]
@@ -538,6 +543,40 @@ describe('PersonLegend', () => {
     // left out, the view is the life garden
     expect(dataLimits(PUBLIC)).toEqual(dataLimits(PUBLIC, 'garden'))
     expect(dataLimits(TOKEN)).toEqual(dataLimits(TOKEN, 'garden'))
+  })
+
+  it("shows each language in the colour the view paints it: the theme's in a life view, a console view's own, none on phosphor", () => {
+    for (const profile of [TOKEN, PUBLIC]) {
+      const { timeline } = setup(profile)
+      for (const view of VIEWS) {
+        const html = legend(profile, view)
+        const where = `${view} ${profile.source}`
+        const swatches = [...html.matchAll(/<span class="h-2 w-2 shrink-0 rounded-full" style="background:([^"]+)"><\/span>([^<]*)<\/li>/g)].map(
+          (m) => [m[2], m[1]] as const,
+        )
+        if (view === 'phosphor') {
+          // one green for every repo: no language swatch would match the screen
+          expect(swatches, where).toEqual([])
+          expect(textOf(html), where).toContain('one green for every repo')
+          continue
+        }
+        expect(swatches.length, where).toBeGreaterThan(0)
+        const def = LIFE_VIEWS[view]
+        const layout = def.layout(timeline, profile.source)
+        const items = def.scene.items(layout)
+        const ink = viewInk(lifeInk(theme), def)
+        let checked = 0
+        for (const [language, colour] of swatches) {
+          const shown = language === 'no language' ? null : language
+          // a live repo of that language, as the canvas colours it (an archived one is drawn dry)
+          const i = items.findIndex((item) => timeline.lanes[item.lane].language === shown && !timeline.lanes[item.lane].isArchived)
+          if (i < 0) continue
+          expect(colour, `${where} ${language}`).toBe(def.scene.itemColour(layout, i, ink, colourOf))
+          checked++
+        }
+        expect(checked, where).toBeGreaterThan(0)
+      }
+    }
   })
 
   it('says what links two stars: the months they share, and the two each star shares the most with', () => {
@@ -975,7 +1014,7 @@ describe("PersonApp's layouts", () => {
   it('lays each view out once per timeline, and reuses that layout on every switch back to it', () => {
     const { profile, timeline } = setup(TOKEN)
     const counted = (def: LifeViewDef) => ({ ...def, layout: vi.fn(def.layout) })
-    const defs = { garden: counted(LIFE_VIEWS.garden), lines: counted(LIFE_VIEWS.lines), constellation: counted(LIFE_VIEWS.constellation) }
+    const defs = Object.fromEntries(VIEWS.map((view) => [view, counted(LIFE_VIEWS[view])])) as Record<PersonView, ReturnType<typeof counted>>
     const layoutOf = viewLayouts(timeline, profile.source)
     const first = new Map(VIEWS.map((view) => [view, layoutOf(defs[view])]))
     for (const view of ['constellation', 'garden', 'constellation', 'lines', 'garden', 'constellation'] as PersonView[]) {

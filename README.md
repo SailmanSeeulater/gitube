@@ -21,7 +21,8 @@ whole coding life ([person mode](#person-mode)).
   requests looks exactly as before.
 - **Person mode**: a login (`octocat`, `@octocat` or `github.com/octocat`)
   grows one user's repos over time, as a garden, life lines or a
-  constellation, with its own time-lapse, poster and share link.
+  constellation, or in four console looks (phosphor, htop, git log, minimap),
+  with its own time-lapse, poster and share link.
 - Everything runs in the browser against the GitHub API (REST, plus GraphQL
   once a token is set). No clone, no server. Add a personal access token (key
   icon) for private repos, a much higher rate limit and, in person mode, the
@@ -80,7 +81,8 @@ They are never cached or saved.
 
 Type a GitHub login where a repo goes (`octocat`, `@octocat`, or a
 `github.com/octocat` link), or open `?user=octocat`, with `&view=garden`,
-`&view=lines` or `&view=constellation` to pick the view. It grows one user's
+`&view=lines`, `&view=constellation`, `&view=phosphor`, `&view=htop`,
+`&view=gitlog` or `&view=minimap` to pick the view. It grows one user's
 coding life: when each repo was born, when it was busy, when it went quiet,
 which languages led when, and their milestones (joining GitHub, the first
 repo, the most starred one, language switches, and with a token the first pull
@@ -90,8 +92,9 @@ shows "that's an organization" (a bot's, "that's a bot"), and its repos still
 grow as `owner/repo`. A user with no repos to show gets a note saying so,
 with "add a token" when a token would show more.
 
-Three views, picked in the side panel, paint the same life on one canvas and
-share the panel, the inspector (hover a repo or a day), the theme, the
+Seven views, picked in the side panel (the life views on its first row, the
+console views on its second), paint the same life on one canvas and share the
+panel, the inspector (hover a repo or a day), the theme, the
 time-lapse and the poster:
 
 - **garden** (the default): time runs left to right along a horizon. Each repo
@@ -106,6 +109,20 @@ time-lapse and the poster:
 - **constellation**: each repo is a star, placed by when the person's part in
   it starts (across) and its language (down), sized by activity, glowing by
   stars, with faint links between repos active in the same months.
+
+The console views keep their own terminal colours whatever the theme (the
+labels, the time-lapse caption and the poster follow them):
+
+- **phosphor**: a green CRT screen with scanlines; each repo is a stack of
+  blocks rising where the person's part in it starts, as tall as a garden
+  plant, its head brighter for stars.
+- **htop**: a system monitor; each repo is a numbered row whose meter is lit
+  where it was active, brighter for busier stretches.
+- **git log**: like `git log --graph`; each repo is a branch forking off the
+  trunk where the person's part in it starts, with commit dots and a short
+  hash (from its dates, never its name).
+- **minimap**: a code editor; each repo is a numbered line whose syntax-coloured
+  tokens are its active spans, with a minimap strip of every line at the right.
 
 The side panel also holds the repo list (search, hide, pick one to spotlight
 it), the milestones, and the legend, which ends with what GitHub's data leaves
@@ -261,7 +278,7 @@ Person mode sends these (`src/profile/analytics.ts` has the `grow` rules):
 | Event | Data | Sent when |
 |---|---|---|
 | `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached`, `token` (whether the profile was fetched with a token, read from the fetch result, not the token set now); `login` only for a live fetch without a token | the person on show was grown or refreshed (a login typed in either input, the same one again included, a `?user=` link, refresh or "try again" in the status strip) and the profile arrived, from GitHub or the cache: once per request. Not for a token change, a background refetch or a view switch; a request that fails sends nothing |
-| `view-switch` | `view`: `garden`, `lines` or `constellation` | another view is picked in the side panel |
+| `view-switch` | `view`: `garden`, `lines`, `constellation`, `phosphor`, `htop`, `gitlog` or `minimap` | another view is picked in the side panel |
 | `timelapse-play` | none | the time-lapse is opened ("watch it grow") |
 | `export` | `format: 'webm'`, also when Safari records mp4 | a time-lapse recording is saved; the only `export` person mode sends |
 | `poster-export` | none | a poster is saved (the panel's poster button, or Save image in the top bar), after its download; a save that fails sends nothing |

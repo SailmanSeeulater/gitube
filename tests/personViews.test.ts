@@ -21,6 +21,8 @@ import { POSTER_GARDEN_VIEW, composeLifePoster, saveLifePoster, type PosterDeps,
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import { closeLifeTimelapse, lapseCaption, openLifeTimelapse } from '../src/profile/lifeTimelapse'
 import { LIFE_VIEWS, VIEW_OPTIONS, switchView } from '../src/profile/lifeViews'
+import { viewInk } from '../src/profile/lifeView'
+import type { LifeHover } from '../src/profile/lifeTypes'
 import { leafColour } from '../src/components/gardenPaint'
 import { languagePalette } from '../src/profile/lifeInk'
 import { PRIVATE_REPO_LABEL, repoKey } from '../src/profile/privacy'
@@ -31,6 +33,10 @@ import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import type { PersonView } from '../src/share/shareUrl'
 import { useGardenStore } from '../src/store/useGardenStore'
 import { THEMES, getTheme } from '../src/theme/themes'
+import { PHOSPHOR } from '../src/theme/console/phosphor'
+import { HTOP_PALETTE } from '../src/theme/console/htop'
+import { GITLOG_PALETTE } from '../src/theme/console/gitlog'
+import { MINIMAP_PALETTE } from '../src/theme/console/minimap'
 import type { ProfileData } from '../src/types'
 import {
   FAKE_TOKEN,
@@ -52,13 +58,17 @@ import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/record
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
 const PROGRESSES = [0, 0.25, 0.5, 0.75, 1]
 /** What each view's legend says first, and only it. */
 const INTROS: Record<PersonView, string> = {
   garden: 'each plant is a repo, rooted where their part in it starts',
   lines: 'each line is a repo, from where their part in it starts to today: thick while active, thin while dormant',
   constellation: "each star is a repo, placed where their part in it starts, in its language's row",
+  phosphor: 'each stack of blocks is a repo, rising where their part in it starts',
+  htop: 'each row is a repo, its meter lit where it was active',
+  gitlog: 'each branch is a repo, forking off the trunk where their part in it starts',
+  minimap: 'each line of code is a repo, in the order they started, its tokens where it was active',
 }
 
 /** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
@@ -174,7 +184,7 @@ describe('the panel and the inspector', () => {
     expect(checkedViews(free)).toEqual(['lines'])
     expect(free).not.toMatch(/role="radio"[^>]*disabled=""/)
     const locked = renderToStaticMarkup(h(PersonPanel, { ...base, view: 'lines', onView: noop, viewLocked: true }))
-    expect(locked.match(/role="radio" aria-checked="(?:true|false)" disabled=""/g)).toHaveLength(3)
+    expect(locked.match(/role="radio" aria-checked="(?:true|false)" disabled=""/g)).toHaveLength(VIEWS.length)
     expect(locked).toContain('Waits until the recording ends')
   })
 })
@@ -198,27 +208,59 @@ function allowedColours(g: Grown): Set<string> {
 const DRAWS = new Set(['fill', 'fillRect', 'fillText'])
 const STROKES = new Set(['stroke', 'strokeRect', 'strokeText'])
 
+/** The console views, each with its fixed palette (src/theme/console): a terminal's look whatever the theme. */
+const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE }
+
+/** Every colour string in a palette, its lists included. */
+function paletteColours(palette: object): Set<string> {
+  const out = new Set<string>()
+  const walk = (value: unknown) => {
+    if (typeof value === 'string') out.add(value)
+    else if (Array.isArray(value)) value.forEach(walk)
+    else if (value && typeof value === 'object') Object.values(value).forEach(walk)
+  }
+  walk(palette)
+  return out
+}
+
 describe('the theme', () => {
-  it('paints every view in the theme’s colours only, the canvas colour first, in all ten themes', () => {
+  it('paints every life view in the theme’s colours only, and every console view in its own palette alone, the canvas colour first, in all ten themes', () => {
+    /** a console view's draws and strokes with their colours, as the first theme painted them */
+    const consoleFrames = new Map<PersonView, string>()
     for (const t of THEMES) {
       const g = grow(kepano, KEPANO_NOW, t)
-      const allowed = allowedColours(g)
       const lanes = g.timeline.lanes
       const state = { hover: { kind: 'repo' as const, key: repoKey(lanes[3].repo) }, selected: repoKey(lanes[lanes.length - 2].repo) }
       for (const view of VIEWS) {
+        const own = CONSOLE_PALETTES[view]
+        const allowed: Set<string> = own ? paletteColours(own) : allowedColours(g)
+        const canvas = own ? LIFE_VIEWS[view].ink!(g.ink).canvas : t.canvas
         const { rec } = paintView(g, view, { ...state, progress: 0.8 })
         const where = `${t.id} ${view}`
         const first = rec.log.find((e) => e.kind === 'call' && /^(fill|fillRect|stroke|fillText)$/.test(e.name)) as Extract<CtxEntry, { kind: 'call' }>
         expect(first.name, where).toBe('fillRect')
         expect(first.args, where).toEqual([0, 0, g.view.width * 2, g.view.height * 2])
-        expect(first.style.fillStyle, where).toBe(t.canvas)
+        expect(first.style.fillStyle, where).toBe(canvas)
+        const painted: string[] = []
         for (const e of rec.log) {
           if (e.kind !== 'call') continue
-          if (DRAWS.has(e.name)) expect(allowed.has(String(e.style.fillStyle)), `${where} ${e.name} ${String(e.style.fillStyle)}`).toBe(true)
-          if (STROKES.has(e.name)) expect(allowed.has(String(e.style.strokeStyle)), `${where} ${e.name} ${String(e.style.strokeStyle)}`).toBe(true)
+          if (DRAWS.has(e.name)) {
+            expect(allowed.has(String(e.style.fillStyle)), `${where} ${e.name} ${String(e.style.fillStyle)}`).toBe(true)
+            painted.push(`${e.name} ${String(e.style.fillStyle)}`)
+          }
+          if (STROKES.has(e.name)) {
+            expect(allowed.has(String(e.style.strokeStyle)), `${where} ${e.name} ${String(e.style.strokeStyle)}`).toBe(true)
+            painted.push(`${e.name} ${String(e.style.strokeStyle)}`)
+          }
         }
+        if (!own) continue
+        // a console view, its labels, plates and caption included, looks the same whatever the theme
+        const frame = painted.join('\n')
+        if (!consoleFrames.has(view)) consoleFrames.set(view, frame)
+        expect(frame === consoleFrames.get(view), `${where}: the same frame as in ${THEMES[0].id}`).toBe(true)
       }
     }
+    expect([...consoleFrames.keys()]).toEqual(VIEWS.filter((view) => CONSOLE_PALETTES[view]))
   })
 })
 
@@ -430,7 +472,9 @@ describe('the recording', () => {
       const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
       expect(painter.paint(rec.ctx, g.view, g.camera, 33), view).toBe(true)
       expect(String(rec.calls('fillText').at(-1)?.args[0]), view).toBe('kepano · repo-garden')
-      expect(rec.calls('fillRect').some((c) => c.style.fillStyle === g.ink.accent && c.args[1] === g.view.height - 3), view).toBe(true)
+      // in the view's own ink: a console view's caption reads on its dark screen whatever the theme
+      const ink = viewInk(g.ink, LIFE_VIEWS[view])
+      expect(rec.calls('fillRect').some((c) => c.style.fillStyle === ink.accent && c.args[1] === g.view.height - 3), view).toBe(true)
     }
   })
 })
@@ -473,11 +517,28 @@ describe('a switch', () => {
       const spot = new Float32Array(3)
       expect(grown.def.scene.anchor(grown.layout, geoms, at(hidden), null, spot)).toBe(true)
       expect(painter.hitAt(spot[0], spot[1]), view).not.toEqual({ kind: 'repo', key: hidden })
-      // the selection: ringed, every other repo dimmed
-      expect(rec.calls('stroke').some((e) => e.style.strokeStyle === g.ink.inspectedRing), view).toBe(true)
-      expect(rec.log.some((e) => e.kind === 'call' && (e.name === 'stroke' || e.name === 'fill') && e.style.globalAlpha === g.ink.dimAlpha), view).toBe(true)
-      // the hover: ringed, on a plate naming it as the namer does, revealed for this login
-      expect(rec.calls('stroke').some((e) => e.style.strokeStyle === g.ink.hoverRing), view).toBe(true)
+      // the selection: marked, every other repo dimmed, in the view's own ink (a console view's, whatever the theme)
+      const ink = viewInk(g.ink, grown.def)
+      expect(rec.log.some((e) => e.kind === 'call' && (e.name === 'stroke' || e.name === 'fill') && e.style.globalAlpha === ink.dimAlpha), view).toBe(true)
+      if (!grown.def.ink) {
+        // a life view rings the selected and the hovered repo
+        expect(rec.calls('stroke').some((e) => e.style.strokeStyle === ink.inspectedRing), view).toBe(true)
+        expect(rec.calls('stroke').some((e) => e.style.strokeStyle === ink.hoverRing), view).toBe(true)
+      } else {
+        // a console view marks them its own way (phosphor's frames, htop's cursor bar, the editor's line bands, the git
+        // log's halos): each changes what the scene draws, and the selection's mark is in its inspected colour
+        const scene = (selected: string | null, hover: LifeHover) => {
+          const r = recordingCtx(g.view.width * 2, g.view.height * 2)
+          grown.def.scene.paint(r.ctx, { layout: grown.layout, timeline: g.timeline, geoms, camera: g.camera, view: g.view, ink, colourOf: g.colourOf, hidden: new Set([hidden]), hover, selected, at: null })
+          return JSON.stringify(r.log)
+        }
+        const plain = scene(null, null)
+        expect(scene(selected, null), view).not.toBe(plain)
+        expect(scene(null, { kind: 'repo', key: hovered }), view).not.toBe(plain)
+        const marks = [...rec.calls('stroke'), ...rec.calls('strokeRect'), ...rec.calls('fill'), ...rec.calls('fillRect')]
+        expect(marks.some((e) => (e.name.startsWith('stroke') ? e.style.strokeStyle : e.style.fillStyle) === ink.inspectedRing), view).toBe(true)
+      }
+      // the hover: on a plate naming it as the namer does, revealed for this login
       const names = labelNames(items, g.timeline, g.name, g.profile.login)
       expect(labels.placer.plates[at(hovered)]?.rows[0].text, view).toBe(names[at(hovered)].text)
       expect(names[at(hovered)].text, view).toBe('obsidian-skills')
