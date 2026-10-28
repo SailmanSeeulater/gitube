@@ -1,6 +1,6 @@
 /**
- * Person mode's three views (PROFILE_SPEC.md section 5) and their switcher: the life garden, life
- * lines and the constellation, each as a LifeViewDef (lifeView.ts) that one canvas host (LifeView),
+ * Person mode's views (PROFILE_SPEC.md section 5) and their switcher: the life garden, life lines
+ * and the constellation, then the console views (phosphor, htop, git log, minimap), each as a LifeViewDef (lifeView.ts) that one canvas host (LifeView),
  * one painter (makeViewPaint), the labels, the time-lapse and the poster all drive the same way.
  *
  * switchView is the switcher's one way to change the view: it sends view-switch with the view only
@@ -20,6 +20,10 @@ import { constellationGeom, type ConstellationGeom } from './constellationGeomet
 import { hitConstellation } from './constellationHit'
 import { constellationKeepOut, paintConstellation, starAnchor, starColour, starLabelOrder } from './constellationPaint'
 import type { LifeGardenLayout, PlantGeom } from './lifeTypes'
+import { PHOSPHOR_VIEW } from './phosphorView'
+import { HTOP_VIEW } from './htopView'
+import { GITLOG_VIEW } from './gitLogView'
+import { MINIMAP_VIEW } from './minimapView'
 
 /** The life garden: each repo a plant rooted where the person's part in it starts. */
 export const GARDEN_VIEW: LifeViewDef<LifeGardenLayout, PlantGeom[]> = {
@@ -68,14 +72,29 @@ export const LIFE_VIEWS: { readonly [V in PersonView]: LifeViewDef } = {
   garden: GARDEN_VIEW,
   lines: LINES_VIEW,
   constellation: CONSTELLATION_VIEW,
+  phosphor: PHOSPHOR_VIEW,
+  htop: HTOP_VIEW,
+  gitlog: GITLOG_VIEW,
+  minimap: MINIMAP_VIEW,
 }
 
-/** The switcher's options, in its order. */
-export const VIEW_OPTIONS: ReadonlyArray<{ value: PersonView; label: string }> = [
-  { value: 'garden', label: 'garden' },
-  { value: 'lines', label: 'lines' },
-  { value: 'constellation', label: 'constellation' },
+/** The switcher's rows: the life views, then the console ones (a terminal's look whatever the theme). */
+export const VIEW_ROWS: ReadonlyArray<ReadonlyArray<{ value: PersonView; label: string }>> = [
+  [
+    { value: 'garden', label: 'garden' },
+    { value: 'lines', label: 'lines' },
+    { value: 'constellation', label: 'constellation' },
+  ],
+  [
+    { value: 'phosphor', label: 'phosphor' },
+    { value: 'htop', label: 'htop' },
+    { value: 'gitlog', label: 'git log' },
+    { value: 'minimap', label: 'minimap' },
+  ],
 ]
+
+/** The switcher's options, in its order. */
+export const VIEW_OPTIONS: ReadonlyArray<{ value: PersonView; label: string }> = VIEW_ROWS.flat()
 
 /** Shows next in place of current: counts it (view-switch, with the view and nothing else) and sets it; nothing for the same view. */
 export function switchView(current: PersonView, next: PersonView, set: (view: PersonView) => void): void {

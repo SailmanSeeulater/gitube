@@ -10,7 +10,7 @@
  * in view. A view's paint never receives a namer: repo names reach the canvas only through the shared
  * labels, and a view draws only years, "today" and language names.
  *
- * Pure: types and three small helpers, no theme and no DOM.
+ * Pure: types and four small helpers, no theme and no DOM.
  */
 import type { ProfileData } from '../types'
 import type { PersonView } from '../share/shareUrl'
@@ -134,6 +134,17 @@ export interface LifeViewDef<L extends LifeViewModel = any, G = any> {
   /** pure and deterministic: the same timeline gives the same layout */
   layout(timeline: LifeTimeline, source: ProfileData['source']): L
   scene: LifeScene<L, G>
+  /**
+   * a console view's own ink (its fixed terminal palette) from the theme's: the host, the labels,
+   * their plates, the time-lapse caption and the poster use it in place of the theme's, so they read
+   * on the console's dark screen in every theme. Left out by the life views, which paint the theme.
+   */
+  ink?: (base: LifeInk) => LifeInk
+}
+
+/** The ink a view paints with: its own (a console view's) over the theme's, else the theme's. */
+export function viewInk(base: LifeInk, def: Pick<LifeViewDef, 'ink'> | null | undefined): LifeInk {
+  return def?.ink ? def.ink(base) : base
 }
 
 /** A milestone marker on the horizon is hit within this distance of its centre. */

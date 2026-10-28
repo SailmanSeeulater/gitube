@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, type KeyboardEvent, type MouseEvent, type P
 import type { Theme } from '../theme/themes'
 import type { LifeTimeline } from './timeline'
 import type { LifeHover, RepoNamer } from './lifeTypes'
-import type { LifeViewDef, LifeViewModel } from './lifeView'
+import { viewInk, type LifeViewDef, type LifeViewModel } from './lifeView'
 import { lifeInk } from './lifeInk'
 import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP } from './lifeGeometry'
 import { revealLifeCamera } from './lifeCamera'
@@ -60,7 +60,7 @@ export function lifeViewLabel(title: string, login: string, count: number, timel
 }
 
 export default function LifeView<L extends LifeViewModel>({ def, layout, timeline, theme, colourOf, name, login, timelapse = null }: LifeViewProps<L>) {
-  const ink = useMemo(() => lifeInk(theme), [theme])
+  const ink = useMemo(() => viewInk(lifeInk(theme), def), [theme, def])
   /** the pointer over the canvas while no button is down; null otherwise */
   const pointerRef = useRef<{ x: number; y: number } | null>(null)
   /** the last painter's labels and its view: the next one takes over their spots by repo key, in the same view only */

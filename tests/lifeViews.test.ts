@@ -4,7 +4,8 @@
  * nothing else) once per real change, the panel's switcher hands its option's value on and is the
  * repo garden's Segmented to the class, and each view's scene keeps the contract the painter, the
  * labels, the time-lapse and the panel's focus rely on, on both recordings. The views' own drawing
- * code writes no colour of its own.
+ * code writes no colour of its own: the life views paint the theme, the console views their own fixed
+ * palette (src/theme/console), labels and plates included.
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { isValidElement, type ReactElement } from 'react'
@@ -19,12 +20,32 @@ import { languagePalette } from '../src/profile/lifeInk'
 import { repoKey } from '../src/profile/privacy'
 import { useGardenStore } from '../src/store/useGardenStore'
 import type { PersonView } from '../src/share/shareUrl'
-import { getTheme } from '../src/theme/themes'
+import { THEMES, getTheme } from '../src/theme/themes'
+import { PHOSPHOR } from '../src/theme/console/phosphor'
+import { HTOP_PALETTE } from '../src/theme/console/htop'
+import { GITLOG_PALETTE } from '../src/theme/console/gitlog'
+import { MINIMAP_PALETTE } from '../src/theme/console/minimap'
 import type { ProfileData } from '../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, type Grown } from './helpers/personScene'
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
 const theme = getTheme('obsidian')
+/** The views that paint the theme... */
+const LIFE_ONLY: PersonView[] = ['garden', 'lines', 'constellation']
+/** ...and the console views, each its own palette's colours, whatever the theme. */
+const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE }
+
+/** Every colour string in a palette, its lists included. */
+function paletteColours(palette: object): Set<string> {
+  const out = new Set<string>()
+  const walk = (value: unknown) => {
+    if (typeof value === 'string') out.add(value)
+    else if (Array.isArray(value)) value.forEach(walk)
+    else if (value && typeof value === 'object') Object.values(value).forEach(walk)
+  }
+  walk(palette)
+  return out
+}
 
 let kepano: ProfileData
 let gaearon: ProfileData
@@ -54,7 +75,7 @@ describe('the registry', () => {
     expect(LIFE_VIEWS.lines).toBe(LINES_VIEW)
     expect(LIFE_VIEWS.constellation).toBe(CONSTELLATION_VIEW)
     expect(VIEW_OPTIONS.map((o) => o.value)).toEqual(VIEWS)
-    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['garden', 'lines', 'constellation'])
+    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap'])
   })
 })
 
@@ -99,10 +120,11 @@ describe('switchView', () => {
 
 type Props = Record<string, unknown> & { children?: unknown }
 
-/** The buttons of a rendered ViewSwitch, from its element tree. */
+/** The buttons of a rendered ViewSwitch (in its rows), from its element tree. */
 function buttonsOf(element: ReactElement): Array<ReactElement<Props>> {
   const children = (element.props as Props).children
-  return (Array.isArray(children) ? children : [children]).filter((c): c is ReactElement<Props> => isValidElement(c))
+  const elements = (Array.isArray(children) ? children.flat() : [children]).filter((c): c is ReactElement<Props> => isValidElement(c))
+  return elements.flatMap((c) => (c.props['role'] === 'radio' ? [c] : buttonsOf(c)))
 }
 
 describe('the switcher', () => {
@@ -113,7 +135,7 @@ describe('the switcher', () => {
       expect((tree.props as Props)['role']).toBe('radiogroup')
       expect((tree.props as Props)['aria-label']).toBe('View')
       const buttons = buttonsOf(tree)
-      expect(buttons.map((b) => b.props.children)).toEqual(['garden', 'lines', 'constellation'])
+      expect(buttons.map((b) => b.props.children)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap'])
       expect(buttons.map((b) => b.props['aria-checked'])).toEqual(VIEWS.map((v) => v === value))
       for (const b of buttons) (b.props.onClick as () => void)()
       expect(onChange.mock.calls).toEqual(VIEWS.map((v) => [v]))
@@ -131,9 +153,17 @@ describe('the switcher', () => {
     const copy = personPanelSource.slice(personPanelSource.indexOf('export function ViewSwitch('), personPanelSource.indexOf('function PrivacyToggle('))
     expect(segmented.length).toBeGreaterThan(200)
     expect(copy.length).toBeGreaterThan(200)
+    // the group is the Segmented's field, stacked into rows (one per VIEW_ROWS row) and nothing else
+    const groupClass = (code: string) => /role="radiogroup"[^>]*?className="([^"]+)"/.exec(code)?.[1].split(' ') ?? []
+    const field = groupClass(segmented)
+    expect(field).toEqual(['flex', 'rounded-lg', 'bg-garden-field', 'p-0.5'])
+    const stacked = groupClass(copy)
+    for (const name of field) expect(stacked, name).toContain(name)
+    expect(stacked.filter((name) => !field.includes(name))).toEqual(['flex-col', 'gap-0.5'])
+    expect(copy).toContain('{VIEW_ROWS.map((row) => (')
+    expect(copy).toContain('className="flex">')
     for (const part of [
       'role="radiogroup"',
-      'className="flex rounded-lg bg-garden-field p-0.5"',
       'role="radio"',
       'aria-checked={active}',
       'className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${',
@@ -190,7 +220,17 @@ describe("each view's scene", () => {
         expect([...order].sort((a, b) => a - b), where).toEqual(items.map((_, i) => i))
         const keepOut = def.scene.keepOut(layout, g.view)
         expect(keepOut.length % 4, where).toBe(0)
-        expect(Array.from(keepOut.slice(0, 4)), where).toEqual([0, horizonY(g.view) - 1, g.view.width, g.view.height])
+        const boxes = Array.from({ length: keepOut.length / 4 }, (_, b) => Array.from(keepOut.slice(b * 4, b * 4 + 4)))
+        const ground = [0, horizonY(g.view) - 1, g.view.width, g.view.height]
+        // the ground first in a life view; a console view keeps a box over all of it (the git log's reaches up over its
+        // tags on the trunk), and its chrome (header, gutter, strip) clear too
+        if (LIFE_ONLY.includes(view)) expect(boxes[0], where).toEqual(ground)
+        else {
+          const covers = (box: number[]) => box[0] <= ground[0] && box[1] <= ground[1] && box[2] >= ground[2] && box[3] >= ground[3]
+          expect(boxes.some(covers), where).toBe(true)
+        }
+        const own = CONSOLE_PALETTES[view]
+        const colours = own ? paletteColours(own) : palette
         const geoms = def.scene.geoms(layout, g.camera, g.view)
         const out = new Float32Array(3)
         items.forEach((_, i) => {
@@ -202,8 +242,38 @@ describe("each view's scene", () => {
           expect(y).toBeGreaterThanOrEqual(0)
           expect(y).toBeLessThanOrEqual(horizonY(g.view) + 1)
           expect(r).toBeGreaterThanOrEqual(0)
-          expect(palette.has(def.scene.itemColour(layout, i, g.ink, g.colourOf)), `${where} colour`).toBe(true)
+          expect(colours.has(def.scene.itemColour(layout, i, g.ink, g.colourOf)), `${where} colour`).toBe(true)
         })
+      }
+    }
+  })
+
+  it("gives a console view its own ink, in its palette alone and the same in every theme, and the life views the theme's", () => {
+    for (const view of VIEWS) {
+      const def = LIFE_VIEWS[view]
+      const own = CONSOLE_PALETTES[view]
+      if (!own) {
+        expect(def.ink, view).toBeUndefined()
+        continue
+      }
+      expect(def.ink, view).toBeTypeOf('function')
+      const colours = paletteColours(own)
+      let first: string | null = null
+      for (const t of THEMES) {
+        const g = grow(kepano, KEPANO_NOW, t)
+        const ink = def.ink!(g.ink)
+        const { garden, dimAlpha, ...rest } = ink
+        // the garden's ink is the theme's (no console view draws with it); every colour the shared pieces read is the
+        // console's, and so is the dimming of the repos a selection leaves out
+        expect(garden, `${view} ${t.id}`).toBe(g.ink.garden)
+        expect(dimAlpha).toBeGreaterThan(0)
+        expect(dimAlpha).toBeLessThan(1)
+        for (const [name, value] of Object.entries(rest)) expect(colours.has(value), `${view} ${t.id} ${name}: ${value}`).toBe(true)
+        const shown = JSON.stringify({ ...rest, dimAlpha })
+        first ??= shown
+        expect(shown, `${view} ${t.id}`).toBe(first)
+        // applied twice (the host, then the paint), it is the same ink
+        expect(def.ink!(ink), `${view} ${t.id}`).toEqual(ink)
       }
     }
   })
@@ -228,13 +298,18 @@ describe("the views' drawing code", () => {
       '../src/profile/LifeViewCanvas.tsx',
       '../src/profile/lifeLines*.ts',
       '../src/profile/constellation*.ts',
+      // the console views: their colours are their palettes', under src/theme/console
+      '../src/profile/phosphor*.ts',
+      '../src/profile/htop*.ts',
+      '../src/profile/gitLog*.ts',
+      '../src/profile/minimap*.ts',
     ],
     { query: '?raw', import: 'default', eager: true },
   )
 
-  it('writes no colour of its own: every colour comes from the theme', () => {
+  it('writes no colour of its own: every colour comes from the theme, or a console view\'s palette under src/theme/console', () => {
     const files = Object.keys(sources)
-    expect(files.length).toBe(12)
+    expect(files.length).toBe(31)
     for (const [file, text] of Object.entries(sources)) {
       const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
       expect(code.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i), file).toBeNull()
