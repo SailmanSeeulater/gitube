@@ -1,4 +1,5 @@
 import type { Graph, RepoData } from '../types'
+import type { HealthItem } from '../graph/health'
 import { preload } from '../lazy/chunk'
 import { timelapseChunk } from '../lazy/parts'
 import { useGardenStore } from '../store/useGardenStore'
@@ -17,6 +18,8 @@ export interface StatusStripProps {
   onRefresh?: () => void
   /** opens the time-lapse (the strip gives way to its controls); omitted while there is no graph */
   onTimelapse?: () => void
+  /** the repo's health signals (graph/health.ts), worded; a second line under the counts when there are any */
+  health?: ReadonlyArray<HealthItem> | null
 }
 
 /** the time-lapse controls load as the pointer or focus reaches their button */
@@ -33,6 +36,7 @@ export default function StatusStrip({
   cachedAt = null,
   onRefresh,
   onTimelapse,
+  health = null,
 }: StatusStripProps) {
   const progress = useGardenStore((s) => s.progress)
   const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
@@ -153,6 +157,16 @@ export default function StatusStrip({
         <span className="text-garden-muted" title="GitHub API requests remaining this hour">
           {remaining} requests left
         </span>
+      )}
+      {health && health.length > 0 && (
+        <div className="flex w-full flex-wrap items-center gap-x-2 text-[11px] text-garden-muted">
+          {health.map((item, i) => (
+            <span key={item.text} className="flex items-center gap-x-2">
+              {i > 0 && <span className="text-garden-border">·</span>}
+              <span title={item.title}>{item.text}</span>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )

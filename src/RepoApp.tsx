@@ -4,6 +4,7 @@ import { parseSubject } from './api/parseSubject'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
 import { findWeeds, type WeedReport } from './graph/weeds'
+import { healthItems, repoHealth } from './graph/health'
 import { countPulls, prMarks } from './graph/pulls'
 import type { GardenTimelapse } from './components/Garden'
 import type { ContributorFocus, ContributorIndex } from './graph'
@@ -156,6 +157,11 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
   // merged branches to clear away, and thorny ones drifting far from the default branch
   const weeds = useMemo<WeedReport | null>(() => (data ? findWeeds(data) : null), [data])
+  // the status strip's health line: bus factor, branch lifetime, pull request hygiene
+  const health = useMemo(
+    () => (data && contributors && weeds ? healthItems(repoHealth(data, contributors, weeds, pulls.index)) : null),
+    [data, contributors, weeds, pulls.index],
+  )
 
   // ---- share links ----
   // A link to a person (?by=) opens the people tab once the repo is in: start on its code now, while
@@ -629,6 +635,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           cachedAt={cachedAt}
           onRefresh={refresh}
           onTimelapse={graph ? openTimelapse : undefined}
+          health={health}
         />
       )}
 
