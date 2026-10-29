@@ -4,6 +4,10 @@ Paste a GitHub repo and see how its branches fork and merge, drawn as an
 Obsidian-style node graph. Paste a GitHub login instead and see that person's
 whole coding life ([person mode](#person-mode)).
 
+[![Andrej Karpathy's coding life as a garden: one plant per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-garden.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=garden)
+
+<sub>Andrej Karpathy's fifteen years on GitHub as a [garden](https://repogarden.latesailor.dev/?user=karpathy&view=garden): each plant a repo, rooted where it began, a bloom for its stars. Repo mode, more people and every view in the [gallery](#gallery).</sub>
+
 - **Skeleton view** keeps branch tips, fork points, merge commits and roots, and
   collapses straight runs of commits into one edge with a `+N` badge.
 - **Full view** shows every fetched commit.
@@ -28,6 +32,58 @@ whole coding life ([person mode](#person-mode)).
   once a token is set). No clone, no server. Add a personal access token (key
   icon) for private repos, a much higher rate limit and, in person mode, the
   commits GitHub counted.
+
+## Gallery
+
+A well-known repo in repo mode, then well-known developers' public profiles in
+each of person mode's views. Click a picture to open it live. The profiles were
+captured without a token, so a repo's size is how long it was active rather
+than its commit count.
+
+<table>
+  <tr>
+    <td colspan="2">
+      <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-repo.jpg" alt="vuejs/core in repo mode: 83 branches forking off main as a node graph"></a>
+      <br><b>repo mode</b> · <code>vuejs/core</code>, skeleton view in the organic layout: 83 branches forking off <code>main</code>, mostly the core team's fix and vapor branches, with Renovate's dependency branches clustered by the tip. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="https://repogarden.latesailor.dev/?user=gaearon&view=lines"><img src="docs/screenshots/gaearon-lines.jpg" alt="Dan Abramov's repos as life lines, from react-hot-loader and redux experiments in 2015 to react and atproto"></a>
+      <br><b>lines</b> · Dan Abramov (<code>gaearon</code>): 300 repos as tube-map lines, thick while active. The 2015 burst of React tooling fans out at the left.
+    </td>
+    <td width="50%">
+      <a href="https://repogarden.latesailor.dev/?user=antirez&view=constellation"><img src="docs/screenshots/antirez-constellation.jpg" alt="Salvatore Sanfilippo's repos as a constellation, one row per language"></a>
+      <br><b>constellation</b> · Salvatore Sanfilippo (<code>antirez</code>): a row per language, C on top from linenoise and sds to kilo and redis, Ruby and Tcl below.
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="https://repogarden.latesailor.dev/?user=yyx990803&view=phosphor"><img src="docs/screenshots/yyx990803-phosphor.jpg" alt="Evan You's repos as stacks of green blocks on a phosphor screen"></a>
+      <br><b>phosphor</b> · Evan You (<code>yyx990803</code>): a green CRT, each repo a stack of blocks rising where it began, from HTML5 experiments to the Vue and Vite years.
+    </td>
+    <td>
+      <a href="https://repogarden.latesailor.dev/?user=sindresorhus&view=htop"><img src="docs/screenshots/sindresorhus-htop.jpg" alt="Sindre Sorhus's 500 oldest repos as rows of a system monitor"></a>
+      <br><b>htop</b> · Sindre Sorhus (<code>sindresorhus</code>): one meter per repo, lit where it was active; the oldest 500 of his small modules, row after row from 2011 on.
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="https://repogarden.latesailor.dev/?user=tj&view=gitlog"><img src="docs/screenshots/tj-gitlog.jpg" alt="TJ Holowaychuk's repos as git log --graph branches, Node modules then Go"></a>
+      <br><b>git log</b> · TJ Holowaychuk (<code>tj</code>): every repo a branch off the trunk; commander.js, n and the co family through 2014, then the go-* years.
+    </td>
+    <td>
+      <a href="https://repogarden.latesailor.dev/?user=kepano&view=minimap"><img src="docs/screenshots/kepano-minimap.jpg" alt="Steph Ango's repos as lines of code in an editor, with a minimap strip"></a>
+      <br><b>minimap</b> · Steph Ango (<code>kepano</code>): a code editor, one numbered line per repo, from the Minimal theme to Obsidian plugins and Defuddle.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <a href="https://repogarden.latesailor.dev/?user=torvalds&view=helix"><img src="docs/screenshots/torvalds-helix.jpg" alt="Linus Torvalds's repos wound into a coil, one turn per year"></a>
+      <br><b>helix</b> · Linus Torvalds (<code>torvalds</code>): the life wound into a coil, one turn per year with January at the top, so seasons line up across turns. linux runs the whole length; subsurface, libgit2 and the 2025 guitar pedals join along the way.
+    </td>
+  </tr>
+</table>
 
 ## Run it
 
@@ -93,7 +149,7 @@ shows "that's an organization" (a bot's, "that's a bot"), and its repos still
 grow as `owner/repo`. A user with no repos to show gets a note saying so,
 with "add a token" when a token would show more.
 
-Seven views, picked in the side panel (the life views on its first row, the
+Eight views, picked in the side panel (the life views on its first row, the
 console views on its second), paint the same life on one canvas and share the
 panel, the inspector (hover a repo or a day), the theme, the
 time-lapse and the poster:
