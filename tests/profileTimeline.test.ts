@@ -58,6 +58,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -1001,5 +1002,104 @@ describe('life timeline: purity', () => {
     // what the model may use: a Date from a time it is given, and Date's static parsers
     for (const fine of ['new Date(day * DAY_MS)', 'Date.UTC(2024, 0, 1)', 'Date.parse(date)']) expect(fine, fine).not.toMatch(impure)
     expect(source).not.toMatch(impure)
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests', () => {
+  const tool = () => repo('tool', { nameWithOwner: 'Up/tool', isOwn: false, createdAt: iso('2018-01-01'), firstActiveAt: iso('2020-05-10'), lastActiveAt: iso('2020-09-01') })
+
+  it('groups profile.landed by repo without case into the lane, ascending, one entry per pull request, none after today or without a lane', () => {
+    const p = profile({
+      repos: [repo('a', { activity: commitsOn({ '2020-03-01': 2 }) }), tool()],
+      landed: [
+        { day: '2020-09-01', repo: 'up/TOOL' },
+        { day: '2020-05-10', repo: 'Up/tool' },
+        { day: '2020-05-10', repo: 'Up/tool' },
+        { day: '2024-06-16', repo: 'Up/tool' },
+        { day: '2021-01-01', repo: 'nobody/here' },
+      ],
+    })
+    const tl = buildLifeTimeline(p, NOW)
+    expect(tl.lanes).toHaveLength(2)
+    expect(tl.lanes.find((lane) => lane.repo === 'Up/tool')!.landed).toEqual(['2020-05-10', '2020-05-10', '2020-09-01'])
+    expect(laneOf(tl, 'a').landed).toEqual([])
+    // every lane has the field, empty without a token
+    expect(buildLifeTimeline(profile({ source: 'rest', repos: [repo('a')] }), NOW).lanes[0].landed).toEqual([])
+  })
+
+  it('counts a landed day as an activity day: it ends a dormancy, keeps a span going, and is the last activity', () => {
+    const p = profile({
+      repos: [repo('a', { createdAt: iso('2020-03-01'), activity: commitsOn({ '2020-03-01': 2, '2020-03-10': 1 }) })],
+      landed: [
+        { day: '2020-09-10', repo: 'me/a' },
+        { day: '2020-08-15', repo: 'me/a' },
+      ],
+    })
+    const lane = laneOf(buildLifeTimeline(p, NOW), 'a')
+    expect(shape(lane)).toEqual([
+      ['active', '2020-03-01', '2020-03-10'],
+      ['dormant', '2020-03-11', '2020-08-14'],
+      ['active', '2020-08-15', '2020-09-10'],
+      ['dormant', '2020-09-11', TODAY],
+    ])
+    expect(lane.lastActive).toBe('2020-09-10')
+    // a landed day adds no commits and is not a counted day
+    expect(lane.commits).toBe(3)
+    expect(lane.activeDays).toBe(2)
+    expect(lane.spans[2]).toMatchObject({ commits: 0, activeDays: 0, days: 27 })
+    expect(lane.detailed).toBe(true)
+    expect(lane.landed).toEqual(['2020-08-15', '2020-09-10'])
+  })
+
+  it('gives a repo named only by landed pull requests its spans from them, rooted at the first, without counted commits', () => {
+    const p = profile({ repos: [tool()], landed: [{ day: '2020-09-01', repo: 'Up/tool' }, { day: '2020-05-10', repo: 'Up/tool' }] })
+    const lane = buildLifeTimeline(p, NOW).lanes[0]
+    expect(lane.root).toBe('2020-05-10')
+    expect(lane.born).toBe('2018-01-01')
+    expect(lane.start).toBe('2020-05-10')
+    expect(shape(lane)).toEqual([
+      ['active', '2020-05-10', '2020-05-10'],
+      ['dormant', '2020-05-11', '2020-08-31'],
+      ['active', '2020-09-01', '2020-09-01'],
+      ['dormant', '2020-09-02', TODAY],
+    ])
+    expect(lane.detailed).toBe(false)
+    expect(lane.commits).toBe(0)
+    expect(lane.lastActive).toBe('2020-09-01')
+    expect(lane.landed).toEqual(['2020-05-10', '2020-09-01'])
+    // with firstActiveAt unreadable, the first landed day roots a repo they only contributed to
+    const bare = { ...p.repos[0], firstActiveAt: 'unknown' }
+    expect(buildLifeTimeline({ ...p, repos: [bare] }, NOW).lanes[0].root).toBe('2020-05-10')
+    // a landed day before the root (a merge before their first counted commit) draws from there, as backdated commits do
+    const early = { ...p, landed: [...p.landed, { day: '2020-04-01', repo: 'Up/tool' }] }
+    const lane2 = buildLifeTimeline(early, NOW).lanes[0]
+    expect(lane2.root).toBe('2020-05-10')
+    expect(lane2.start).toBe('2020-04-01')
+    expect(lane2.spans[0]).toMatchObject({ kind: 'active', from: '2020-04-01', to: '2020-04-01' })
+  })
+
+  it('makes a quiet month with a landed pull request an active month of the clock', () => {
+    const base = profile({ repos: [repo('a', { createdAt: iso('2020-01-01'), activity: commitsOn({ '2020-01-01': 1 }) })] })
+    const quiet = buildLifeTimeline(base, NOW)
+    const busy = buildLifeTimeline({ ...base, landed: [{ day: '2022-07-15', repo: 'me/a' }] }, NOW)
+    const monthOf = (tl: LifeTimeline, month: string) => tl.clock.months.find((m) => m.month === month)!
+    expect(monthOf(quiet, '2022-07').active).toBe(false)
+    expect(monthOf(busy, '2022-07').active).toBe(true)
+    // the month gets a full share of the time-lapse instead of a quiet one
+    const share = (tl: LifeTimeline) => progressAt(tl.clock, '2022-08-01') - progressAt(tl.clock, '2022-07-01')
+    expect(share(busy)).toBeGreaterThan(share(quiet) * 5)
+  })
+
+  it('tells two private lanes alike in all else apart by their landed days, whatever order the repos came in', () => {
+    const twin = (name: string) => repo(name, { createdAt: iso('2020-02-02'), isPrivate: true })
+    const landed = [{ day: '2021-03-03', repo: 'me/b' }]
+    const forward = buildLifeTimeline(profile({ repos: [twin('a'), twin('b')], landed }), NOW)
+    const backward = buildLifeTimeline(profile({ repos: [twin('b'), twin('a')], landed }), NOW)
+    expect(forward.lanes.map((lane) => lane.repo)).toEqual(backward.lanes.map((lane) => lane.repo))
+    expect(forward.lanes.map((lane) => lane.landed)).toEqual(backward.lanes.map((lane) => lane.landed))
+    // the two are told apart (their spans and landed days differ as text), nothing of a name deciding
+    expect(forward.lanes.map((lane) => lane.landed.length).sort()).toEqual([0, 1])
   })
 })

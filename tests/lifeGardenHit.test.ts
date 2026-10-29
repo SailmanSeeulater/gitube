@@ -33,6 +33,7 @@ function makePlant(over: Partial<LifePlant> = {}): LifePlant {
     seedling: false,
     parts: [{ kind: 'active', t0: 0, t1: 1 }],
     leaves: [],
+    landed: [],
     language: null,
     startDay: START + 100,
     endDay: START + 399,
@@ -155,6 +156,7 @@ describe('life garden hit testing', () => {
       restrictedContributions: 0,
       truncated: false,
       lostWindows: [],
+      landed: [],
       fallback: null,
     }
     const layout = layoutLifeGarden(buildLifeTimeline(p, Date.parse('2024-06-15T19:00:00Z')), 'rest')

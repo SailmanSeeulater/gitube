@@ -47,6 +47,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -177,7 +178,7 @@ describe('day index: token profiles', () => {
     expect(dayDetail(index, day('2020-03-01')).repos).toEqual([{ repo: 'me/a', n: 2, unit: 'commits' }])
     expect(dayDetail(index, day('2020-03-05')).repos).toEqual([])
     const tomorrow = dayDetail(index, day('2024-06-16'))
-    expect(tomorrow).toEqual({ day: day('2024-06-16'), key: '2024-06-16', known: false, count: null, repos: [], milestones: [] })
+    expect(tomorrow).toEqual({ day: day('2024-06-16'), key: '2024-06-16', known: false, count: null, repos: [], landed: [], milestones: [] })
   })
 
   it('takes a calendar day listed twice at its larger count, and keeps a listed zero as known', () => {
@@ -236,6 +237,7 @@ describe('day index: profiles without a token', () => {
         { repo: 'me/Site', n: 3, unit: 'pushes' },
         { repo: 'other/lib', n: 1, unit: 'pushes' },
       ],
+      landed: [],
       milestones: [],
     })
     expect(dayDetail(index, day('2024-06-12')).repos).toEqual([{ repo: 'other/lib', n: 2, unit: 'pushes' }])
@@ -260,7 +262,7 @@ describe('day index: profiles without a token', () => {
 describe('day index: edge cases', () => {
   it('indexes a user with no repos and no events', () => {
     const index = indexOf(profile({ source: 'rest', recentFrom: '2024-05-16' }))
-    expect(dayDetail(index, day('2024-06-01'))).toEqual({ day: day('2024-06-01'), key: '2024-06-01', known: true, count: null, repos: [], milestones: [] })
+    expect(dayDetail(index, day('2024-06-01'))).toEqual({ day: day('2024-06-01'), key: '2024-06-01', known: true, count: null, repos: [], landed: [], milestones: [] })
   })
 
   it('indexes the milestones of a day', () => {
@@ -282,5 +284,63 @@ describe('day index: edge cases', () => {
     detail.milestones.push(7)
     expect(dayDetail(index, day('2020-01-01')).repos).toEqual([{ repo: 'me/a', n: 1, unit: 'commits' }])
     expect(dayDetail(index, day('2020-01-01')).milestones).toEqual(milestones)
+  })
+})
+
+describe('day index: landed pull requests', () => {
+  it('lists the pull requests landed each day by repo, the most first, then in lane order, as the lane spells the repo', () => {
+    const p = profile({
+      repos: [
+        repo('me/a', { activity: [{ date: '2024-03-01', commits: 1 }] }),
+        repo('Up/tool', { isOwn: false, createdAt: iso('2018-01-01'), firstActiveAt: iso('2024-02-01'), lastActiveAt: iso('2024-03-01') }),
+        repo('Other/lib', { isOwn: false, createdAt: iso('2019-01-01'), firstActiveAt: iso('2024-02-01'), lastActiveAt: iso('2024-02-01') }),
+      ],
+      days: [{ date: '2024-03-01', count: 1 }],
+      landed: [
+        { day: '2024-02-01', repo: 'up/tool' },
+        { day: '2024-02-01', repo: 'Other/lib' },
+        { day: '2024-02-01', repo: 'UP/tool' },
+        { day: '2024-03-01', repo: 'Up/tool' },
+        // after today, and a repo with no lane: dropped
+        { day: '2024-06-16', repo: 'Up/tool' },
+        { day: '2024-02-01', repo: 'Nobody/here' },
+      ],
+    })
+    const index = indexOf(p)
+    const first = dayDetail(index, day('2024-02-01'))
+    expect(first.landed).toEqual([
+      { repo: 'Up/tool', n: 2 },
+      { repo: 'Other/lib', n: 1 },
+    ])
+    // a day with a landed pull request and nothing else is known, even without a calendar entry
+    expect(first.known).toBe(true)
+    expect(first.count).toBeNull()
+    expect(first.repos).toEqual([])
+    const second = dayDetail(index, day('2024-03-01'))
+    expect(second.landed).toEqual([{ repo: 'Up/tool', n: 1 }])
+    expect(second.repos).toEqual([{ repo: 'me/a', n: 1, unit: 'commits' }])
+    expect(dayDetail(index, day('2024-06-16')).landed).toEqual([])
+    expect(dayDetail(index, day('2024-02-02')).landed).toEqual([])
+    // each repo's landed entries over every day sum to its lane's
+    const tl = buildLifeTimeline(p, NOW)
+    let total = 0
+    for (const rows of index.landed.values()) for (const row of rows) total += row.n
+    expect(total).toBe(tl.lanes.reduce((sum, lane) => sum + lane.landed.length, 0))
+    expect(total).toBe(4)
+  })
+
+  it('reads kepano\'s landed pull requests from the recording: a day lists them, and they add up to the lanes', async () => {
+    const now = Date.parse(KEPANO.now)
+    const kepano = await fetchProfileGraphql('kepano', { token: 'ghp_TEST_TOKEN_not_a_real_one_0000', fetch: replay, now })
+    const tl = buildLifeTimeline(kepano, now)
+    const index = buildDayIndex(kepano, tl)
+    let total = 0
+    for (const rows of index.landed.values()) for (const row of rows) total += row.n
+    expect(total).toBe(kepano.landed.length)
+    expect(total).toBe(tl.lanes.reduce((sum, lane) => sum + lane.landed.length, 0))
+    expect(total).toBe(193)
+    const detail = dayDetail(index, dayNumber('2020-11-14'))
+    expect(detail.landed).toEqual([{ repo: 'obsidianmd/obsidian-releases', n: 3 }])
+    expect(detail.known).toBe(true)
   })
 })

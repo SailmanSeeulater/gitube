@@ -2,8 +2,9 @@
  * Canvas drawing for the minimap view (a console view: a code editor's chrome, after VS Code's
  * Dark+). The shared time axis under a dark editor; a faint guide at each new year, like an indent
  * guide; the hovered row's current-line band and the selected row's selection band; every repo as a
- * line of code, its active spans rounded syntax tokens in its language's tone and its dormant spans
- * whitespace dots (while the rows are tall enough to show them); the milestones and the hovered
+ * line of code, its active spans rounded syntax tokens in its language's tone, its dormant spans
+ * whitespace dots (while the rows are tall enough to show them) and a square in the accent, a
+ * little taller than its tokens, on each day a pull request of theirs landed in it; the milestones and the hovered
  * day's guide; then the chrome over it all, in screen px whatever the camera: the gutter's line
  * numbers, the tab bar ("life.garden"), and the minimap strip at the right edge with a box over the
  * stretch of time on screen. The labels go on top (useLifeLabels) and are the only repo names on the
@@ -58,6 +59,9 @@ const DOT_PX = 1.5
 const TOKEN_RADIUS_PX = 3
 /** A current-line band is at least this tall. */
 const MIN_BAND_PX = 2
+/** A landed pull request's square: this much taller than a token, and at least this wide. */
+const LANDED_PAD_PX = 1
+export const LANDED_MIN_PX = 3
 /** The selected row's edge in the gutter. */
 const SELECT_EDGE_PX = 2
 /** Things this far off screen are skipped. */
@@ -111,7 +115,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-/** A row: its whitespace dots, then its tokens, up to `to`, between the gutter and the strip. */
+/** A row: its whitespace dots, then its tokens, then its landed squares, up to `to`, between the gutter and the strip. */
 function drawRow(ctx: CanvasRenderingContext2D, row: MinimapRow, y: number, to: number, g: MinimapGeom): void {
   const { k, tx } = g.camera
   const left = g.gutterW - CULL_PX
@@ -152,15 +156,32 @@ function drawRow(ctx: CanvasRenderingContext2D, row: MinimapRow, y: number, to: 
     roundRect(ctx, x0, y - h / 2, x1 - x0, h, TOKEN_RADIUS_PX)
     any = true
   }
-  if (!any) return
-  const colour = rowColour(row)
-  if (row.seedling && h >= 3) {
-    ctx.strokeStyle = colour
-    ctx.lineWidth = 1
-    ctx.stroke()
-  } else {
-    ctx.fillStyle = colour
-    ctx.fill()
+  if (any) {
+    const colour = rowColour(row)
+    if (row.seedling && h >= 3) {
+      ctx.strokeStyle = colour
+      ctx.lineWidth = 1
+      ctx.stroke()
+    } else {
+      ctx.fillStyle = colour
+      ctx.fill()
+    }
+  }
+
+  // a landed pull request: a square in the accent on its day, once reached
+  if (row.landed.length > 0) {
+    const side = Math.max(LANDED_MIN_PX, h + 2 * LANDED_PAD_PX)
+    ctx.fillStyle = P.accent
+    ctx.beginPath()
+    let landed = false
+    for (const lx of row.landed) {
+      if (Math.floor(lx) > to) break
+      const cx = sx(lx)
+      if (cx + side / 2 < left || cx - side / 2 > right) continue
+      ctx.rect(cx - side / 2, y - side / 2, side, side)
+      landed = true
+    }
+    if (landed) ctx.fill()
   }
 }
 

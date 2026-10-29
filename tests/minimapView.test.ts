@@ -28,6 +28,10 @@ import type { ProfileData, ProfileRepo } from '../src/types'
 import { prolific } from './helpers/lifeLinesScale'
 import { recordingCtx } from './helpers/recordingCtx'
 import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, kepanoProfile } from './helpers/personScene'
+import { LANDED_MIN_PX as MINIMAP_LANDED_MIN_PX } from '../src/profile/minimapPaint'
+import { MINIMAP_PALETTE as M_PALETTE } from '../src/theme/console/minimap'
+import { rowY as mRowY } from '../src/profile/minimapLayout'
+import { dayNumber } from '../src/profile/timeline'
 
 const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
 const NONE: ReadonlySet<string> = new Set()
@@ -73,6 +77,7 @@ function profile(repos: ProfileRepo[], over: Partial<ProfileData> = {}): Profile
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -497,5 +502,46 @@ describe('minimap labels and the view', () => {
       expect(code.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i), file).toBeNull()
       expect(code, file).not.toMatch(/RepoNamer|repoNamer|nameWithOwner/)
     }
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests on the minimap', () => {
+  const landedProfile = () =>
+    profile([...small().repos, repo('tool', { nameWithOwner: 'up/tool', isOwn: false, createdAt: iso('2018-01-01'), firstActiveAt: iso('2021-06-01'), lastActiveAt: iso('2022-02-01') })], {
+      landed: [
+        { day: '2022-02-01', repo: 'up/tool' },
+        { day: '2021-06-01', repo: 'UP/tool' },
+      ],
+    })
+
+  /** The accent squares on row i: rects in the accent centred on the row, as wide as tall. */
+  function squaresOn(rec: ReturnType<typeof recordingCtx>, input: MinimapPaintInput, i: number): number[] {
+    const y = mRowY(input.geoms, i)
+    return rec
+      .calls('rect')
+      .filter((c) => c.style.fillStyle === M_PALETTE.accent && c.args[2] === c.args[3] && (c.args[2] as number) >= MINIMAP_LANDED_MIN_PX && Math.abs((c.args[1] as number) + (c.args[3] as number) / 2 - y) < 1e-6)
+      .map((c) => (c.args[0] as number) + (c.args[2] as number) / 2)
+  }
+
+  it('draws an accent square on each landed day of a row once reached, never on a hidden row', () => {
+    const b = build(landedProfile(), NOW)
+    const i = b.layout.byKey.get('up/tool')!
+    const row = b.layout.rows[i]
+    expect(row.landed).toEqual([dayNumber('2021-06-01') - b.layout.startDay + 0.5, dayNumber('2022-02-01') - b.layout.startDay + 0.5])
+    expect(row.seedling).toBe(true)
+    const sx = (x: number) => b.camera.tx + x * b.camera.k
+    const full = painted(b)
+    expect(squaresOn(full.rec, full.input, i).map((x) => Math.round(x * 1e6) / 1e6)).toEqual(row.landed.map(sx).map((x) => Math.round(x * 1e6) / 1e6))
+    for (let k = 0; k < b.layout.rows.length; k++) if (k !== i) expect(squaresOn(full.rec, full.input, k)).toEqual([])
+    const before = painted(b, { at: row.startDay - 1 })
+    expect(squaresOn(before.rec, before.input, i)).toEqual([])
+    const between = painted(b, { at: dayNumber('2021-12-01') })
+    expect(squaresOn(between.rec, between.input, i)).toHaveLength(1)
+    const onDay = painted(b, { at: dayNumber('2022-02-01') })
+    expect(squaresOn(onDay.rec, onDay.input, i)).toHaveLength(2)
+    const hidden = painted(b, { hidden: new Set(['up/tool']) })
+    expect(squaresOn(hidden.rec, hidden.input, i)).toEqual([])
   })
 })

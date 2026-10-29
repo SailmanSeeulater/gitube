@@ -2,7 +2,8 @@
  * Canvas drawing for the phosphor view: a green-phosphor CRT. The shared time axis (lifeAxis.ts)
  * in phosphor green, every repo as a stack of blocks rising from the ground at its root day (the
  * blocks brightening toward the top, dimmer through dormant stretches, a brighter head block on
- * top, bigger for starred repos, an archived repo dim), the milestones, the hover and the selection
+ * top, bigger for starred repos, an archived repo dim, and a bright diamond over the block at the
+ * height of each day a pull request of theirs landed in it), the milestones, the hover and the selection
  * as frames, then scanlines and a soft vignette over the whole screen. The labels go on top
  * (useLifeLabels), placed by phosphorAnchor, phosphorLabelOrder and phosphorKeepOut.
  *
@@ -37,6 +38,8 @@ const HALO_ALPHA = 0.35
 const HALO_MIN = 0.25
 /** The hover's and the selection's frames, this far round a stack. */
 const FRAME_GAP = 3
+/** A landed pull request's diamond: this far from its centre to each corner, over its block. */
+export const LANDED_PX = BLOCK_PX / 2 + 1
 /** Scanlines: one SCAN_PX line every SCAN_EVERY px at SCAN_ALPHA. */
 const SCAN_EVERY = 3
 const SCAN_PX = 1
@@ -53,6 +56,16 @@ export function phosphorColour(stack: Pick<PhosphorStack, 'dry'>): string {
   return stack.dry ? PHOSPHOR.dim : PHOSPHOR.phosphor
 }
 
+/**
+ * Screen y of the centre of the block a landed mark sits over: the body block at stack time t
+ * among the `grown` risen so far, or the head block while none has.
+ */
+export function landedCentreY(g: PhosphorGeom, i: number, grown: number, t: number): number {
+  if (grown <= 0) return headTop(g, i, 0) + g.head[i] / 2
+  const k = Math.min(grown - 1, Math.max(0, Math.floor(t * g.blocks[i])))
+  return g.base - (k + 1) * PITCH_PX + GAP_PX + BLOCK_PX / 2
+}
+
 /** Whether a block at stack time t (0 ground .. 1 head) falls in a dormant stretch. */
 function dormantAt(stack: PhosphorStack, t: number): boolean {
   for (const part of stack.parts) if (t >= part.t0 && t < part.t1) return part.kind === 'dormant'
@@ -60,7 +73,7 @@ function dormantAt(stack: PhosphorStack, t: number): boolean {
 }
 
 /** One stack: its body blocks, brightening toward the top, then its head. */
-function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: PhosphorGeom, i: number, grown: number, alpha: number): void {
+function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: PhosphorGeom, i: number, grown: number, alpha: number, at: number | null): void {
   const x = g.x[i]
   const n = g.blocks[i]
   const bx = Math.round(x - BLOCK_PX / 2)
@@ -81,6 +94,22 @@ function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: Phosp
       ctx.globalAlpha = alpha * (BODY_LOW + ((BODY_HIGH - BODY_LOW) * (level + 1)) / BODY_LEVELS) * (dormant ? DORMANT : 1)
       ctx.fill()
     }
+  }
+
+  // a landed pull request: a bright diamond over the block at its day's height, once reached (over
+  // the head block while no body block has risen yet)
+  ctx.globalAlpha = alpha
+  ctx.fillStyle = PHOSPHOR.bright
+  for (const l of stack.landed) {
+    if (at !== null && l.day > at) continue
+    const cy = landedCentreY(g, i, grown, l.t)
+    ctx.beginPath()
+    ctx.moveTo(x, cy - LANDED_PX)
+    ctx.lineTo(x + LANDED_PX, cy)
+    ctx.lineTo(x, cy + LANDED_PX)
+    ctx.lineTo(x - LANDED_PX, cy)
+    ctx.closePath()
+    ctx.fill()
   }
 
   // the head: a halo for a starred repo, then the block, hollow for a repo they only contributed to
@@ -151,7 +180,7 @@ export function paintPhosphor(ctx: CanvasRenderingContext2D, input: PhosphorPain
     const reach = g.head[i] / 2 + HALO_PX + 1
     if (g.x[i] + reach < 0 || g.x[i] - reach > W) continue
     const alpha = (sel >= 0 && sel !== i ? UNSELECTED : 1) * (stack.dry ? DRY : 1) * (stack.seedling ? SEEDLING : 1)
-    drawStack(ctx, stack, g, i, blocksAt(stack, g.blocks[i], at), alpha)
+    drawStack(ctx, stack, g, i, blocksAt(stack, g.blocks[i], at), alpha, at)
   }
   ctx.globalAlpha = 1
 

@@ -38,6 +38,7 @@ function makeStar(over: Partial<LifeStar> = {}): LifeStar {
     seedling: false,
     language: null,
     endDay: START + 399,
+    landed: [],
     stars: 0,
     growthDays: [START + 100, START + 400],
     growthShares: [0, 1],

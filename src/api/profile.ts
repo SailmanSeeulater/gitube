@@ -291,6 +291,7 @@ async function restProfile(session: ProfileSession, user: ProfileIdentity): Prom
     days: [],
     recent,
     recentFrom,
+    landed: [],
     milestones: [{ kind: 'joined', date: user.createdAt, label: 'Joined GitHub' }],
     restrictedContributions: 0,
     truncated,

@@ -61,12 +61,17 @@ export const REPOS_QUERY =
 
 /**
  * What one window reads. The first* fields are unions: a contribution GitHub may show in full, or a
- * RestrictedContribution (a private repo the viewer cannot see) with its date alone.
+ * RestrictedContribution (a private repo the viewer cannot see) with its date alone. The pull
+ * request contributions are one node per pull request, in the window it was opened in; merged ones
+ * into repos the user does not own become ProfileData.landed, on the day they were merged (which
+ * can fall in a later window).
  */
 const WINDOW_FIELDS =
   'contributionCalendar { weeks { contributionDays { date contributionCount } } } ' +
   `commitContributionsByRepository(maxRepositories: ${PAGE}) { repository { ...RepoFields } ` +
   `contributions(first: ${PAGE}) { nodes { occurredAt commitCount } pageInfo { hasNextPage } } } ` +
+  `pullRequestContributionsByRepository(maxRepositories: ${PAGE}) { repository { ...RepoFields } ` +
+  `contributions(first: ${PAGE}) { nodes { occurredAt pullRequest { merged mergedAt } } pageInfo { hasNextPage } } } ` +
   'firstPullRequestContribution { ... on CreatedPullRequestContribution { occurredAt pullRequest { repository { nameWithOwner isPrivate } } } ' +
   '... on RestrictedContribution { occurredAt } } ' +
   'firstIssueContribution { ... on CreatedIssueContribution { occurredAt issue { repository { nameWithOwner isPrivate } } } ' +
@@ -172,6 +177,13 @@ interface GqlCollection {
     repository?: GqlRepo | null
     contributions?: {
       nodes?: Array<{ occurredAt?: string | null; commitCount?: number | null } | null> | null
+      pageInfo?: { hasNextPage?: boolean | null } | null
+    } | null
+  } | null> | null
+  pullRequestContributionsByRepository?: Array<{
+    repository?: GqlRepo | null
+    contributions?: {
+      nodes?: Array<{ occurredAt?: string | null; pullRequest?: { merged?: boolean | null; mergedAt?: string | null } | null } | null> | null
       pageInfo?: { hasNextPage?: boolean | null } | null
     } | null
   } | null> | null
@@ -468,19 +480,35 @@ export async function graphqlProfile(session: ProfileSession, user: ProfileIdent
   }
 
   const profile = mergeProfile(user, listing, answered, lost, session.now)
-  session.emit('done', 1, 1, `Done: ${profile.repos.length} repos, ${profile.days.length} days, ${session.state.requestsUsed} requests`)
+  session.emit('done', 1, 1, `Done: ${profile.repos.length} repos, ${profile.days.length} days, ${profile.landed.length} PRs landed, ${session.state.requestsUsed} requests`)
   return profile
 }
 
 // ---------- merging ----------
 
-/** One repo's counted commits across the windows. */
+/** One repo's counted commits and landed pull requests across the windows. */
 interface Counted {
   repo: GqlRepo
   byDay: Map<string, number>
   /** ISO: the earliest and latest occurredAt counted (midnight Pacific of those days) */
   firstAt: string | null
   lastAt: string | null
+  /** ISO: the earliest and latest mergedAt of a pull request landed in it (never in an own repo) */
+  firstLanded: string | null
+  lastLanded: string | null
+}
+
+/** The earlier (or later) of two ISO instants, a null never winning. */
+function earlierIso(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return Date.parse(b) < Date.parse(a) ? b : a
+}
+
+function laterIso(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return Date.parse(b) > Date.parse(a) ? b : a
 }
 
 /** The earlier of two first*Contributions; a null or undated one never wins. */
@@ -499,13 +527,16 @@ function byDate(a: { date: string }, b: { date: string }): number {
 function profileRepo(raw: GqlRepo, counted: Counted | null, isOwn: boolean): ProfileRepo {
   const createdAt = raw.createdAt
   const activity = counted ? [...counted.byDay].map(([date, commits]) => ({ date, commits })).sort(byDate) : []
-  // An own repo starts at its birth; one they only contributed to where they arrived.
-  const firstActiveAt = isOwn || !counted?.firstAt ? createdAt : counted.firstAt
+  // An own repo starts at its birth; one they only contributed to where they arrived: their first
+  // counted commit or landed pull request, whichever came first.
+  const arrived = counted ? earlierIso(counted.firstAt, counted.firstLanded) : null
+  const firstActiveAt = isOwn || arrived === null ? createdAt : arrived
   // An own repo runs to its last push (a fork's can predate its creation) or counted day, whichever
-  // is later. A repo they only contributed to runs to their last counted day: its pushes are other
-  // people's and say nothing of this person's part in it.
+  // is later. A repo they only contributed to runs to their last counted or landed day: its pushes
+  // are other people's and say nothing of this person's part in it.
   let lastActiveAt = isOwn ? laterOf(createdAt, raw.pushedAt ?? createdAt) : firstActiveAt
-  if (counted?.lastAt) lastActiveAt = laterOf(lastActiveAt, counted.lastAt)
+  const left = counted ? laterIso(counted.lastAt, counted.lastLanded) : null
+  if (left !== null) lastActiveAt = laterOf(lastActiveAt, left)
   return {
     nameWithOwner: raw.nameWithOwner,
     createdAt,
@@ -525,8 +556,10 @@ function profileRepo(raw: GqlRepo, counted: Counted | null, isOwn: boolean): Pro
 
 /**
  * The windows that came back as one profile: the calendar's days (never after today's Pacific
- * day), commits per repo per Pacific day, the own repos merged with the ones only contributed to,
- * restricted contributions summed, and the milestones GitHub states.
+ * day), commits per repo per Pacific day, the pull requests landed in other people's repos by the
+ * Pacific day they were merged, the own repos merged with the ones only contributed to (commits
+ * counted or pull requests landed), restricted contributions summed, and the milestones GitHub
+ * states.
  */
 function mergeProfile(
   user: ProfileIdentity,
@@ -539,6 +572,15 @@ function mergeProfile(
   let truncated = listing.truncated || lost.length > 0
   const days = new Map<string, number>()
   const counted = new Map<string, Counted>()
+  const seenOf = (key: string, repo: GqlRepo): Counted => {
+    let seen = counted.get(key)
+    if (!seen) counted.set(key, (seen = { repo, byDay: new Map(), firstAt: null, lastAt: null, firstLanded: null, lastLanded: null }))
+    // the latest window's copy lends the fields (stars, pushedAt)
+    seen.repo = repo
+    return seen
+  }
+  const landed: ProfileData['landed'] = []
+  const owner = `${user.login.toLowerCase()}/`
   let restricted = 0
   let joined: GqlFirst | null = null
   let firstPr: GqlFirst | null = null
@@ -561,19 +603,42 @@ function mergeProfile(
       const repo = entry?.repository
       if (!entry || !repo?.nameWithOwner) continue
       if (entry.contributions?.pageInfo?.hasNextPage) truncated = true
-      const key = repo.nameWithOwner.toLowerCase()
-      const seen = counted.get(key) ?? { repo, byDay: new Map<string, number>(), firstAt: null, lastAt: null }
-      seen.repo = repo
-      for (const node of entry.contributions?.nodes ?? []) {
+      const nodes = (entry.contributions?.nodes ?? []).flatMap((node) => {
         const at = node?.occurredAt ?? ''
+        return Number.isFinite(Date.parse(at)) ? [{ at, commitCount: node?.commitCount ?? 0 }] : []
+      })
+      if (nodes.length === 0) continue
+      const seen = seenOf(repo.nameWithOwner.toLowerCase(), repo)
+      for (const { at, commitCount } of nodes) {
         const t = Date.parse(at)
-        if (!node || !Number.isFinite(t)) continue
         const date = pacificDay(t)
-        seen.byDay.set(date, (seen.byDay.get(date) ?? 0) + (node.commitCount ?? 0))
+        seen.byDay.set(date, (seen.byDay.get(date) ?? 0) + commitCount)
         if (seen.firstAt === null || t < Date.parse(seen.firstAt)) seen.firstAt = at
         if (seen.lastAt === null || t > Date.parse(seen.lastAt)) seen.lastAt = at
       }
-      if (seen.firstAt !== null) counted.set(key, seen)
+    }
+
+    // Pull requests merged into repos they do not own, by the day of the merge. The owner is read
+    // off nameWithOwner, so a private repo stays (the views hide its name as any other's).
+    const prsByRepo = collection.pullRequestContributionsByRepository ?? []
+    if (prsByRepo.length >= PAGE) truncated = true
+    for (const entry of prsByRepo) {
+      const repo = entry?.repository
+      if (!entry || !repo?.nameWithOwner) continue
+      if (entry.contributions?.pageInfo?.hasNextPage) truncated = true
+      const key = repo.nameWithOwner.toLowerCase()
+      if (key.startsWith(owner)) continue
+      for (const node of entry.contributions?.nodes ?? []) {
+        const pr = node?.pullRequest
+        const t = Date.parse(pr?.mergedAt ?? '')
+        if (!pr?.merged || !Number.isFinite(t)) continue
+        const day = pacificDay(t)
+        if (day > today) continue
+        const seen = seenOf(key, repo)
+        seen.firstLanded = earlierIso(seen.firstLanded, pr.mergedAt!)
+        seen.lastLanded = laterIso(seen.lastLanded, pr.mergedAt!)
+        landed.push({ day, repo: repo.nameWithOwner })
+      }
     }
 
     restricted += collection.restrictedContributionsCount ?? 0
@@ -592,9 +657,8 @@ function mergeProfile(
     listed.add(key)
     repos.push(profileRepo(raw, counted.get(key) ?? null, true))
   }
-  // A repo only the windows name is one they contributed to; or their own beyond the 500-repo cap,
-  // which the owner in its name tells.
-  const owner = `${user.login.toLowerCase()}/`
+  // A repo only the windows name is one they contributed to (commits counted or pull requests
+  // landed); or their own beyond the 500-repo cap, which the owner in its name tells.
   for (const [key, seen] of counted) {
     if (listed.has(key)) continue
     repos.push(profileRepo(seen.repo, seen, key.startsWith(owner)))
@@ -626,6 +690,7 @@ function mergeProfile(
     days: [...days].map(([date, count]) => ({ date, count })).sort(byDate),
     recent: [],
     recentFrom: null,
+    landed: landed.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0)),
     milestones,
     restrictedContributions: restricted,
     truncated,

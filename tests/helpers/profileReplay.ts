@@ -43,6 +43,10 @@ export interface RawWindowUser {
       repository: { nameWithOwner: string; createdAt: string; pushedAt: string | null; primaryLanguage: { name: string; color: string } | null }
       contributions: { nodes: Array<{ occurredAt: string; commitCount: number }>; pageInfo: { hasNextPage: boolean } }
     }>
+    pullRequestContributionsByRepository: Array<{
+      repository: { nameWithOwner: string; isPrivate: boolean }
+      contributions: { nodes: Array<{ occurredAt: string; pullRequest: { merged: boolean; mergedAt: string | null } }>; pageInfo: { hasNextPage: boolean } }
+    }>
     restrictedContributionsCount: number
   }
 }

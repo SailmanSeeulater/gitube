@@ -52,6 +52,7 @@ function makeLine(over: Partial<LifeLine> = {}): LifeLine {
     weight: 1,
     stars: 0,
     parts: [{ kind: 'active', x0, x1, weight: 1 }],
+    landed: [],
     ...over,
   }
 }
@@ -251,6 +252,7 @@ describe('hitLifeLines', () => {
       restrictedContributions: 0,
       truncated: false,
       lostWindows: [],
+      landed: [],
       fallback: null,
     }
     const timeline = buildLifeTimeline(profile, now)

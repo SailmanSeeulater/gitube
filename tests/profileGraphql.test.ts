@@ -7,7 +7,10 @@
  * and bounds a request asks for, so a test may ask for any split of the recorded windows. Each recorded entry also holds a hash of
  * its query's selection (selectionHash: the query text with the window aliases folded away), and
  * the replay answers HTTP 400 to a request whose selection differs: a change to the queries' fields
- * fails these tests until the fixtures are recorded again with it.
+ * fails these tests until the fixtures are recorded again with it. The window field
+ * pullRequestContributionsByRepository (the "landed elsewhere" feature) was recorded live on
+ * 2026-10-28 into both files, on the recorded aliases and bounds, and spliced into the window
+ * bodies with every other field kept as first recorded (see each file's _note).
  *
  * Synthesised inline, each where it is used: a window whose alias comes back null with an error,
  * or whose data comes back with an error on its path (built from kepano's recorded batches), what
@@ -124,6 +127,8 @@ function repoNode(nameWithOwner: string, overrides: Record<string, unknown> = {}
 interface WindowPlan {
   days?: Array<[string, number]>
   repos?: Array<{ repo: ReturnType<typeof repoNode>; nodes: Array<[string, number]>; hasNextPage?: boolean }>
+  /** pull requests by repo: each node [occurredAt, mergedAt], mergedAt null for one not merged */
+  prs?: Array<{ repo: ReturnType<typeof repoNode>; nodes: Array<[string, string | null]>; hasNextPage?: boolean }>
   firstPullRequestContribution?: unknown
   firstIssueContribution?: unknown
   firstRepositoryContribution?: unknown
@@ -139,6 +144,13 @@ function windowUser(plan: WindowPlan = {}) {
       commitContributionsByRepository: (plan.repos ?? []).map((r) => ({
         repository: r.repo,
         contributions: { nodes: r.nodes.map(([occurredAt, commitCount]) => ({ occurredAt, commitCount })), pageInfo: { hasNextPage: r.hasNextPage ?? false } },
+      })),
+      pullRequestContributionsByRepository: (plan.prs ?? []).map((r) => ({
+        repository: r.repo,
+        contributions: {
+          nodes: r.nodes.map(([occurredAt, mergedAt]) => ({ occurredAt, pullRequest: { merged: mergedAt !== null, mergedAt } })),
+          pageInfo: { hasNextPage: r.hasNextPage ?? false },
+        },
       })),
       firstPullRequestContribution: plan.firstPullRequestContribution ?? null,
       firstIssueContribution: plan.firstIssueContribution ?? null,
@@ -255,6 +267,10 @@ describe('buildWindowQuery', () => {
     for (const q of [REPOS_QUERY, query]) expect(repoFields(q)).toEqual(expect.arrayContaining(['nameWithOwner', 'isPrivate']))
     expect(REPOS_QUERY).toContain('nodes { ...RepoFields }')
     expect(query).toContain('commitContributionsByRepository(maxRepositories: 100) { repository { ...RepoFields }')
+    // the landed pull requests: the field names checked against the live schema on 2026-10-28
+    expect(query).toContain(
+      'pullRequestContributionsByRepository(maxRepositories: 100) { repository { ...RepoFields } contributions(first: 100) { nodes { occurredAt pullRequest { merged mergedAt } } pageInfo { hasNextPage } } }',
+    )
 
     // Each first* union's created kind selects its repository's name and privacy: without both, a
     // milestone names no repo.
@@ -390,13 +406,14 @@ describe('fetchProfileGraphql on the recorded fixtures', () => {
     expect(restricted).toBe(10316)
     expect(profile.restrictedContributions).toBe(restricted)
 
-    // Repos: the 39 own repos of the listing, and the 19 only contributed to, by first active day.
+    // Repos: the 39 own repos of the listing, and the 21 only contributed to (19 with counted
+    // commits, 2 only through landed pull requests), by first active day.
     const listing = (KEPANO.graphql[0].body.data.user as { repositories: { nodes: Array<{ nameWithOwner: string }> } }).repositories.nodes
-    expect(profile.repos).toHaveLength(58)
+    expect(profile.repos).toHaveLength(60)
     const own = profile.repos.filter((r) => r.isOwn)
     expect(new Set(own.map((r) => r.nameWithOwner))).toEqual(new Set(listing.map((r) => r.nameWithOwner)))
     for (const repo of own) expect(repo.firstActiveAt).toBe(repo.createdAt)
-    expect(profile.repos.filter((r) => !r.isOwn)).toHaveLength(19)
+    expect(profile.repos.filter((r) => !r.isOwn)).toHaveLength(21)
     for (let i = 1; i < profile.repos.length; i++) {
       expect(Date.parse(profile.repos[i - 1].firstActiveAt)).toBeLessThanOrEqual(Date.parse(profile.repos[i].firstActiveAt))
     }
@@ -416,11 +433,35 @@ describe('fetchProfileGraphql on the recorded fixtures', () => {
       isFork: false,
       isArchived: false,
     })
-    // A repo they only contributed to roots at their first counted day and ends at their last one,
-    // not at its own birth or its latest push (other people's).
+    // A repo they only contributed to roots at their first counted or landed day and ends at their
+    // last one, not at its own birth or its latest push (other people's): releases got a pull
+    // request merged on 2020-11-14, a week before the first counted commit (2020-11-22), and its
+    // last merge (2024-01-27 20:52 UTC) is later in the day than its last counted commit.
     const releases = profile.repos.find((r) => r.nameWithOwner === 'obsidianmd/obsidian-releases')!
-    expect(releases).toMatchObject({ isOwn: false, firstActiveAt: '2020-11-22T08:00:00Z', lastActiveAt: '2024-01-27T08:00:00Z' })
+    expect(releases).toMatchObject({ isOwn: false, firstActiveAt: '2020-11-14T21:23:11Z', lastActiveAt: '2024-01-27T20:52:59Z' })
+    expect(releases.activity[0].date).toBe('2020-11-22')
     expect(Date.parse(releases.createdAt)).toBeLessThan(Date.parse(releases.firstActiveAt))
+
+    // Landed: his pull requests merged into repos not under his name, one entry each, by the Pacific
+    // day of the merge, sorted by day then repo; the 67 into his own repos and the 14 not merged are
+    // left out. Two repos are named only by landed pull requests and get a contributed repo of
+    // their own, with no counted commits, from their first to their last merge.
+    expect(profile.landed).toHaveLength(193)
+    expect(new Set(profile.landed.map((l) => l.repo)).size).toBe(18)
+    expect(profile.landed.some((l) => /^kepano\//i.test(l.repo))).toBe(false)
+    expect(profile.landed[0]).toEqual({ day: '2020-11-14', repo: 'obsidianmd/obsidian-releases' })
+    expect(profile.landed[profile.landed.length - 1]).toEqual({ day: '2026-10-20', repo: 'obsidianmd/pele' })
+    for (let i = 1; i < profile.landed.length; i++) {
+      const [a, b] = [profile.landed[i - 1], profile.landed[i]]
+      expect(a.day < b.day || (a.day === b.day && a.repo <= b.repo), `${i}`).toBe(true)
+    }
+    expect(profile.landed.filter((l) => l.repo === 'obsidianmd/obsidian-clipper')).toHaveLength(85)
+    const hub = profile.repos.find((r) => r.nameWithOwner === 'community-archive/obsidian-hub')!
+    expect(hub).toMatchObject({ isOwn: false, isPrivate: false, activity: [], firstActiveAt: '2021-11-19T22:29:31Z', lastActiveAt: '2021-11-19T22:29:31Z' })
+    expect(profile.repos.filter((r) => r.activity.length === 0 && !r.isOwn).map((r) => r.nameWithOwner)).toEqual([
+      'community-archive/obsidian-hub',
+      'community-archive/obsidian-style-settings',
+    ])
 
     // Milestones as GitHub states them. All four of kepano's are restricted contributions, so none
     // names a repo; the first repo predates the account (backdated).
@@ -440,6 +481,24 @@ describe('fetchProfileGraphql on the recorded fixtures', () => {
     // GraphQL points never reach the rate state: the budget it reports is the identity call's core one.
     expect(done.rateLimitRemaining).toBe(Number(KEPANO.user.headers['x-ratelimit-remaining']))
     expect(done.rateLimitResetAt).toBe(new Date(Number(KEPANO.user.headers['x-ratelimit-reset']) * 1000).toISOString())
+  })
+
+  it('lists the pull requests merged into other people\'s repos by the Pacific day of the merge, one entry each', async () => {
+    const profile = await kepanoProfile()
+    const expected: Array<{ day: string; repo: string }> = []
+    for (const [, collection] of recordedCollections(KEPANO)) {
+      for (const entry of collection.pullRequestContributionsByRepository) {
+        const name = entry.repository.nameWithOwner
+        if (name.toLowerCase().startsWith('kepano/')) continue
+        for (const node of entry.contributions.nodes) {
+          if (node.pullRequest.merged && node.pullRequest.mergedAt) expected.push({ day: pacificDate(node.pullRequest.mergedAt), repo: name })
+        }
+      }
+    }
+    expected.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0))
+    expect(profile.landed).toEqual(expected)
+    // a repo with landed pull requests and counted commits is one repo, spanning both
+    for (const { repo } of profile.landed) expect(profile.repos.filter((r) => r.nameWithOwner === repo)).toHaveLength(1)
   })
 
   it("counts each repo's commits per GitHub day, occurredAt read in US Pacific time", async () => {
@@ -478,11 +537,153 @@ describe('fetchProfileGraphql on the recorded fixtures', () => {
     expect(windowCalls(calls).map(aliasesOf)).toEqual([['w2018q1']])
     expect(profile.truncated).toBe(true)
     expect(profile.lostWindows).toEqual([])
-    expect(profile.repos).toHaveLength(100)
-    // The listing is synthesised empty, so these come from the window alone; all 100 are under his
-    // name, which says they are his own (as for repos past the 500-repo cap).
-    expect(profile.repos.every((r) => r.nameWithOwner.startsWith('sindresorhus/') && r.isOwn && r.firstActiveAt === r.createdAt)).toBe(true)
+    // The listing is synthesised empty, so these come from the window alone: the 100 repos with
+    // counted commits are all under his name, which says they are his own (as for repos past the
+    // 500-repo cap), and 10 more are named only by the pull requests he landed in them that quarter.
+    expect(profile.repos).toHaveLength(110)
+    const counted = profile.repos.filter((r) => r.activity.length > 0)
+    expect(counted).toHaveLength(100)
+    expect(counted.every((r) => r.nameWithOwner.startsWith('sindresorhus/') && r.isOwn && r.firstActiveAt === r.createdAt)).toBe(true)
+    const landedOnly = profile.repos.filter((r) => r.activity.length === 0)
+    expect(landedOnly).toHaveLength(10)
+    expect(landedOnly.every((r) => !r.isOwn && !r.nameWithOwner.toLowerCase().startsWith('sindresorhus/'))).toBe(true)
+    expect(profile.landed).toHaveLength(77)
+    expect(new Set(profile.landed.map((l) => l.repo)).size).toBe(10)
+    expect(profile.landed.filter((l) => l.repo === 'atomiclabs/hyperdex')).toHaveLength(54)
+    expect(profile.landed.every((l) => l.day >= '2018-01-01' && l.day <= '2018-03-31')).toBe(true)
     expect(profile.days.map((d) => d.date)).toEqual(Array.from({ length: 90 }, (_, i) => new Date(Date.UTC(2018, 0, 1) + i * DAY_MS).toISOString().slice(0, 10)))
+  })
+})
+
+// ---------- landed pull requests, on quiet-sprout ----------
+
+describe('fetchProfileGraphql: landed pull requests', () => {
+  const merged = (occurredAt: string, mergedAt: string): [string, string] => [occurredAt, mergedAt]
+  const NOW = Date.parse('2024-05-15T19:00:00Z')
+
+  it('keeps merged pull requests into repos they do not own, by the Pacific day of the merge, sorted by day then repo', async () => {
+    const theirs = repoNode('Quiet-Sprout/garden')
+    const upstream = repoNode('Upstream/tool', { createdAt: '2018-01-01T00:00:00Z', pushedAt: '2024-05-01T00:00:00Z' })
+    const other = repoNode('Another/lib', { createdAt: '2019-01-01T00:00:00Z' })
+    const { fetch } = makeFetch(
+      sproutRouter({
+        years: [2024],
+        pages: [[theirs]],
+        windows: (alias) =>
+          alias === 'w2024q1'
+            ? {
+                prs: [
+                  // into their own repo, whatever the case of the owner: not landed
+                  { repo: repoNode('QUIET-SPROUT/garden'), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-06T10:00:00Z')] },
+                  // 03:30 UTC on March 2 is still March 1 in Los Angeles; an open one is not landed
+                  { repo: upstream, nodes: [merged('2024-02-01T12:00:00Z', '2024-03-02T03:30:00Z'), ['2024-02-10T12:00:00Z', null], merged('2024-01-20T12:00:00Z', '2024-01-21T18:00:00Z')] },
+                  { repo: other, nodes: [merged('2024-01-19T12:00:00Z', '2024-01-21T18:00:00Z')] },
+                ],
+              }
+            : undefined,
+      }),
+    )
+    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    expect(profile.landed).toEqual([
+      { day: '2024-01-21', repo: 'Another/lib' },
+      { day: '2024-01-21', repo: 'Upstream/tool' },
+      { day: '2024-03-01', repo: 'Upstream/tool' },
+    ])
+    expect(profile.truncated).toBe(false)
+    // a repo named only by its landed pull requests gets a contributed repo of its own, from its
+    // first merge to its last (never its own birth or push), with no counted commits
+    expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Quiet-Sprout/garden', 'Another/lib', 'Upstream/tool'])
+    expect(profile.repos.find((r) => r.nameWithOwner === 'Upstream/tool')).toMatchObject({
+      isOwn: false,
+      activity: [],
+      createdAt: '2018-01-01T00:00:00Z',
+      firstActiveAt: '2024-01-21T18:00:00Z',
+      lastActiveAt: '2024-03-02T03:30:00Z',
+      stars: 0,
+    })
+    expect(profile.repos.find((r) => r.nameWithOwner === 'Quiet-Sprout/garden')).toMatchObject({ isOwn: true, activity: [] })
+  })
+
+  it("keeps a private repo (the views hide its name), and a landed pull request widens a counted repo's span", async () => {
+    const secret = repoNode('Hush/vault', { isPrivate: true })
+    const tool = repoNode('Upstream/tool')
+    const { fetch } = makeFetch(
+      sproutRouter({
+        years: [2024],
+        windows: (alias) =>
+          alias === 'w2024q1'
+            ? {
+                repos: [{ repo: tool, nodes: [['2024-02-10T08:00:00Z', 2]] }],
+                prs: [
+                  { repo: secret, nodes: [merged('2024-01-02T10:00:00Z', '2024-01-03T12:00:00Z')] },
+                  { repo: tool, nodes: [merged('2024-01-05T10:00:00Z', '2024-01-10T12:00:00Z'), merged('2024-03-01T10:00:00Z', '2024-03-20T12:00:00Z')] },
+                ],
+              }
+            : undefined,
+      }),
+    )
+    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    expect(profile.landed).toEqual([
+      { day: '2024-01-03', repo: 'Hush/vault' },
+      { day: '2024-01-10', repo: 'Upstream/tool' },
+      { day: '2024-03-20', repo: 'Upstream/tool' },
+    ])
+    expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Hush/vault', 'Upstream/tool'])
+    expect(profile.repos[0]).toMatchObject({ isPrivate: true, isOwn: false, activity: [], firstActiveAt: '2024-01-03T12:00:00Z', lastActiveAt: '2024-01-03T12:00:00Z' })
+    expect(profile.repos[1]).toMatchObject({
+      isOwn: false,
+      activity: [{ date: '2024-02-10', commits: 2 }],
+      firstActiveAt: '2024-01-10T12:00:00Z',
+      lastActiveAt: '2024-03-20T12:00:00Z',
+    })
+  })
+
+  it('sets truncated for a window whose pull requests are still paging, or that returned 100 repositories, and keeps what came', async () => {
+    const paging = makeFetch(
+      sproutRouter({
+        years: [2024],
+        windows: (alias) =>
+          alias === 'w2024q1' ? { prs: [{ repo: repoNode('Upstream/tool'), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-10T12:00:00Z')], hasNextPage: true }] } : undefined,
+      }),
+    )
+    const paged = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch: paging.fetch, now: NOW })
+    expect(paged.truncated).toBe(true)
+    expect(paged.landed).toEqual([{ day: '2024-01-10', repo: 'Upstream/tool' }])
+
+    const full = makeFetch(
+      sproutRouter({
+        years: [2024],
+        windows: (alias) =>
+          alias === 'w2024q1'
+            ? { prs: Array.from({ length: 100 }, (_, i) => ({ repo: repoNode(`other-${i}/lib`), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-10T12:00:00Z')] })) }
+            : undefined,
+      }),
+    )
+    const capped = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch: full.fetch, now: NOW })
+    expect(capped.truncated).toBe(true)
+    expect(capped.landed).toHaveLength(100)
+    expect(capped.repos).toHaveLength(100)
+  })
+
+  it('drops a merge after today, or one whose day it cannot read, and a repo named only by those', async () => {
+    const { fetch } = makeFetch(
+      sproutRouter({
+        years: [2024],
+        windows: (alias) =>
+          alias === 'w2024q2'
+            ? {
+                prs: [
+                  { repo: repoNode('Later/thing'), nodes: [merged('2024-05-01T10:00:00Z', '2024-05-16T12:00:00Z')] },
+                  { repo: repoNode('Odd/thing'), nodes: [merged('2024-05-01T10:00:00Z', 'not a time'), ['2024-05-02T10:00:00Z', null]] },
+                  { repo: repoNode('Fine/thing'), nodes: [merged('2024-05-01T10:00:00Z', '2024-05-14T12:00:00Z')] },
+                ],
+              }
+            : undefined,
+      }),
+    )
+    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    expect(profile.landed).toEqual([{ day: '2024-05-14', repo: 'Fine/thing' }])
+    expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Fine/thing'])
   })
 })
 

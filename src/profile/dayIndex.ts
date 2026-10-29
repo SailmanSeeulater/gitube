@@ -1,7 +1,8 @@
 /**
  * What happened on one day of a life, for the inspector when a day is hovered: the calendar's count
- * (tier 2), the repos with counted commits (tier 2) or pushes (tier 1) that day, and the milestones on
- * it. The timeline keeps no per-day activity on its lanes, so this indexes the profile once.
+ * (tier 2), the repos with counted commits (tier 2) or pushes (tier 1) that day, the pull requests
+ * landed in other people's repos that day (tier 2), and the milestones on it. The timeline keeps no
+ * per-day activity on its lanes, so this indexes the profile once.
  *
  * It reads the profile with the timeline's own rules, so a day's detail always agrees with the lanes:
  * days are GitHub's (a day key as it is, a timestamp by its US Pacific day), nothing after today
@@ -23,6 +24,13 @@ export interface DayRepo {
   unit: 'commits' | 'pushes'
 }
 
+/** The pull requests landed in one repo on a day. */
+export interface DayLanded {
+  /** nameWithOwner, as its lane spells it; views show it through the namer */
+  repo: string
+  n: number
+}
+
 export interface DayDetail {
   /** day number */
   day: number
@@ -35,6 +43,8 @@ export interface DayDetail {
   count: number | null
   /** the most active first, then in lane order */
   repos: DayRepo[]
+  /** the pull requests landed that day, by repo: the most first, then in lane order (tier 2) */
+  landed: DayLanded[]
   /** indexes in timeline.milestones */
   milestones: number[]
 }
@@ -48,6 +58,8 @@ export interface DayIndex {
   readonly calendar: ReadonlyMap<number, number>
   /** the repos active per day, in DayDetail's order */
   readonly repos: ReadonlyMap<number, ReadonlyArray<DayRepo>>
+  /** the pull requests landed per day, in DayDetail's order */
+  readonly landed: ReadonlyMap<number, ReadonlyArray<DayLanded>>
   readonly milestones: ReadonlyMap<number, ReadonlyArray<number>>
 }
 
@@ -124,6 +136,24 @@ export function buildDayIndex(profile: ProfileData, timeline: LifeTimeline): Day
     b.n - a.n || (a.unit === b.unit ? 0 : a.unit === 'commits' ? -1 : 1) || laneOf(a.repo) - laneOf(b.repo) || (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0)
   for (const list of repos.values()) list.sort(order)
 
+  // Pull requests landed per day per repo key (tier 2), one entry each; a repo without a lane is
+  // dropped, as the timeline drops it. Lane order breaks a tie here too.
+  const landedBy = new Map<number, Map<string, number>>()
+  for (const { day: date, repo } of profile.landed) {
+    const day = dayOf(date)
+    const key = repoKey(repo)
+    if (!(day <= today) || !lanes.has(key)) continue
+    let byRepo = landedBy.get(day)
+    if (!byRepo) landedBy.set(day, (byRepo = new Map()))
+    addTo(byRepo, key, 1)
+  }
+  const landed = new Map<number, DayLanded[]>()
+  for (const [day, byRepo] of landedBy) {
+    const list = [...byRepo].map(([key, n]): DayLanded => ({ repo: spelled.get(key) ?? key, n }))
+    list.sort((a, b) => b.n - a.n || laneOf(a.repo) - laneOf(b.repo) || (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0))
+    landed.set(day, list)
+  }
+
   const milestones = new Map<number, number[]>()
   timeline.milestones.forEach((milestone, i) => {
     const day = dayNumber(milestone.day)
@@ -139,7 +169,7 @@ export function buildDayIndex(profile: ProfileData, timeline: LifeTimeline): Day
     recentFromDay = Number.isFinite(from) ? from : Number.isFinite(firstPush) ? firstPush : null
   }
 
-  return { source: profile.source, todayDay: today, recentFromDay, calendar, repos, milestones }
+  return { source: profile.source, todayDay: today, recentFromDay, calendar, repos, landed, milestones }
 }
 
 /** One day's detail (a day number; a fractional one reads its day). */
@@ -147,15 +177,17 @@ export function dayDetail(index: DayIndex, day: number): DayDetail {
   const d = Math.floor(day)
   const upToToday = d <= index.todayDay
   const repos = upToToday ? (index.repos.get(d) ?? []).map((repo) => ({ ...repo })) : []
+  const landed = upToToday ? (index.landed.get(d) ?? []).map((row) => ({ ...row })) : []
   const known =
     upToToday &&
-    (index.source === 'graphql' ? index.calendar.has(d) || repos.length > 0 : index.recentFromDay !== null && d >= index.recentFromDay)
+    (index.source === 'graphql' ? index.calendar.has(d) || repos.length > 0 || landed.length > 0 : index.recentFromDay !== null && d >= index.recentFromDay)
   return {
     day: d,
     key: dayKey(d),
     known,
     count: index.source === 'graphql' ? (index.calendar.get(d) ?? null) : null,
     repos,
+    landed,
     milestones: [...(index.milestones.get(d) ?? [])],
   }
 }

@@ -27,6 +27,9 @@ import type { ProfileData, ProfileRepo } from '../src/types'
 import { prolific } from './helpers/lifeLinesScale'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './helpers/profileReplay'
 import { recordingCtx, type RecordingCtx } from './helpers/recordingCtx'
+import { GITLOG_PALETTE as G_PALETTE } from '../src/theme/console/gitlog'
+import type { GitBranch } from '../src/profile/gitLogLayout'
+import type { CtxEntry } from './helpers/recordingCtx'
 
 /** 2024-06-15 12:00 in Los Angeles (PDT). */
 const NOW = Date.parse('2024-06-15T19:00:00Z')
@@ -86,6 +89,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -413,4 +417,36 @@ describe('git log: the recordings', () => {
       })
     })
   }
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests on the git log', () => {
+  const landedProfile = () => profile({ repos: REPOS, landed: [{ day: '2023-01-15', repo: 'someone/big-project' }, { day: '2022-08-01', repo: 'someone/big-project' }] })
+
+  /** The merge dots on branch b: arcs on its lane a pad larger than a commit, filled in the tag colour. */
+  function dotsOn(rec: RecordingCtx, s: Scene, b: GitBranch): number[] {
+    const y = s.g.laneY[b.track]
+    const out: number[] = []
+    rec.log.forEach((e, i) => {
+      if (e.kind !== 'call' || e.name !== 'arc' || e.args[1] !== y || e.args[2] !== s.g.dotR + 1) return
+      const next = rec.log.slice(i + 1).find((n): n is Extract<CtxEntry, { kind: 'call' }> => n.kind === 'call' && (n.name === 'fill' || n.name === 'stroke'))
+      if (next?.name === 'fill' && next.style.fillStyle === G_PALETTE.tag) out.push(e.args[0] as number)
+    })
+    return out
+  }
+
+  it('draws a merge dot in the tag colour on each landed day of a branch once reached, never on a hidden one', () => {
+    const s = scene(landedProfile())
+    const i = s.layout.byKey.get('someone/big-project')!
+    const b = s.layout.branches[i]
+    expect([...b.landed]).toEqual([dayNumber('2022-08-01') - s.layout.startDay + 0.5, dayNumber('2023-01-15') - s.layout.startDay + 0.5])
+    const sx = (x: number) => s.camera.tx + x * s.camera.k
+    expect(dotsOn(painted(s), s, b)).toEqual([...b.landed].map(sx))
+    for (const other of s.layout.branches) if (other !== b && other.track !== b.track) expect(dotsOn(painted(s), s, other)).toEqual([])
+    expect(dotsOn(painted(s, { at: b.startDay - 1 }), s, b)).toEqual([])
+    expect(dotsOn(painted(s, { at: dayNumber('2022-12-01') }), s, b)).toEqual([sx(b.landed[0])])
+    expect(dotsOn(painted(s, { at: dayNumber('2023-01-15') }), s, b)).toEqual([...b.landed].map(sx))
+    expect(dotsOn(painted(s, { hidden: new Set([b.key]) }), s, b)).toEqual([])
+  })
 })

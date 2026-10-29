@@ -27,7 +27,8 @@ const warnChip = 'rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1
 
 /**
  * The status strip once a profile is on show: the button that opens the time-lapse, its repos, its
- * span of years and (with a token) its contributions; why REST filled a token run, what was cut
+ * span of years and (with a token) its contributions and the pull requests it landed in other
+ * people's repos; why REST filled a token run, what was cut
  * short, and whether it came from the cache. The fetching state is StatusStrip's, which reads only
  * the progress.
  */
@@ -39,6 +40,14 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
   const from = timeline.start.slice(0, 4)
   const to = timeline.today.slice(0, 4)
   const contributions = profile.source === 'graphql' ? timeline.eras.reduce((sum, era) => sum + (era.contributions ?? 0), 0) : null
+  // pull requests landed in repos they do not own, as the lanes hold them (a token profile only)
+  let landed = 0
+  let landedRepos = 0
+  for (const lane of timeline.lanes) {
+    if (lane.landed.length === 0) continue
+    landed += lane.landed.length
+    landedRepos += 1
+  }
   const note = profile.fallback ? fallbackNote(profile.fallback) : null
   const short = cutShort(profile)
   const remaining = rate?.remaining ?? null
@@ -68,6 +77,14 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
           <span className="text-garden-border">·</span>
           <span className="text-garden-muted" title="GitHub's contribution calendar, summed over the years shown">
             {contributions} contribution{contributions === 1 ? '' : 's'}
+          </span>
+        </>
+      )}
+      {landed > 0 && (
+        <>
+          <span className="text-garden-border">·</span>
+          <span className="text-garden-muted" title="pull requests of theirs merged into repos they do not own">
+            {landed} pr{landed === 1 ? '' : 's'} landed in {landedRepos} repo{landedRepos === 1 ? '' : 's'}
           </span>
         </>
       )}

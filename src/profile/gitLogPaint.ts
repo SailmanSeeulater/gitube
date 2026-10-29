@@ -3,7 +3,8 @@
  * axis. Editor grey under everything, the axis (years, today, the language ribbon) in console ink, a
  * faint gridline at each new year, then every branch: a dotted connector up from the trunk, a short
  * diagonal into its lane, its line to its last activity, a commit on its active days (thinned where
- * they crowd), an archived branch's "*" terminal and, where its lane leaves room, its seven-digit
+ * they crowd), a merge dot in the tag colour on each day a pull request of theirs landed in it, an
+ * archived branch's "*" terminal and, where its lane leaves room, its seven-digit
  * hash beside the fork. Then the trunk along the horizon, the milestones as tags on it, the hovered
  * day's guide, and the hovered and selected branches on top over a halo.
  *
@@ -35,6 +36,8 @@ export const DIM_ALPHA = 0.3
 const THIN_RADII = 2.4
 const TRUNK_PX = 2
 const TRUNK_DOT_PX = 3
+/** A landed pull request's merge dot: this much larger than a commit. */
+const LANDED_PAD_PX = 1
 const TERMINAL_PAD_PX = 2
 /** A tag on the trunk: half its width and its height, and how much larger while hovered. */
 const TAG_HALF_PX = 3.5
@@ -197,6 +200,28 @@ function drawBranch(ctx: CanvasRenderingContext2D, branch: GitBranch, g: GitLogG
       ctx.fillStyle = colour
       ctx.fill()
     }
+  }
+
+  // a landed pull request: a merge dot in the tag colour on its day, once reached
+  const lr = r + LANDED_PAD_PX
+  ctx.beginPath()
+  let landed = false
+  for (let j = 0; j < branch.landed.length; j++) {
+    const lx = branch.landed[j]
+    if (!commitReached(lx, layout.startDay, at)) break
+    const x = sx(lx)
+    if (x < -CULL_PX) continue
+    if (x > W + CULL_PX) break
+    ctx.moveTo(x + lr, y)
+    ctx.arc(x, y, lr, 0, TWO_PI)
+    landed = true
+  }
+  if (landed) {
+    ctx.fillStyle = P.tag
+    ctx.fill()
+    ctx.strokeStyle = P.bg
+    ctx.lineWidth = 1
+    ctx.stroke()
   }
 
   // an archived branch ends in a terminal on its last commit

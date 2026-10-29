@@ -237,6 +237,8 @@ async function main(): Promise<number> {
   if (profile.source === 'graphql') {
     const owned = profile.repos.filter((r) => r.isOwn).length
     console.log(`ownership  ${owned} own, ${profile.repos.length - owned} only contributed to`)
+    const landedRepos = new Set(profile.landed.map((l) => l.repo.toLowerCase())).size
+    console.log(`landed     ${profile.landed.length} prs merged into ${landedRepos} repos they do not own`)
     console.log(`restricted ${profile.restrictedContributions} contributions in repos this token cannot see`)
     if (profile.lostWindows.length > 0) console.log(`lost       ${profile.lostWindows.join(', ')}`)
     console.log(`milestones ${profile.milestones.map((m) => `${m.kind} ${m.date.slice(0, 10)}`).join(', ')}`)

@@ -20,7 +20,7 @@ export const PROFILE_CACHE_FRESH_MS = 24 * 60 * 60 * 1000
 /** Most profiles kept (each tier's copy counts as one); the least recently fetched go first. */
 export const PROFILE_CACHE_MAX = 6
 /** Bumped when ProfileData changes shape, so older entries are ignored rather than misread. */
-export const PROFILE_CACHE_VERSION = 1
+export const PROFILE_CACHE_VERSION = 2
 
 const POLICY: CachePolicy = { freshMs: PROFILE_CACHE_FRESH_MS, maxEntries: PROFILE_CACHE_MAX, version: PROFILE_CACHE_VERSION }
 

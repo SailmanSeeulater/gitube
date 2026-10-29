@@ -17,8 +17,8 @@
 import type { ProfileData } from '../types'
 import { hash01 } from '../components/gardenLook'
 import { repoKey } from './privacy'
-import { progressAtDay, type Lane, type LifeTimeline, type Span } from './timeline'
-import type { LifeGardenLayout, LifeLeaf, LifePlant, LifeStemPart, LifeTip } from './lifeTypes'
+import { dayNumber, progressAtDay, type Lane, type LifeTimeline, type Span } from './timeline'
+import type { LifeGardenLayout, LifeLanded, LifeLeaf, LifePlant, LifeStemPart, LifeTip } from './lifeTypes'
 import { axisOf } from './lifeView'
 
 /** Depth rows: plants rooted close together step back a row instead of overlapping. */
@@ -71,7 +71,7 @@ function laneWeight(lane: Lane, source: ProfileData['source']): number {
 }
 
 /** Stem time of a day's start: 0 at the lane's first day, 1 after its last. */
-function stemTime(lane: Lane, day: number): number {
+function stemTime(lane: Pick<Lane, 'startDay' | 'endDay'>, day: number): number {
   return (day - lane.startDay) / (lane.endDay - lane.startDay + 1)
 }
 
@@ -94,6 +94,17 @@ function leavesOf(lane: Lane, source: ProfileData['source'], heaviest: number): 
     size: heaviest > 0 ? Math.sqrt(weight / heaviest) : 0,
     fromDay: span.fromDay,
   }))
+}
+
+/** One marker per day a pull request landed, at that day's middle on the stem (several that day draw one). */
+export function landedOf(lane: Pick<Lane, 'landed' | 'startDay' | 'endDay'>): LifeLanded[] {
+  const out: LifeLanded[] = []
+  for (const key of lane.landed) {
+    const day = dayNumber(key)
+    if (!Number.isFinite(day) || (out.length > 0 && out[out.length - 1].day === day)) continue
+    out.push({ t: stemTime(lane, day + 0.5), day })
+  }
+  return out
 }
 
 /** By row from the back, then x, then lane order: the order plants are painted in. */
@@ -150,6 +161,7 @@ export function layoutLifeGarden(timeline: LifeTimeline, source: ProfileData['so
       seedling,
       parts: partsOf(lane),
       leaves: seedling ? [] : leavesOf(lane, source, heaviestSpan),
+      landed: landedOf(lane),
       language: lane.language,
       startDay: lane.startDay,
       endDay: lane.endDay,

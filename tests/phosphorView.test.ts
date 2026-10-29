@@ -30,6 +30,11 @@ import hitSource from '../src/profile/phosphorHit.ts?raw'
 import viewSource from '../src/profile/phosphorView.ts?raw'
 import { recordingCtx, type CtxEntry } from './helpers/recordingCtx'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './helpers/profileReplay'
+import { LANDED_PX as PHOSPHOR_LANDED_PX, landedCentreY as pLandedCentreY } from '../src/profile/phosphorPaint'
+import { GAP_PX as P_GAP_PX, PITCH_PX as P_PITCH_PX, BLOCK_PX as P_BLOCK_PX, blocksAt as pBlocksAt } from '../src/profile/phosphorGeometry'
+import { PHOSPHOR as P_PALETTE } from '../src/theme/console/phosphor'
+import { dayNumber } from '../src/profile/timeline'
+import type { RecordingCtx } from './helpers/recordingCtx'
 
 // The recordings replayed as personScene does (not imported from it: it pulls in every view's registry).
 const FAKE_TOKEN = 'test-token-not-real'
@@ -76,6 +81,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -466,5 +472,55 @@ describe('the scene', () => {
       expect(code.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i), file).toBeNull()
       expect(code, file).not.toMatch(/RepoNamer|repoNamer|\bname\(|hash01/)
     }
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests on the phosphor screen', () => {
+  const landedProfile = (): ProfileData => ({ ...RICH, landed: [{ day: '2021-03-05', repo: 'other/lib' }, { day: '2021-02-10', repo: 'Other/Lib' }] })
+
+  /** Whether the bright diamond of landed day l is drawn over its block: its top corner's moveTo in the bright colour. */
+  function diamondAt(rec: RecordingCtx, s: Scene, i: number, l: { t: number; day: number }, grown: number): boolean {
+    const cy = pLandedCentreY(s.g, i, grown, l.t)
+    return rec.calls('moveTo').some((c) => c.args[0] === s.g.x[i] && c.args[1] === cy - PHOSPHOR_LANDED_PX && c.style.fillStyle === P_PALETTE.bright)
+  }
+
+  it('sits over the body block at its day, or over the head block while none has risen', () => {
+    const g = { base: 100, head: Float64Array.of(7), blocks: Int32Array.of(10), x: Float64Array.of(50) }
+    expect(pLandedCentreY(g, 0, 10, 0.45)).toBe(100 - 5 * P_PITCH_PX + P_GAP_PX + P_BLOCK_PX / 2)
+    expect(pLandedCentreY(g, 0, 10, 0.999)).toBe(100 - 10 * P_PITCH_PX + P_GAP_PX + P_BLOCK_PX / 2)
+    expect(pLandedCentreY(g, 0, 3, 0.9)).toBe(100 - 3 * P_PITCH_PX + P_GAP_PX + P_BLOCK_PX / 2)
+    expect(pLandedCentreY(g, 0, 0, 0.5)).toBe(100 - 7 / 2)
+  })
+
+  it('draws a bright diamond over the block at each landed day\'s height, once the time-lapse has reached it', () => {
+    const s = scene(landedProfile(), NOW)
+    const i = s.layout.byKey.get('other/lib')!
+    const stack = s.layout.stacks[i]
+    expect(stack.landed.map((l) => l.day)).toEqual([dayNumber('2021-02-10'), dayNumber('2021-03-05')])
+    expect(s.layout.stacks.filter((st) => st.landed.length > 0)).toHaveLength(1)
+    const full = paintLog(s)
+    for (const l of stack.landed) expect(diamondAt(full, s, i, l, s.g.blocks[i])).toBe(true)
+    // the mark is drawn in the bright colour, filled
+    expect(full.calls('fill').some((c) => c.style.fillStyle === P_PALETTE.bright)).toBe(true)
+    // before the stack rises: nothing; between its two days: the first only
+    expect(paintLog(s, { at: stack.startDay - 1 }).calls('moveTo').filter((c) => c.args[0] === s.g.x[i] && c.style.fillStyle === P_PALETTE.bright)).toHaveLength(0)
+    const between = dayNumber('2021-02-20')
+    const grown = pBlocksAt(stack, s.g.blocks[i], between)
+    // the stack has only begun to rise: the one mark reached sits over its head block
+    expect(grown).toBe(0)
+    const rec = paintLog(s, { at: between })
+    expect(diamondAt(rec, s, i, stack.landed[0], grown)).toBe(true)
+    const brightMoves = (r: RecordingCtx) => r.calls('moveTo').filter((c) => c.args[0] === s.g.x[i] && c.style.fillStyle === P_PALETTE.bright)
+    expect(brightMoves(rec)).toHaveLength(1)
+    expect(brightMoves(full)).toHaveLength(2)
+    // later, over the body block at its day's height
+    const later = dayNumber('2023-06-01')
+    const risen = pBlocksAt(stack, s.g.blocks[i], later)
+    expect(risen).toBeGreaterThan(0)
+    for (const l of stack.landed) expect(diamondAt(paintLog(s, { at: later }), s, i, l, risen)).toBe(true)
+    // hidden: none
+    expect(paintLog(s, { hidden: new Set(['other/lib']) }).calls('moveTo').filter((c) => c.args[0] === s.g.x[i] && c.style.fillStyle === P_PALETTE.bright)).toHaveLength(0)
   })
 })

@@ -269,6 +269,7 @@ function made(over: Partial<ProfileData>): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }

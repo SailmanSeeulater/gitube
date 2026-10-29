@@ -12,7 +12,7 @@
  */
 import type { ProfileData } from '../types'
 import { layoutLifeGarden } from './lifeGardenLayout'
-import type { LifeStemPart } from './lifeTypes'
+import type { LifeLanded, LifeStemPart } from './lifeTypes'
 import type { LifeTimeline } from './timeline'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
 
@@ -35,6 +35,8 @@ export interface PhosphorStack extends LifeViewItem {
   endDay: number
   /** the lane's active and dormant stretches by stack time (0 at the ground, 1 at the head) */
   parts: LifeStemPart[]
+  /** one marker per day a pull request of theirs was merged into it, by stack time, ascending (the garden's) */
+  landed: LifeLanded[]
 }
 
 export interface PhosphorLayout extends LifeViewModel {
@@ -67,6 +69,7 @@ export function layoutPhosphor(timeline: LifeTimeline, source: ProfileData['sour
       language: plant.language,
       endDay: plant.endDay,
       parts: plant.parts,
+      landed: plant.landed,
     }
   })
   stacks.sort(comparePaint)

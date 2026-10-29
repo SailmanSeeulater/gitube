@@ -28,6 +28,10 @@ import type { ProfileData, ProfileRepo } from '../src/types'
 import { prolific } from './helpers/lifeLinesScale'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './helpers/profileReplay'
 import { recordingCtx, type RecordingCtx } from './helpers/recordingCtx'
+import { LANDED_CELL_PX as HTOP_LANDED_PX } from '../src/profile/htopPaint'
+import { HTOP_PALETTE as H_PALETTE } from '../src/theme/console/htop'
+import { rowY as hRowY } from '../src/profile/htopGeometry'
+import { dayNumber } from '../src/profile/timeline'
 
 /** 2024-06-15 12:00 in Los Angeles (PDT). */
 const NOW = Date.parse('2024-06-15T19:00:00Z')
@@ -92,6 +96,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -441,5 +446,34 @@ describe('htop: the recordings', () => {
     expect(layoutHtop(buildLifeTimeline({ ...gaearon, repos: shuffled(gaearon.repos, 9) }, GAEARON_NOW), 'rest')).toEqual(s.layout)
     expect(expectHitAtAnchors(s)).toBe(s.layout.rows.length)
     expect(expectHitAtAnchors(s, dayAt(s.timeline.clock, 0.5))).toBeGreaterThan(0)
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests on the htop meters', () => {
+  const landedProfile = () => profile({ repos: REPOS, landed: [{ day: '2023-01-15', repo: 'someone/big-project' }, { day: '2022-08-01', repo: 'someone/big-project' }] })
+
+  /** The accent cells drawn on row i: rects in the accent, a cell wide, centred on the row. */
+  function cellsOn(rec: RecordingCtx, s: Scene, i: number): number[] {
+    const y = hRowY(s.g, i)
+    return rec
+      .calls('rect')
+      .filter((c) => c.style.fillStyle === H_PALETTE.accent && c.args[2] === HTOP_LANDED_PX && Math.abs((c.args[1] as number) + (c.args[3] as number) / 2 - y) < 1e-6)
+      .map((c) => c.args[0] as number)
+  }
+
+  it('draws an accent cell on each landed day of a row once reached, never on a hidden row', () => {
+    const s = scene(landedProfile())
+    const i = s.layout.byKey.get('someone/big-project')!
+    const row = s.layout.rows[i]
+    expect(row.landed).toEqual([dayNumber('2022-08-01') - s.layout.startDay + 0.5, dayNumber('2023-01-15') - s.layout.startDay + 0.5])
+    const sx = (x: number) => Math.round(s.camera.tx + x * s.camera.k - HTOP_LANDED_PX / 2)
+    expect(cellsOn(paint(s), s, i)).toEqual(row.landed.map(sx))
+    for (let k = 0; k < s.layout.rows.length; k++) if (k !== i) expect(cellsOn(paint(s), s, k)).toEqual([])
+    expect(cellsOn(paint(s, { at: row.startDay - 1 }), s, i)).toEqual([])
+    expect(cellsOn(paint(s, { at: dayNumber('2022-12-01') }), s, i)).toEqual([sx(row.landed[0])])
+    expect(cellsOn(paint(s, { at: dayNumber('2023-01-15') }), s, i)).toEqual(row.landed.map(sx))
+    expect(cellsOn(paint(s, { hidden: new Set([row.key]) }), s, i)).toEqual([])
   })
 })

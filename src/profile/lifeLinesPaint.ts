@@ -2,8 +2,9 @@
  * Canvas drawing for the life lines (PROFILE_SPEC.md section 5, view 2): the shared time axis, the
  * language eras as faint bands behind everything, a gridline at each new year, and every repo as a
  * line along its track, thick while active and thin while dormant, with its start marked, a fork's
- * branch stub, an archived repo's terminus and its milestones as stations (a station on a start
- * marker rings it, keeping the marker's dot in view). Then the axis milestones, the hovered day's
+ * branch stub, an archived repo's terminus, a filled station in the accent on each day a pull
+ * request of theirs landed in it, and its milestones as stations (a station on a start marker rings
+ * it, keeping the marker's dot in view; a landed station there rings it in the accent). Then the axis milestones, the hovered day's
  * guide, and the hovered and selected lines redrawn on top over a halo. The labels go on top of it
  * all (useLifeLabels), and are the only repo names on the canvas: this draws none.
  *
@@ -148,6 +149,26 @@ function drawLine(ctx: CanvasRenderingContext2D, line: LifeLine, g: LinesGeom, i
       ctx.stroke()
     } else {
       ctx.fillStyle = colour
+      ctx.fill()
+      ctx.strokeStyle = ink.canvas
+      ctx.stroke()
+    }
+  }
+
+  // a landed pull request: a filled station in the accent on its day (round the start marker where
+  // it would cover its dot), once the time-lapse has reached it
+  for (const lx of line.landed) {
+    if (!stationReached(lx, layout.startDay, at)) continue
+    const { x: mx, y: my, ring } = stationMark(line, { x: lx }, g, at)
+    if (mx < -pad || mx > view.width + pad) continue
+    ctx.beginPath()
+    ctx.arc(mx, my, ring ? stationRingRadius(g) : stationRadius(g), 0, TWO_PI)
+    ctx.lineWidth = MARKER_RING_PX
+    if (ring) {
+      ctx.strokeStyle = ink.accent
+      ctx.stroke()
+    } else {
+      ctx.fillStyle = ink.accent
       ctx.fill()
       ctx.strokeStyle = ink.canvas
       ctx.stroke()
