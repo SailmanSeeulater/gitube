@@ -77,7 +77,7 @@ const LAZY_ONLY = [
   'profile/constellationGeometry.ts',
   'profile/constellationPaint.ts',
   'profile/constellationHit.ts',
-  // the console views (a terminal's look whatever the theme): phosphor, htop, the git log and the minimap
+  // the console views (a terminal's look whatever the theme): phosphor, htop, the git log, the minimap and the helix
   'profile/phosphorLayout.ts',
   'profile/phosphorGeometry.ts',
   'profile/phosphorPaint.ts',
@@ -97,11 +97,17 @@ const LAZY_ONLY = [
   'profile/minimapPaint.ts',
   'profile/minimapHit.ts',
   'profile/minimapView.ts',
+  'profile/helixLayout.ts',
+  'profile/helixGeometry.ts',
+  'profile/helixPaint.ts',
+  'profile/helixHit.ts',
+  'profile/helixView.ts',
   // ...and their fixed palettes, which only they (and the legend) read: no theme of the first download
   'theme/console/phosphor.ts',
   'theme/console/htop.ts',
   'theme/console/gitlog.ts',
   'theme/console/minimap.ts',
+  'theme/console/helix.ts',
   // the GraphQL timeout both lazy clients share, and person mode's tier 2 fetcher
   'api/graphql.ts',
   'api/profileGraphql.ts',

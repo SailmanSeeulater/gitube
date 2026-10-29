@@ -41,7 +41,7 @@ import {
 const noop = () => {}
 const theme = getTheme('obsidian')
 /** person mode's three views */
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 
 /**
  * kepano's repos made private: the top-starred one (a derived milestone names it), one of his own,

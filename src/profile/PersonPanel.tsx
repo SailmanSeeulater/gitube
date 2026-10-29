@@ -335,7 +335,7 @@ export default function PersonPanel({
             viewLocked
               ? 'Waits until the recording ends, so a video shows one view.'
               : "garden: repos grown as plants. lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row. " +
-                'phosphor, htop, git log and minimap: the same life on a terminal screen, in its own colours whatever the theme'
+                'phosphor, htop, git log, minimap and helix: the same life on a terminal screen, in its own colours whatever the theme'
           }
         >
           <ViewSwitch value={view} onChange={onView} disabled={viewLocked} />

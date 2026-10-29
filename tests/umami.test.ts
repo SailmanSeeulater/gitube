@@ -69,7 +69,7 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   'fetch-error': FETCH_ERROR_CODES.map((code) => ({ code })),
   'poster-export': [],
   // person mode's view switcher: the view, never a name
-  'view-switch': Object.keys({ garden: 1, lines: 1, constellation: 1, phosphor: 1, htop: 1, gitlog: 1, minimap: 1 } satisfies Record<PersonView, 1>).map((view) => ({ view })),
+  'view-switch': Object.keys({ garden: 1, lines: 1, constellation: 1, phosphor: 1, htop: 1, gitlog: 1, minimap: 1, helix: 1 } satisfies Record<PersonView, 1>).map((view) => ({ view })),
 }
 const ALL_EVENTS = Object.keys(APP_EVENTS) as AnalyticsEvent[]
 

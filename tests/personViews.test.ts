@@ -37,6 +37,7 @@ import { PHOSPHOR } from '../src/theme/console/phosphor'
 import { HTOP_PALETTE } from '../src/theme/console/htop'
 import { GITLOG_PALETTE } from '../src/theme/console/gitlog'
 import { MINIMAP_PALETTE } from '../src/theme/console/minimap'
+import { HELIX_PALETTE } from '../src/theme/console/helix'
 import type { ProfileData } from '../src/types'
 import {
   FAKE_TOKEN,
@@ -58,7 +59,7 @@ import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/record
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 const PROGRESSES = [0, 0.25, 0.5, 0.75, 1]
 /** What each view's legend says first, and only it. */
 const INTROS: Record<PersonView, string> = {
@@ -69,6 +70,7 @@ const INTROS: Record<PersonView, string> = {
   htop: 'each row is a repo, its meter lit where it was active',
   gitlog: 'each branch is a repo, forking off the trunk where their part in it starts',
   minimap: 'each line of code is a repo, in the order they started, its tokens where it was active',
+  helix: 'each thread is a repo, wound on where their part in it starts',
 }
 
 /** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
@@ -209,7 +211,7 @@ const DRAWS = new Set(['fill', 'fillRect', 'fillText'])
 const STROKES = new Set(['stroke', 'strokeRect', 'strokeText'])
 
 /** The console views, each with its fixed palette (src/theme/console): a terminal's look whatever the theme. */
-const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE }
+const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE, helix: HELIX_PALETTE }
 
 /** Every colour string in a palette, its lists included. */
 function paletteColours(palette: object): Set<string> {
