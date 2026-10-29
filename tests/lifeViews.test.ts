@@ -25,15 +25,16 @@ import { PHOSPHOR } from '../src/theme/console/phosphor'
 import { HTOP_PALETTE } from '../src/theme/console/htop'
 import { GITLOG_PALETTE } from '../src/theme/console/gitlog'
 import { MINIMAP_PALETTE } from '../src/theme/console/minimap'
+import { HELIX_PALETTE } from '../src/theme/console/helix'
 import type { ProfileData } from '../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, type Grown } from './helpers/personScene'
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 const theme = getTheme('obsidian')
 /** The views that paint the theme... */
 const LIFE_ONLY: PersonView[] = ['garden', 'lines', 'constellation']
 /** ...and the console views, each its own palette's colours, whatever the theme. */
-const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE }
+const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE, helix: HELIX_PALETTE }
 
 /** Every colour string in a palette, its lists included. */
 function paletteColours(palette: object): Set<string> {
@@ -75,7 +76,7 @@ describe('the registry', () => {
     expect(LIFE_VIEWS.lines).toBe(LINES_VIEW)
     expect(LIFE_VIEWS.constellation).toBe(CONSTELLATION_VIEW)
     expect(VIEW_OPTIONS.map((o) => o.value)).toEqual(VIEWS)
-    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap'])
+    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
   })
 })
 
@@ -135,7 +136,7 @@ describe('the switcher', () => {
       expect((tree.props as Props)['role']).toBe('radiogroup')
       expect((tree.props as Props)['aria-label']).toBe('View')
       const buttons = buttonsOf(tree)
-      expect(buttons.map((b) => b.props.children)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap'])
+      expect(buttons.map((b) => b.props.children)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
       expect(buttons.map((b) => b.props['aria-checked'])).toEqual(VIEWS.map((v) => v === value))
       for (const b of buttons) (b.props.onClick as () => void)()
       expect(onChange.mock.calls).toEqual(VIEWS.map((v) => [v]))
@@ -303,13 +304,14 @@ describe("the views' drawing code", () => {
       '../src/profile/htop*.ts',
       '../src/profile/gitLog*.ts',
       '../src/profile/minimap*.ts',
+      '../src/profile/helix*.ts',
     ],
     { query: '?raw', import: 'default', eager: true },
   )
 
   it('writes no colour of its own: every colour comes from the theme, or a console view\'s palette under src/theme/console', () => {
     const files = Object.keys(sources)
-    expect(files.length).toBe(31)
+    expect(files.length).toBe(36)
     for (const [file, text] of Object.entries(sources)) {
       const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
       expect(code.match(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i), file).toBeNull()

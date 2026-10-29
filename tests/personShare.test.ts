@@ -92,7 +92,7 @@ function startLink(href: string): void {
 
 describe('a copied link', () => {
   it('reads back as the same person and view, for every view', () => {
-    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap'] as PersonView[]) {
+    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as PersonView[]) {
       const href = `${ORIGIN}/${personSearch('kepano', view, '')}`
       expect(href).toBe(`${ORIGIN}/?user=kepano&view=${view}`)
       expect(readSubject(new URL(href).search)).toEqual({ kind: 'user', login: 'kepano', view })

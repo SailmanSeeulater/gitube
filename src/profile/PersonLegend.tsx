@@ -68,6 +68,14 @@ type GlyphKind =
   | 'comment'
   | 'hollow-token'
   | 'landed-token'
+  // the helix's
+  | 'coil'
+  | 'far-coil'
+  | 'wound'
+  | 'dashed-coil'
+  | 'dim-coil'
+  | 'faint-coil'
+  | 'landed-coil'
 
 // The petal directions gardenLook's petalAngles gives an open bloom at turn 0.1 and a wilted head at
 // turn 0.5, as the repo garden's legend draws them; written out, so the first-load entry need not
@@ -452,6 +460,56 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <path d="M5 5H11L14 8L11 11H5Z" fill={theme.accent} />
         </svg>
       )
+    // the helix: a turn of a thread, thick where busy and thin where dormant
+    case 'coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9" fill="none" stroke={colour} strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M9 9 C11 16, 14 16, 17 9" fill="none" stroke={colour} strokeWidth="1" strokeLinecap="round" />
+        </svg>
+      )
+    // the far side of the coil, dimmer
+    case 'far-coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9" fill="none" stroke={colour} strokeWidth="2" strokeLinecap="round" />
+          <path d="M9 9 C11 16, 14 16, 17 9" fill="none" stroke={colour} strokeWidth="2" strokeLinecap="round" opacity="0.45" />
+        </svg>
+      )
+    // where a thread is wound on: a dot
+    case 'wound':
+      return (
+        <svg {...common}>
+          <path d="M5 9 C8 2, 12 2, 17 9" fill="none" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="5" cy="9" r="2.4" fill={colour} />
+        </svg>
+      )
+    case 'dashed-coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={colour} strokeWidth="1.8" strokeDasharray="3 2.5" strokeLinecap="round" />
+        </svg>
+      )
+    case 'dim-coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={ink.wilt} strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
+    case 'faint-coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={colour} strokeWidth="1.8" strokeLinecap="round" opacity="0.45" />
+        </svg>
+      )
+    // a landed pull request: a bright diamond on the thread
+    case 'landed-coil':
+      return (
+        <svg {...common}>
+          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M9 5L13 9L9 13L5 9Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
+        </svg>
+      )
     // the minimap: a line of code, its tokens where active and whitespace dots where dormant
     case 'token':
       return (
@@ -526,6 +584,7 @@ const MEASURES: { readonly [V in PersonView]: { counted: string; uncounted: stri
   htop: { counted: "a meter's brightness", uncounted: "every active stretch of a meter is lit full, and a meter's length is how long the repo was active" },
   gitlog: { counted: "a branch's run of commits", uncounted: "a branch has a commit at its start and at its last push, and its length is how long the repo was active" },
   minimap: { counted: "a token's length", uncounted: "a token's length is how long the repo was active" },
+  helix: { counted: "a thread's thickness", uncounted: 'every thread is wound one thickness, and its thick run is how long the repo was active' },
 }
 
 /**
@@ -829,6 +888,39 @@ function minimapLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boo
   }
 }
 
+/** The helix's intro, glyphs and colours. */
+function helixLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
+  const items: LegendItem[] = [
+    {
+      kind: 'coil',
+      label: 'thread',
+      hint: `a repo is a thread wound on the coil over its days, thin where it lay dormant; ${
+        graphql ? 'the more commits GitHub counted in a stretch, the thicker' : 'its thick run is how long it was active'
+      }`,
+    },
+    { kind: 'far-coil', label: 'far side', hint: 'January 1 is the top of every turn; the first half of a year winds down the near side, the second half back up the far side, drawn dimmer' },
+    { kind: 'wound', label: 'start', hint: 'a dot where the thread is wound on: where their part in the repo starts' },
+  ]
+  if (timeline.lanes.some((lane) => !lane.isOwn)) {
+    items.push({ kind: 'dashed-coil', label: 'contributed', hint: 'a repo they only contributed to is a dashed thread, wound on from the day of their first counted commit' })
+  }
+  items.push(
+    { kind: 'dim-coil', label: 'archived', hint: 'an archived repo is drawn dim, and ends at its last activity' },
+    { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
+  )
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-coil', label: 'seedling', hint: `a faint thread: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-coil', label: LANDED_LABEL, hint: `a bright diamond on the thread: ${LANDED_HINT}` })
+  if (hasPrivate) items.push(PRIVATE_ITEM)
+  return {
+    intro: `time runs left to right, wound into a coil one turn a year on an amber vector display; each thread is a repo, wound on where their part in it starts. ${
+      graphql ? 'thickness: the commits GitHub counted.' : 'thickness: every active stretch alike.'
+    }`,
+    items,
+    colours: `one amber for every repo, ${CONSOLE_COLOURS}: hover a repo and the inspector names its language.`,
+    swatch: null,
+  }
+}
+
 const LEGENDS: { readonly [V in PersonView]: (timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean) => ViewLegend } = {
   garden: gardenLegend,
   lines: linesLegend,
@@ -837,6 +929,7 @@ const LEGENDS: { readonly [V in PersonView]: (timeline: LifeTimeline, graphql: b
   htop: htopLegend,
   gitlog: gitLogLegend,
   minimap: minimapLegend,
+  helix: helixLegend,
 }
 
 /** The legend of the view on show: its glyphs, its language colours and the limits of GitHub's data. */

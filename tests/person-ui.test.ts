@@ -197,7 +197,7 @@ function legend(profile: ProfileData, view?: PersonView): string {
   return renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: keys.size > 0, view }))
 }
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap']
+const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 
 function status(profile: ProfileData, over: { cachedAt?: string | null; hasToken?: boolean } = {}): string {
   const { timeline } = setup(profile)
@@ -537,6 +537,7 @@ describe('PersonLegend', () => {
       htop: { counted: "a meter's brightness", uncounted: "every active stretch of a meter is lit full, and a meter's length is how long the repo was active" },
       gitlog: { counted: "a branch's run of commits", uncounted: "a branch has a commit at its start and at its last push, and its length is how long the repo was active" },
       minimap: { counted: "a token's length", uncounted: "a token's length is how long the repo was active" },
+      helix: { counted: "a thread's thickness", uncounted: 'every thread is wound one thickness, and its thick run is how long the repo was active' },
     }
     for (const view of VIEWS) {
       const own = MEASURES[view]
@@ -566,7 +567,7 @@ describe('PersonLegend', () => {
     expect(dataLimits(TOKEN)).toEqual(dataLimits(TOKEN, 'garden'))
   })
 
-  it("shows each language in the colour the view paints it: the theme's in a life view, a console view's own, none on phosphor", () => {
+  it("shows each language in the colour the view paints it: the theme's in a life view, a console view's own, none on phosphor or the helix", () => {
     for (const profile of [TOKEN, PUBLIC]) {
       const { timeline } = setup(profile)
       for (const view of VIEWS) {
@@ -575,10 +576,10 @@ describe('PersonLegend', () => {
         const swatches = [...html.matchAll(/<span class="h-2 w-2 shrink-0 rounded-full" style="background:([^"]+)"><\/span>([^<]*)<\/li>/g)].map(
           (m) => [m[2], m[1]] as const,
         )
-        if (view === 'phosphor') {
-          // one green for every repo: no language swatch would match the screen
+        if (view === 'phosphor' || view === 'helix') {
+          // one green (one amber) for every repo: no language swatch would match the screen
           expect(swatches, where).toEqual([])
-          expect(textOf(html), where).toContain('one green for every repo')
+          expect(textOf(html), where).toContain(view === 'phosphor' ? 'one green for every repo' : 'one amber for every repo')
           continue
         }
         expect(swatches.length, where).toBeGreaterThan(0)
