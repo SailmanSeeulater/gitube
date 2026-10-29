@@ -247,7 +247,8 @@ describe('private repo names', () => {
         }
       }
     }
-  })
+    // every view painted in forty states on a recording context: about 14 s here, over 20 s on CI's runners
+  }, 60_000)
 
   it('show on screen once revealed for this very login, still locked and never linked', () => {
     for (const c of cases) {
