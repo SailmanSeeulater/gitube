@@ -6,7 +6,7 @@ whole coding life ([person mode](#person-mode)).
 
 [![Andrej Karpathy's coding life as a garden: one plant per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-garden.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=garden)
 
-<sub>Andrej Karpathy's fifteen years on GitHub as a [garden](https://repogarden.latesailor.dev/?user=karpathy&view=garden): each plant a repo, rooted where it began, a bloom for its stars. More people and views in the [gallery](#gallery).</sub>
+<sub>Andrej Karpathy's fifteen years on GitHub as a [garden](https://repogarden.latesailor.dev/?user=karpathy&view=garden): each plant a repo, rooted where it began, a bloom for its stars. Repo mode, more people and every view in the [gallery](#gallery).</sub>
 
 - **Skeleton view** keeps branch tips, fork points, merge commits and roots, and
   collapses straight runs of commits into one edge with a `+N` badge.
@@ -35,11 +35,18 @@ whole coding life ([person mode](#person-mode)).
 
 ## Gallery
 
-Well-known developers' public profiles in each of person mode's views. Click a
-picture to open it live. Captured without a token, so a repo's size is how long
-it was active rather than its commit count.
+A well-known repo in repo mode, then well-known developers' public profiles in
+each of person mode's views. Click a picture to open it live. The profiles were
+captured without a token, so a repo's size is how long it was active rather
+than its commit count.
 
 <table>
+  <tr>
+    <td colspan="2">
+      <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-repo.jpg" alt="vuejs/core in repo mode: 83 branches forking off main as a node graph"></a>
+      <br><b>repo mode</b> · <code>vuejs/core</code>, skeleton view in the organic layout: 83 branches forking off <code>main</code>, mostly the core team's fix and vapor branches, with Renovate's dependency branches clustered by the tip. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
+    </td>
+  </tr>
   <tr>
     <td width="50%">
       <a href="https://repogarden.latesailor.dev/?user=gaearon&view=lines"><img src="docs/screenshots/gaearon-lines.jpg" alt="Dan Abramov's repos as life lines, from react-hot-loader and redux experiments in 2015 to react and atproto"></a>
