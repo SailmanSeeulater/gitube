@@ -22,6 +22,8 @@ const HORIZON_PX = 1.5
 export const RIBBON_GAP_PX = 2
 export const RIBBON_PX = 4
 const DIAMOND_PX = 4
+/** A landed pull request's mark: a filled diamond this far from its centre to each corner (before a row's scale). */
+export const LANDED_PX = 3.2
 const TWO_PI = Math.PI * 2
 
 /** What the axis is drawn from. */
@@ -45,6 +47,26 @@ export function paintCanvasFill(ctx: CanvasRenderingContext2D, ink: Pick<LifeInk
   ctx.fillStyle = ink.canvas
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
   ctx.restore()
+}
+
+/**
+ * The mark of a landed pull request (a pull request of theirs merged into a repo they do not own)
+ * in the life views: a filled diamond in the accent over a halo, r px from its centre to each
+ * corner. The console views draw their own.
+ */
+export function drawLandedMark(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, ink: Pick<LifeInk, 'accent' | 'textHalo'>): void {
+  ctx.beginPath()
+  ctx.moveTo(x, y - r)
+  ctx.lineTo(x + r, y)
+  ctx.lineTo(x, y + r)
+  ctx.lineTo(x - r, y)
+  ctx.closePath()
+  ctx.strokeStyle = ink.textHalo
+  ctx.lineWidth = 1.5
+  ctx.lineJoin = 'round'
+  ctx.stroke()
+  ctx.fillStyle = ink.accent
+  ctx.fill()
 }
 
 /** A diamond on (x, y), r px from its centre to each corner; two-coloured for a language switch. */

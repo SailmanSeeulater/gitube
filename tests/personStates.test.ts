@@ -66,6 +66,7 @@ const PUBLIC: ProfileData = {
   restrictedContributions: 0,
   truncated: false,
   lostWindows: [],
+  landed: [],
   fallback: null,
 }
 
@@ -338,6 +339,7 @@ describe('very old and very young lives', () => {
       days: [{ date: '1999-12-31', count: 3 }, ...VISITOR.days],
       truncated: true,
       lostWindows: ['2001q2'],
+      landed: [],
     }
     const html = personApp('backdated', FAKE_TOKEN, { profile: early })
     expect(textOf(html)).toMatch(/1999–20\d\d/)

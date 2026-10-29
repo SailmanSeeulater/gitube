@@ -39,6 +39,7 @@ function profile(login: string, over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -57,7 +58,7 @@ describe('profile cache', () => {
   it('keeps profiles fresh for a day, a few at a time, versioned', () => {
     expect(PROFILE_CACHE_FRESH_MS).toBe(DAY)
     expect(PROFILE_CACHE_MAX).toBe(6)
-    expect(PROFILE_CACHE_VERSION).toBe(1)
+    expect(PROFILE_CACHE_VERSION).toBe(2)
   })
 
   it('keys profiles by the lowercased login and the tier', () => {

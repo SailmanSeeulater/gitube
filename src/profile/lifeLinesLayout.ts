@@ -76,6 +76,8 @@ export interface LifeLine extends LifeViewItem {
   stars: number
   /** tile it from x0 to x1; what lies past end is not drawn */
   parts: LifeLinePart[]
+  /** world x of each day a pull request of theirs was merged into it, a day's middle, ascending, one per day */
+  landed: number[]
 }
 
 /**
@@ -144,6 +146,17 @@ function packTracks(spans: ReadonlyArray<{ x0: number; x1: number; held: number 
   return { tracks, ends, count: held.length }
 }
 
+/** The world x of each day a pull request landed on a lane, a day's middle, one per day. */
+export function landedX(lane: Pick<Lane, 'landed'>, startDay: number): number[] {
+  const out: number[] = []
+  for (const key of lane.landed) {
+    const x = dayNumber(key) - startDay + 0.5
+    if (!Number.isFinite(x) || out[out.length - 1] === x) continue
+    out.push(x)
+  }
+  return out
+}
+
 /** By track, then x, then lane order: the order lines are painted in. */
 function comparePaint(a: LifeLine, b: LifeLine): number {
   return a.track - b.track || a.x - b.x || a.lane - b.lane
@@ -200,6 +213,7 @@ export function layoutLifeLines(timeline: LifeTimeline, source: ProfileData['sou
       weight: laneWeight(lane, source),
       stars: lane.stars,
       parts,
+      landed: landedX(lane, startDay),
     }
   })
   lines.sort(comparePaint)

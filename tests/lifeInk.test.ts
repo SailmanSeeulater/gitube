@@ -48,6 +48,7 @@ function timelineOf(repos: ProfileRepo[], source: ProfileData['source'] = 'graph
       restrictedContributions: 0,
       truncated: false,
       lostWindows: [],
+      landed: [],
       fallback: null,
     },
     NOW,

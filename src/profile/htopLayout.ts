@@ -14,7 +14,7 @@
  */
 import type { ProfileData } from '../types'
 import { repoKey } from './privacy'
-import type { Lane, LifeTimeline } from './timeline'
+import { dayNumber, type Lane, type LifeTimeline } from './timeline'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
 
 /** How lit a stretch of a meter is: 0 dormant, 1 to 3 active, from quiet to busy. */
@@ -48,6 +48,8 @@ export interface HtopRow extends LifeViewItem {
   weight: number
   stars: number
   cells: HtopCell[]
+  /** world x of each day a pull request of theirs was merged into it, a day's middle, ascending, one per day */
+  landed: number[]
 }
 
 export interface HtopLayout extends LifeViewModel {
@@ -85,6 +87,16 @@ export function htopLanguageSlots(lanes: ReadonlyArray<Lane>): Map<string, numbe
   return new Map(ordered.map((language, i) => [language, i]))
 }
 
+/** The world x of each day a lane's pull requests landed, a day's middle, one per day. */
+function landedX(lane: Pick<Lane, 'landed'>, startDay: number): number[] {
+  const out: number[] = []
+  for (const key of lane.landed) {
+    const x = dayNumber(key) - startDay + 0.5
+    if (Number.isFinite(x) && out[out.length - 1] !== x) out.push(x)
+  }
+  return out
+}
+
 /** The htop rows of a timeline; source says whether spans carry counted commits (graphql) or not. */
 export function layoutHtop(timeline: LifeTimeline, source: ProfileData['source']): HtopLayout {
   const axis = axisOf(timeline)
@@ -116,6 +128,7 @@ export function layoutHtop(timeline: LifeTimeline, source: ProfileData['source']
       weight: laneWeight(lane, source),
       stars: lane.stars,
       cells,
+      landed: landedX(lane, startDay),
     }
   })
   return { ...axis, byKey: new Map(rows.map((row, i) => [row.key, i])), rows, slots }

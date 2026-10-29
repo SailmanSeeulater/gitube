@@ -38,6 +38,7 @@ import geometrySource from '../src/profile/constellationGeometry.ts?raw'
 import paintSource from '../src/profile/constellationPaint.ts?raw'
 import hitSource from '../src/profile/constellationHit.ts?raw'
 import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/recordingCtx'
+import { LANDED_PX as STAR_LANDED_PX } from '../src/profile/lifeAxis'
 
 /** 2024-06-15 12:00 in Los Angeles (PDT). */
 const NOW = Date.parse('2024-06-15T19:00:00Z')
@@ -94,6 +95,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -620,5 +622,40 @@ describe("the constellation's frame under the shared painter", () => {
     const done = painterFor(s, {}, false, 1).rec
     expect(caption(done)).toEqual([`${s.layout.stars.length} repos`])
     expect(argsOf(done, 'fillText').map(([text]) => String(text))).toContain('Me · repo-garden')
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests in the constellation', () => {
+  const landedProfile = () =>
+    profile({ repos: REPOS, landed: [{ day: '2023-01-15', repo: 'someone/big-project' }, { day: '2022-08-01', repo: 'someone/big-project' }] })
+
+  /** Whether the accent diamond at the star's upper left is drawn: its top corner's moveTo. */
+  function tickAt(rec: RecordingCtx, s: Scene, i: number, at: number | null): boolean {
+    const r = grownRadius(s.g.r[i], starGrownShare(s.layout.stars[i], at))
+    const d = (r + 3) * Math.SQRT1_2
+    const [x, y] = [s.g.x[i] - d, s.g.y[i] - d - STAR_LANDED_PX]
+    return rec.calls('moveTo').some((c) => Math.abs((c.args[0] as number) - x) < 1e-9 && Math.abs((c.args[1] as number) - y) < 1e-9)
+  }
+
+  it('keeps the landed days on the star and draws its tick from the first of them, never on a hidden star', () => {
+    const s = scene(landedProfile())
+    const i = indexOf(s, 'someone/big-project')
+    const star = s.layout.stars[i]
+    expect(star.landed).toEqual([dayNumber('2022-08-01'), dayNumber('2023-01-15')])
+    expect(s.layout.stars.filter((st) => st.landed.length > 0)).toHaveLength(1)
+
+    expect(tickAt(paint(s), s, i, null)).toBe(true)
+    const fills = paint(s).calls('fill').filter((c) => c.style.fillStyle === s.ink.accent)
+    expect(fills.length).toBeGreaterThanOrEqual(1)
+    expect(tickAt(paint(s, { at: star.startDay - 1 }), s, i, star.startDay - 1)).toBe(false)
+    const beforeFirst = star.landed[0] - 1
+    expect(tickAt(paint(s, { at: beforeFirst }), s, i, beforeFirst)).toBe(false)
+    expect(tickAt(paint(s, { at: star.landed[0] }), s, i, star.landed[0])).toBe(true)
+    expect(tickAt(paint(s, { hidden: new Set([star.key]) }), s, i, null)).toBe(false)
+    // no other star gets one
+    const none = scene()
+    for (let k = 0; k < none.layout.stars.length; k++) expect(tickAt(paint(none), none, k, null)).toBe(false)
   })
 })

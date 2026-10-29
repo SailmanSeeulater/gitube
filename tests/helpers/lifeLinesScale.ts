@@ -60,6 +60,7 @@ export function prolific(n: number, source: ProfileData['source'], seed = 11): P
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
   }
 }

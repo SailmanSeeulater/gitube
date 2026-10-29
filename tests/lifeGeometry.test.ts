@@ -109,6 +109,7 @@ function makePlant(over: Partial<LifePlant> = {}): LifePlant {
     seedling: false,
     parts: [{ kind: 'active', t0: 0, t1: 1 }],
     leaves: [],
+    landed: [],
     language: null,
     startDay: 0,
     endDay: 10,

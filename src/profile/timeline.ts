@@ -69,8 +69,14 @@ export interface Lane {
   end: string
   startDay: number
   endDay: number
-  /** the last day with activity: a counted commit, the root, or the last push (tier 1) */
+  /** the last day with activity: a counted commit, a landed pull request, the root, or the last push (tier 1) */
   lastActive: string
+  /**
+   * the days pull requests of theirs were merged into it (profile.landed, grouped by repo without
+   * case, as mergeRepos merges copies), one entry per pull request, ascending, none after today;
+   * they count as activity days for the spans and the clock. Tier 1: empty.
+   */
+  landed: string[]
   language: string | null
   isOwn: boolean
   isFork: boolean
@@ -332,6 +338,8 @@ interface RawSpan {
 interface MergedRepo {
   repo: ProfileRepo
   byDay: Map<number, number>
+  /** the days its landed pull requests were merged, one per pull request, ascending, none after today */
+  landed: number[]
 }
 
 interface BuiltLane {
@@ -343,6 +351,8 @@ interface BuiltLane {
   lastActiveDay: number
   /** [day, commits] for each day with counted commits, ascending */
   activity: [number, number][]
+  /** the landed pull requests' days, as numbers */
+  landed: number[]
   /** laneSignature, made the first time compareLanes needs it */
   signature?: string
 }
@@ -376,9 +386,10 @@ function compareRepoFields(a: ProfileRepo, b: ProfileRepo): number {
  * windows overlapping) are merged instead: each day keeps the larger of the copies' counts, and the
  * freshest copy (first in compareRepoFields's order) lends the other fields, except that the repo is
  * private when any copy is, as privateRepoKeys hides its name (privacy.ts). These rules ignore which
- * copy came first.
+ * copy came first. The landed pull requests (profile.landed) go to the repo of the same key, one
+ * entry each; an entry naming a repo the profile does not list is dropped.
  */
-function mergeRepos(repos: ProfileRepo[], today: number): MergedRepo[] {
+function mergeRepos(repos: ProfileRepo[], landed: ProfileData['landed'], today: number): MergedRepo[] {
   const byName = new Map<string, MergedRepo>()
   const secret = new Set<string>()
   for (const repo of repos) {
@@ -391,12 +402,18 @@ function mergeRepos(repos: ProfileRepo[], today: number): MergedRepo[] {
     if (repo.isPrivate) secret.add(key)
     const merged = byName.get(key)
     if (!merged) {
-      byName.set(key, { repo, byDay })
+      byName.set(key, { repo, byDay, landed: [] })
       continue
     }
     for (const [day, commits] of byDay) merged.byDay.set(day, Math.max(merged.byDay.get(day) ?? 0, commits))
     if (compareRepoFields(repo, merged.repo) < 0) merged.repo = repo
   }
+  for (const { day, repo } of landed) {
+    const merged = byName.get(repo.toLowerCase())
+    const n = dayOf(day)
+    if (merged && n <= today) merged.landed.push(n)
+  }
+  for (const merged of byName.values()) merged.landed.sort((a, b) => a - b)
   return [...byName].map(([key, merged]) => (secret.has(key) && !merged.repo.isPrivate ? { ...merged, repo: { ...merged.repo, isPrivate: true } } : merged))
 }
 
@@ -413,29 +430,30 @@ function toSpan(raw: RawSpan): Span {
   }
 }
 
-function buildLane({ repo, byDay }: MergedRepo, today: number, nowDay: number): BuiltLane {
+function buildLane({ repo, byDay, landed }: MergedRepo, today: number, nowDay: number): BuiltLane {
   const activity = [...byDay].sort((a, b) => a[0] - b[0])
 
-  // The root: firstActiveAt, else createdAt, else the first counted day. Its instant orders the
-  // lanes, so backdated commits, which only add spans before it, cannot reorder them.
-  // A repo they only contributed to falls back to their first counted day before its own birth.
+  // The root: firstActiveAt, else createdAt, else the first counted or landed day. Its instant
+  // orders the lanes, so backdated commits, which only add spans before it, cannot reorder them.
+  // A repo they only contributed to falls back to their first counted or landed day before its own birth.
   let rootAt = positionOf(repo.firstActiveAt)
-  if (Number.isNaN(rootAt) && !repo.isOwn) rootAt = activity[0]?.[0] ?? NaN
+  if (Number.isNaN(rootAt) && !repo.isOwn) rootAt = activity[0]?.[0] ?? landed[0] ?? NaN
   if (Number.isNaN(rootAt)) rootAt = positionOf(repo.createdAt)
-  if (Number.isNaN(rootAt)) rootAt = activity[0]?.[0] ?? today
+  if (Number.isNaN(rootAt)) rootAt = activity[0]?.[0] ?? landed[0] ?? today
   rootAt = Math.min(rootAt, nowDay)
   const rootDay = Math.floor(rootAt)
   const created = dayOf(repo.createdAt)
 
   const runs: RawSpan[] = []
-  if (activity.length === 0) {
-    // no counted commits: one span from the root to the last push, tier 1's only detail
+  if (activity.length === 0 && landed.length === 0) {
+    // no counted commits or landed pull requests: one span from the root to the last push, tier 1's only detail
     const last = dayOf(repo.lastActiveAt)
     runs.push({ kind: 'active', fromDay: rootDay, toDay: Math.min(today, Math.max(rootDay, Number.isFinite(last) ? last : rootDay)), commits: 0, activeDays: 0 })
   } else {
-    // The root counts as active too: the repo was born, or they arrived, that day.
+    // The root counts as active too: the repo was born, or they arrived, that day. A landed pull
+    // request's day is an activity day as a counted commit's is (it adds no commits).
     // Activity days closer than DORMANT_DAYS quiet days apart share one active span.
-    const points = [...new Set([rootDay, ...activity.map(([day]) => day)])].sort((a, b) => a - b)
+    const points = [...new Set([rootDay, ...activity.map(([day]) => day), ...landed])].sort((a, b) => a - b)
     let run: RawSpan = { kind: 'active', fromDay: points[0], toDay: points[0], commits: 0, activeDays: 0 }
     for (const day of points) {
       if (day - run.toDay - 1 >= DORMANT_DAYS) {
@@ -478,6 +496,7 @@ function buildLane({ repo, byDay }: MergedRepo, today: number, nowDay: number): 
     startDay,
     endDay,
     lastActive: dayKey(lastActiveDay),
+    landed: landed.map(dayKey),
     language: repo.language,
     isOwn: repo.isOwn,
     isFork: repo.isFork,
@@ -490,13 +509,13 @@ function buildLane({ repo, byDay }: MergedRepo, today: number, nowDay: number): 
     detailed: activity.length > 0,
     spans: raw.map(toSpan),
   }
-  return { lane, repo, rootAt, lastActiveDay, activity }
+  return { lane, repo, rootAt, lastActiveDay, activity, landed }
 }
 
 /**
- * Everything the views can show of a lane but its name, as text: its fields, its spans and its
- * counted days (which a day's repo list shows). Named field by field, so a field added to Lane stays
- * out until someone decides it reveals nothing.
+ * Everything the views can show of a lane but its name, as text: its fields, its spans, its
+ * counted days (which a day's repo list shows) and its landed days (drawn as markers). Named field
+ * by field, so a field added to Lane stays out until someone decides it reveals nothing.
  */
 function laneSignature({ lane, activity }: BuiltLane): string {
   return JSON.stringify([
@@ -516,6 +535,7 @@ function laneSignature({ lane, activity }: BuiltLane): string {
     lane.detailed,
     lane.spans.map((span) => [span.kind, span.fromDay, span.toDay, span.commits, span.activeDays]),
     activity,
+    lane.landed,
   ])
 }
 
@@ -731,7 +751,7 @@ export function buildLifeTimeline(profile: ProfileData, now: number): LifeTimeli
   }
   const contributionDays = [...calendar.keys()].sort((a, b) => a - b)
 
-  const repos = mergeRepos(profile.repos, today)
+  const repos = mergeRepos(profile.repos, profile.landed, today)
   const built = repos.map((repo) => buildLane(repo, today, nowDay)).sort(compareLanes)
   const lanes = built.map(({ lane }) => lane)
 
@@ -814,12 +834,12 @@ export function buildLifeTimeline(profile: ProfileData, now: number): LifeTimeli
   }
   milestones.sort(compareMilestones)
 
-  // The clock's events: the account's creation, each lane's root and activity, the last push of a
-  // lane without counted commits, contribution days and recent pushes.
+  // The clock's events: the account's creation, each lane's root, activity and landed days, the
+  // last push of a lane without counted commits, contribution days and recent pushes.
   const events: number[] = [...contributionDays, ...recentDays]
   if (account <= today) events.push(account)
-  for (const { lane, lastActiveDay, activity } of built) {
-    events.push(lane.rootDay)
+  for (const { lane, lastActiveDay, activity, landed } of built) {
+    events.push(lane.rootDay, ...landed)
     if (!lane.detailed) events.push(lastActiveDay)
     for (const [day] of activity) events.push(day)
   }

@@ -114,6 +114,7 @@ const TOKEN: ProfileData = {
   restrictedContributions: 12,
   truncated: true,
   lostWindows: ['2022q3'],
+  landed: [],
   fallback: null,
 }
 
@@ -138,6 +139,7 @@ const PUBLIC: ProfileData = {
   restrictedContributions: 0,
   truncated: false,
   lostWindows: [],
+  landed: [],
   fallback: null,
 }
 
@@ -418,6 +420,25 @@ describe('PersonStatus', () => {
     expect(text).not.toContain('requests left')
   })
 
+  it("counts the pull requests landed in other people's repos, with a token, by repo", () => {
+    const landed: ProfileData = {
+      ...TOKEN,
+      repos: [...TOKEN.repos, repo('Up/tool', { isOwn: false, createdAt: iso('2015-01-01'), firstActiveAt: iso('2022-01-01'), lastActiveAt: iso('2022-01-01') })],
+      landed: [
+        { day: '2021-07-04', repo: 'other/lib' },
+        { day: '2021-08-01', repo: 'Other/Lib' },
+        { day: '2022-01-01', repo: 'Up/tool' },
+      ],
+    }
+    const text = textOf(status(landed, { hasToken: true }))
+    expect(text).toContain('8 repos')
+    expect(text).toContain('3 prs landed in 2 repos')
+    expect(textOf(status({ ...TOKEN, landed: [{ day: '2021-07-04', repo: 'other/lib' }] }, { hasToken: true }))).toContain('1 pr landed in 1 repo')
+    // none landed, or no token: nothing said
+    expect(textOf(status(TOKEN, { hasToken: true }))).not.toContain('landed')
+    expect(textOf(status(PUBLIC))).not.toContain('landed')
+  })
+
   it('nudges toward a token with a button that says what a token adds, never with one set', () => {
     const nudge = /<button[^>]*title="([^"]*)"[^>]*>add a token for commits<\/button>/.exec(status(PUBLIC))
     expect(nudge?.[1]).toContain('the commits GitHub counted')
@@ -579,6 +600,17 @@ describe('PersonLegend', () => {
     }
   })
 
+  it('lists the landed PR glyph in every view, only while a lane has one', () => {
+    const landed: ProfileData = { ...TOKEN, landed: [{ day: '2021-08-01', repo: 'other/lib' }] }
+    for (const view of VIEWS) {
+      expect(legend(TOKEN, view)).not.toContain('landed PR')
+      const html = legend(landed, view)
+      expect(html).toContain('landed PR')
+      expect(html).toContain('merged into a repo they do not own')
+    }
+    expect(legend(PUBLIC)).not.toContain('landed PR')
+  })
+
   it('says what links two stars: the months they share, and the two each star shares the most with', () => {
     /** The glyph grid's hints by label, entities read back. */
     const hints = (html: string) =>
@@ -617,6 +649,43 @@ describe('PersonInspector', () => {
     expect(html).toContain('href="https://github.com/Me/open"')
     // hovered, not pinned: no close button
     expect(html).not.toContain('aria-label="Close"')
+  })
+
+  it('counts the pull requests landed in a repo, with their first and last day', () => {
+    const landed: ProfileData = {
+      ...TOKEN,
+      landed: [
+        { day: '2021-08-01', repo: 'other/lib' },
+        { day: '2021-07-04', repo: 'other/lib' },
+        { day: '2021-07-04', repo: 'Other/Lib' },
+      ],
+    }
+    hoverRepo('other/lib')
+    expect(textOf(inspector(landed))).toContain('3 prs landed · first 2021-07-04 · last 2021-08-01')
+    expect(textOf(inspector({ ...TOKEN, landed: [{ day: '2021-08-01', repo: 'other/lib' }] }))).toContain('1 pr landed on 2021-08-01')
+    expect(textOf(inspector(TOKEN))).not.toContain('landed')
+  })
+
+  it('lists the pull requests landed on a day, by repo, names masked', () => {
+    const landed: ProfileData = {
+      ...TOKEN,
+      repos: [...TOKEN.repos, repo('Hush/vault', { isOwn: false, isPrivate: true, createdAt: iso('2015-01-01'), firstActiveAt: iso('2020-03-03'), lastActiveAt: iso('2020-03-03') })],
+      landed: [
+        { day: '2020-03-03', repo: 'Hush/vault' },
+        { day: '2020-03-03', repo: 'other/lib' },
+        { day: '2020-03-03', repo: 'hush/VAULT' },
+      ],
+    }
+    hoverDay('2020-03-03')
+    const html = inspector(landed)
+    const text = textOf(html)
+    expect(text).toContain('2 contributions')
+    expect(text).toContain(`${PRIVATE_REPO_LABEL} 2 prs landed`)
+    expect(text).toContain('other/lib 1 pr landed')
+    expect(text).not.toContain('no commits to a repo listed here')
+    expectNoPrivateName(html)
+    expect(html.toLowerCase()).not.toContain('hush/vault')
+    expect(textOf(inspector(landed, true))).toContain('Hush/vault 2 prs landed')
   })
 
   it('prints days as GitHub keys them, in no other time zone', () => {

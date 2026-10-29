@@ -47,6 +47,14 @@ export interface LifeLeaf {
   fromDay: number
 }
 
+/** A pull request landed in the repo: the day it was merged, and where that day is on the stem. */
+export interface LifeLanded {
+  /** stem time, 0..1: the day's middle */
+  t: number
+  /** day number */
+  day: number
+}
+
 /** One repo as the life garden draws it, in world units (days along x, shares of the plot along y). */
 export interface LifePlant {
   /** index in timeline.lanes */
@@ -81,6 +89,8 @@ export interface LifePlant {
   seedling: boolean
   parts: LifeStemPart[]
   leaves: LifeLeaf[]
+  /** one marker per day a pull request of theirs was merged into it, ascending (lane.landed) */
+  landed: LifeLanded[]
   language: string | null
   /** the lane's first and last day numbers */
   startDay: number

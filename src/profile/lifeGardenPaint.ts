@@ -6,14 +6,15 @@
  *
  * Positions come from lifeGeometry, which hit testing shares, and colours from LifeInk and the
  * language palette, so every theme works. The glyphs are the repo garden's own (gardenPaint):
- * leaves, blooms, buds, wilted heads and roots. Everything is drawn in screen px under the device
+ * leaves, blooms, buds, wilted heads and roots, plus a diamond in the accent on the stem for each
+ * day a pull request landed (lifeAxis's drawLandedMark). Everything is drawn in screen px under the device
  * pixel transform, so a zoom spreads plants apart and never stretches them.
  */
 import { BLOOM_SCALE, drawLeaf, drawRoots, drawTip } from '../components/gardenPaint'
 import type { LifeTimeline } from './timeline'
 import type { LifeCamera, LifeGardenLayout, LifeHover, LifeInk, LifePlant, LifeViewport, PlantGeom } from './lifeTypes'
-import { leafGeom, subQuad } from './lifeGeometry'
-import { paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from './lifeAxis'
+import { leafGeom, pointAt, subQuad } from './lifeGeometry'
+import { LANDED_PX, drawLandedMark, paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from './lifeAxis'
 
 export interface LifePaintInput {
   layout: LifeGardenLayout
@@ -139,6 +140,13 @@ function drawPlant(ctx: CanvasRenderingContext2D, plant: LifePlant, g: PlantGeom
   // the head: a bloom for stars, a bud without, a wilted head on an archived repo
   const [hx, hy] = headAt(g, grown)
   drawTip(ctx, hx, hy, g.tipR, plant.tip, plant.turn, colour, ink.garden)
+
+  // a landed pull request: a diamond on the stem at its day, once the time-lapse has reached it
+  for (const l of plant.landed) {
+    if (at !== null && l.day > at) continue
+    const [x, y] = pointAt(g, Math.min(l.t, grown))
+    drawLandedMark(ctx, x, y, LANDED_PX * g.scale, ink)
+  }
 
   if (plant.visiting) {
     ctx.beginPath()

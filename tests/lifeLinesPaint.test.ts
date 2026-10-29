@@ -36,6 +36,7 @@ import type { LifeCamera, LifeHover, LifeInk, LifeViewport } from '../src/profil
 import type { ProfileData, ProfileRepo } from '../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './helpers/profileReplay'
 import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/recordingCtx'
+import { stationMark as landedMark, stationRadius as landedRadius, stationRingRadius as landedRingRadius } from '../src/profile/lifeLinesGeometry'
 
 /** 2024-06-15 12:00 in Los Angeles (PDT). */
 const NOW = Date.parse('2024-06-15T19:00:00Z')
@@ -92,6 +93,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -645,5 +647,69 @@ describe('life lines on the recordings', () => {
         }
       }
     }
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests on the lines', () => {
+  const landedProfile = () =>
+    profile({
+      repos: [...REPOS, repo('upstream/tool', { isOwn: false, createdAt: iso('2016-01-01'), firstActiveAt: iso('2021-05-05'), lastActiveAt: iso('2021-05-05') })],
+      landed: [
+        { day: '2023-01-15', repo: 'someone/big-project' },
+        { day: '2022-08-01', repo: 'someone/big-project' },
+        { day: '2022-08-01', repo: 'someone/big-project' },
+        { day: '2021-05-05', repo: 'upstream/tool' },
+      ],
+    })
+
+  /** The arcs at (x, y) with radius r whose next fill or stroke is in the accent. */
+  function accentArcs(rec: RecordingCtx, s: Scene, x: number, y: number, r: number): Array<'fill' | 'stroke'> {
+    const out: Array<'fill' | 'stroke'> = []
+    rec.log.forEach((e, i) => {
+      if (e.kind !== 'call' || e.name !== 'arc' || e.args[0] !== x || e.args[1] !== y || e.args[2] !== r) return
+      const next = rec.log.slice(i + 1).find((n): n is Extract<CtxEntry, { kind: 'call' }> => n.kind === 'call' && (n.name === 'fill' || n.name === 'stroke'))
+      if (!next) return
+      if (next.name === 'fill' && next.style.fillStyle === s.ink.accent) out.push('fill')
+      if (next.name === 'stroke' && next.style.strokeStyle === s.ink.accent) out.push('stroke')
+    })
+    return out
+  }
+
+  it('lays one station per landed day on the line, at that day', () => {
+    const s = scene(landedProfile())
+    const line = s.layout.lines[lineOf(s, 'someone/big-project')]
+    expect(line.landed).toEqual([dayNumber('2022-08-01') - s.layout.startDay + 0.5, dayNumber('2023-01-15') - s.layout.startDay + 0.5])
+    const tool = s.layout.lines[lineOf(s, 'upstream/tool')]
+    expect(tool.landed).toEqual([tool.x])
+    expect(tool.seedling).toBe(true)
+  })
+
+  it('draws a filled accent station on each landed day once reached, ringing the start marker where it would cover its dot', () => {
+    const s = scene(landedProfile())
+    const line = s.layout.lines[lineOf(s, 'someone/big-project')]
+    const y = yOf(s, line)
+    const full = paint(s)
+    for (const lx of line.landed) expect(accentArcs(full, s, sx(s, lx), y, landedRadius(s.g))).toEqual(['fill'])
+    // a repo known only by a landed pull request: the station is on its start marker, so it rings it in the accent
+    const tool = s.layout.lines[lineOf(s, 'upstream/tool')]
+    const mark = landedMark(tool, { x: tool.landed[0] }, s.g, null)
+    expect(mark.ring).toBe(true)
+    expect(accentArcs(full, s, mark.x, yOf(s, tool), landedRingRadius(s.g))).toEqual(['stroke'])
+    // the hollow start marker's dot is still drawn under it
+    expect(markerOf(full, s, tool).length).toBeGreaterThan(0)
+
+    // the time-lapse: nothing before the line is sown, the first station between its two days
+    const before = paint(s, { at: line.startDay - 1 })
+    for (const lx of line.landed) expect(accentArcs(before, s, sx(s, lx), y, landedRadius(s.g))).toEqual([])
+    const between = paint(s, { at: dayNumber('2022-12-01') })
+    expect(accentArcs(between, s, sx(s, line.landed[0]), y, landedRadius(s.g))).toEqual(['fill'])
+    expect(accentArcs(between, s, sx(s, line.landed[1]), y, landedRadius(s.g))).toEqual([])
+    const onDay = paint(s, { at: dayNumber('2023-01-15') })
+    expect(accentArcs(onDay, s, sx(s, line.landed[1]), y, landedRadius(s.g))).toEqual(['fill'])
+    // hidden: none
+    const hidden = paint(s, { hidden: new Set([line.key]) })
+    for (const lx of line.landed) expect(accentArcs(hidden, s, sx(s, lx), y, landedRadius(s.g))).toEqual([])
   })
 })

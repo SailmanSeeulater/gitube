@@ -83,6 +83,7 @@ function profileWith(names: [string, string, string]): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
   }
 }

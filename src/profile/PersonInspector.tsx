@@ -124,6 +124,12 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
           {recentFrom ? ` since ${recentFrom}` : ' lately'}
         </p>
       )}
+      {lane.landed.length > 0 && (
+        <p className="mt-0.5 text-[12px] text-garden-text-dim" title="pull requests of theirs merged into this repo, by the day they were merged">
+          {plural(lane.landed.length, 'pr')} landed
+          {lane.landed.length === 1 ? ` on ${lane.landed[0]}` : ` · first ${lane.landed[0]} · last ${lane.landed[lane.landed.length - 1]}`}
+        </p>
+      )}
 
       <div className="mt-2.5 flex items-center justify-between text-[12px]">
         <span className="text-garden-muted">
@@ -197,7 +203,18 @@ function DayCard({ day, milestone, profile, timeline, days, name }: {
           {repos.length > listed.length && <li className="text-[11px] text-garden-muted">+{repos.length - listed.length} more</li>}
         </ul>
       )}
-      {listed.length === 0 && detail.known && (!graphql || (detail.count ?? 0) > 0) && (
+      {detail.landed.length > 0 && (
+        <ul className="mt-1.5 flex flex-col gap-0.5 text-[12px]">
+          {detail.landed.slice(0, MAX_ROWS).map((row) => (
+            <li key={repoKey(row.repo)} className="flex items-center justify-between gap-2">
+              <Name shown={name(row.repo)} className="text-garden-text-dim" />
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-garden-accent">{plural(row.n, 'pr')} landed</span>
+            </li>
+          ))}
+          {detail.landed.length > MAX_ROWS && <li className="text-[11px] text-garden-muted">+{detail.landed.length - MAX_ROWS} more</li>}
+        </ul>
+      )}
+      {listed.length === 0 && detail.landed.length === 0 && detail.known && (!graphql || (detail.count ?? 0) > 0) && (
         <p className="mt-1 text-[12px] text-garden-muted">
           {graphql ? 'no commits to a repo listed here: issues, pull requests, reviews or private work' : 'no public pushes'}
         </p>
@@ -254,8 +271,9 @@ export function inspectorCard(hover: LifeHover, selected: string | null): Inspec
 }
 
 /**
- * Details of what the pointer is over: a repo (born, active spans, commits, stars) or a day (its
- * contributions or pushes, by repo, and its milestones); with nothing hovered, or a plain day, the
+ * Details of what the pointer is over: a repo (born, active spans, commits, landed pull requests,
+ * stars) or a day (its contributions or pushes, by repo, the pull requests landed that day, and its
+ * milestones); with nothing hovered, or a plain day, the
  * selected repo (inspectorCard). Every name comes through the namer, and dates are GitHub's day
  * keys as written.
  */

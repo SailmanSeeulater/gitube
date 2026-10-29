@@ -75,6 +75,17 @@ push time): the span ends at `max(created_at, pushed_at ?? created_at)`.
    - `commitContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner createdAt
      pushedAt isFork isArchived isPrivate stargazerCount forkCount primaryLanguage { name color } }
      contributions(first: 100) { nodes { occurredAt commitCount } pageInfo { hasNextPage } } }`
+   - `pullRequestContributionsByRepository(maxRepositories: 100) { repository { …the same fields }
+     contributions(first: 100) { nodes { occurredAt pullRequest { merged mergedAt } } pageInfo
+     { hasNextPage } } }` ("landed elsewhere"; field names checked against the live schema on
+     2026-10-28): one node per pull request opened in the window (`occurredAt` is when it was
+     opened). The merged ones into repos whose owner is not the user (the owner part of
+     `nameWithOwner`, compared without case) become `landed`, each on the GitHub day of its
+     `mergedAt`, which can fall in a later window. A repo named only here joins `repos` as one they
+     only contributed to (`isOwn` false, no activity), from its first landed day to its last; one
+     with counted commits too starts at the earlier of the two and ends at the later. Private
+     repos are kept: the namer hides their names like any other's. A window still paging its pull
+     requests, or returning 100 repositories of them, sets `truncated`.
    - `firstPullRequestContribution`, `firstIssueContribution`, `firstRepositoryContribution` (unions:
      select through `... on Created…Contribution { occurredAt … }` and
      `... on RestrictedContribution { occurredAt }`), `joinedGitHubContribution { occurredAt }`,
@@ -138,9 +149,9 @@ export interface ProfileRepo {
   nameWithOwner: string
   /** ISO: when the repo was created on GitHub */
   createdAt: string
-  /** ISO: when this person's part in it starts: createdAt for their own repos, their first counted day otherwise */
+  /** ISO: when this person's part in it starts: createdAt for their own repos, their first counted or landed day otherwise */
   firstActiveAt: string
-  /** ISO: max(createdAt, pushedAt) in tier 1; the last contribution day (or pushedAt) in tier 2 */
+  /** ISO: max(createdAt, pushedAt) in tier 1; the last contribution or landed day (or pushedAt) in tier 2 */
   lastActiveAt: string
   /** owned by the user; false for a repo they only contributed to (tier 2) */
   isOwn: boolean
@@ -182,6 +193,10 @@ export interface ProfileData {
    *  events was served (GitHub keeps 300, but live pages ran 99, 100 and 80, so the count cannot
    *  tell), else 30 days ago. Days before it are unknown, not zero. null in tier 2. */
   recentFrom: string | null
+  /** Tier 2: pull requests of theirs merged into repos they do not own, one entry each, by the GitHub
+   *  day of the merge, sorted by day then repo (nameWithOwner). A repo named only here is in repos
+   *  too (isOwn false, no activity). Private repos are kept. Tier 1: empty. */
+  landed: { day: string; repo: string }[]
   /** the ones the API states directly; derived ones come from the timeline model */
   milestones: ProfileMilestone[]
   /** Tier 2 only (0 in tier 1) */

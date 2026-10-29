@@ -17,7 +17,7 @@ import type { ProfileData } from '../types'
 import { repoKey } from './privacy'
 import { horizonY } from './lifeGeometry'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
-import type { Lane, LifeTimeline } from './timeline'
+import { dayNumber, type Lane, type LifeTimeline } from './timeline'
 import type { LifeCamera, LifeViewport } from './lifeTypes'
 
 /** A stretch of a row in world x. */
@@ -47,6 +47,8 @@ export interface MinimapRow extends LifeViewItem {
   tokens: MinimapStretch[]
   /** the dormant spans, in x order: whitespace */
   dormant: MinimapStretch[]
+  /** world x of each day a pull request of theirs was merged into it, a day's middle, ascending, one per day */
+  landed: number[]
 }
 
 export interface MinimapLayout extends LifeViewModel {
@@ -69,6 +71,16 @@ export function minimapTones(lanes: ReadonlyArray<Lane>): Map<string, number> {
   for (const lane of lanes) if (lane.language !== null) uses.set(lane.language, (uses.get(lane.language) ?? 0) + 1)
   const ranked = [...uses.keys()].sort((a, b) => uses.get(b)! - uses.get(a)! || (a < b ? -1 : a > b ? 1 : 0))
   return new Map(ranked.map((language, i) => [language, i]))
+}
+
+/** The world x of each day a lane's pull requests landed, a day's middle, one per day. */
+function landedX(lane: Pick<Lane, 'landed'>, startDay: number): number[] {
+  const out: number[] = []
+  for (const key of lane.landed) {
+    const x = dayNumber(key) - startDay + 0.5
+    if (Number.isFinite(x) && out[out.length - 1] !== x) out.push(x)
+  }
+  return out
 }
 
 /** The minimap of a timeline; source says whether lanes weigh commits (graphql) or active days (rest). */
@@ -104,6 +116,7 @@ export function layoutMinimap(timeline: LifeTimeline, source: ProfileData['sourc
       stars: lane.stars,
       tokens,
       dormant,
+      landed: landedX(lane, startDay),
     }
   })
   const byKey = new Map(rows.map((row, i) => [row.key, i]))

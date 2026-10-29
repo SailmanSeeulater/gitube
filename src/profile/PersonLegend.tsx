@@ -20,6 +20,7 @@ type GlyphKind =
   | 'cutting'
   | 'visiting'
   | 'seedling'
+  | 'landed'
   | 'milestone'
   | 'lock'
   // life lines'
@@ -31,6 +32,7 @@ type GlyphKind =
   | 'terminus'
   | 'station'
   | 'dotted'
+  | 'landed-station'
   // the constellation's
   | 'size'
   | 'glow'
@@ -39,28 +41,33 @@ type GlyphKind =
   | 'dry-star'
   | 'link'
   | 'faint'
+  | 'landed-tick'
   // phosphor's
   | 'blocks'
   | 'head'
   | 'hollow-head'
   | 'dim-stack'
   | 'faint-stack'
+  | 'landed-block'
   // htop's
   | 'meter'
   | 'busy'
   | 'idle'
   | 'dry-meter'
   | 'half-meter'
+  | 'landed-cell'
   // the git log's
   | 'branch'
   | 'hollow-commit'
   | 'end'
   | 'tag'
+  | 'landed-commit'
   // the minimap's
   | 'token'
   | 'whitespace'
   | 'comment'
   | 'hollow-token'
+  | 'landed-token'
 
 // The petal directions gardenLook's petalAngles gives an open bloom at turn 0.1 and a wilted head at
 // turn 0.5, as the repo garden's legend draws them; written out, so the first-load entry need not
@@ -160,6 +167,15 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <path d="M9 5L13 9L9 13L5 9Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
         </svg>
       )
+    // a pull request of theirs merged into the repo: a diamond in the accent on the stem at its day
+    case 'landed':
+      return (
+        <svg {...common}>
+          {horizon}
+          <line x1="9" y1="14" x2="9" y2="3" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M9 6L12 9L9 12L6 9Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
+        </svg>
+      )
     case 'lock':
       return (
         <span className="text-garden-muted">
@@ -225,6 +241,14 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <line x1="2" y1="9" x2="16" y2="9" stroke={colour} strokeWidth="1.4" strokeDasharray="1.5 3" />
         </svg>
       )
+    // a landed pull request: a filled station in the accent on the line
+    case 'landed-station':
+      return (
+        <svg {...common}>
+          {track}
+          <circle cx="9" cy="9" r="3.5" fill={theme.accent} stroke={theme.canvas} strokeWidth="1.5" />
+        </svg>
+      )
     // the constellation: a star's size, its glow, and its kinds
     case 'size':
       return (
@@ -275,6 +299,14 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <circle cx="9" cy="9" r="1.6" fill={colour} opacity="0.55" />
         </svg>
       )
+    // a landed pull request: a diamond in the accent at the star's upper left
+    case 'landed-tick':
+      return (
+        <svg {...common}>
+          <circle cx="10.5" cy="10.5" r="4" fill={colour} />
+          <path d="M5 2L8 5L5 8L2 5Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
+        </svg>
+      )
     // phosphor: a stack of blocks, brighter toward its head
     case 'blocks':
       return (
@@ -312,6 +344,17 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
         <svg {...common}>
           {horizon}
           <rect x="7" y="10.5" width="4" height="2.5" fill={colour} opacity="0.45" />
+        </svg>
+      )
+    // a landed pull request: a bright diamond over the block at its day's height
+    case 'landed-block':
+      return (
+        <svg {...common}>
+          {horizon}
+          <rect x="7" y="10.5" width="4" height="2.5" fill={colour} opacity="0.4" />
+          <rect x="7" y="7" width="4" height="2.5" fill={colour} opacity="0.65" />
+          <rect x="7" y="3.5" width="4" height="2.5" fill={colour} />
+          <path d="M9 4.5L12.5 8.25L9 12L5.5 8.25Z" fill={theme.accent} />
         </svg>
       )
     // htop: a meter of ticks between brackets, brighter the busier
@@ -357,6 +400,16 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           ))}
         </svg>
       )
+    // a landed pull request: a cell in the accent, full height, among the ticks
+    case 'landed-cell':
+      return (
+        <svg {...common}>
+          {[3, 5, 11, 13].map((x) => (
+            <rect key={x} x={x} y="6" width="1" height="6" fill={colour} opacity="0.6" />
+          ))}
+          <rect x="7" y="3.5" width="3" height="11" fill={theme.accent} />
+        </svg>
+      )
     // the git log: a branch forking off the trunk, with its commits
     case 'branch':
       return (
@@ -381,6 +434,14 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
           <line x1="1" y1="9" x2="9" y2="9" stroke={colour} strokeWidth="1.4" />
           <circle cx="12" cy="9" r="4.5" fill={theme.canvas} stroke={colour} strokeWidth="1" />
           <path d="M12 6V12 M9.4 7.5L14.6 10.5 M9.4 10.5L14.6 7.5" stroke={colour} strokeWidth="1.2" />
+        </svg>
+      )
+    // a landed pull request: a merge dot in the tag colour on the branch
+    case 'landed-commit':
+      return (
+        <svg {...common}>
+          <line x1="1" y1="9" x2="17" y2="9" stroke={colour} strokeWidth="1.4" />
+          <circle cx="9" cy="9" r="3.4" fill={theme.accent} stroke={theme.canvas} strokeWidth="1" />
         </svg>
       )
     // a milestone: a tag on the trunk
@@ -417,6 +478,15 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       return (
         <svg {...common}>
           <rect x="2.5" y="6.5" width="13" height="5" rx="1.5" fill="none" stroke={colour} strokeWidth="1" />
+        </svg>
+      )
+    // a landed pull request: a square in the accent, a little taller than a token, on its day
+    case 'landed-token':
+      return (
+        <svg {...common}>
+          <rect x="1" y="7" width="6" height="4" rx="1.5" fill={colour} />
+          <rect x="11" y="7" width="6" height="4" rx="1.5" fill={colour} />
+          <rect x="6" y="6" width="6" height="6" fill={theme.accent} />
         </svg>
       )
   }
@@ -541,6 +611,13 @@ interface ViewLegend {
 
 const PRIVATE_ITEM: LegendItem = { kind: 'lock', label: 'private repo', hint: 'its name stays hidden until shown with the toggle at the top of the panel' }
 const SEEDLING_HINT = 'a repo GitHub counted no commits to: see what the data leaves out, below'
+/** The landed pull request entry, worded for each view's mark. */
+export const LANDED_LABEL = 'landed PR'
+const LANDED_HINT = 'a pull request of theirs merged into a repo they do not own, marked on the day it was merged'
+/** Whether any lane has a landed pull request: then the view draws the mark, and the legend lists it. */
+function anyLanded(timeline: LifeTimeline): boolean {
+  return timeline.lanes.some((lane) => lane.landed.length > 0)
+}
 
 /** The life garden's intro, glyphs and colours. */
 function gardenLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
@@ -560,6 +637,7 @@ function gardenLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: bool
     items.push({ kind: 'visiting', label: 'contributed', hint: 'a repo they only contributed to, rooted on the day of their first counted commit, with a ring at the root' })
   }
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'seedling', label: 'seedling', hint: SEEDLING_HINT })
+  if (anyLanded(timeline)) items.push({ kind: 'landed', label: LANDED_LABEL, hint: `a diamond on the stem: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right; each plant is a repo, rooted where their part in it starts. ${
@@ -591,6 +669,7 @@ function linesLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boole
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'seedling', hint: `a dotted line: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-station', label: LANDED_LABEL, hint: `a filled station: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right; each line is a repo, from where their part in it starts to today: thick while active, thin while dormant.${
@@ -617,6 +696,7 @@ function constellationLegend(timeline: LifeTimeline, graphql: boolean, hasPrivat
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint', label: 'seedling', hint: `a faint star: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-tick', label: LANDED_LABEL, hint: `a diamond at the star's upper left, from the day of the first: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right; each star is a repo, placed where their part in it starts, in its language's row. ${
@@ -650,6 +730,7 @@ function phosphorLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: bo
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-stack', label: 'seedling', hint: `a faint stack: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-block', label: LANDED_LABEL, hint: `a bright diamond over the block at its day's height: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right on a green phosphor screen; each stack of blocks is a repo, rising where their part in it starts. ${
@@ -678,6 +759,7 @@ function htopLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolea
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   ]
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'half-meter', label: 'seedling', hint: `a meter lit at half: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-cell', label: LANDED_LABEL, hint: `a full-height cell in the monitor's accent: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right on a system monitor; each row is a repo, its meter lit where it was active. ${
@@ -709,6 +791,7 @@ function gitLogLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: bool
     { kind: 'tag', label: 'milestone', hint: 'a milestone is a tag on the trunk: hover it, or see the milestones tab' },
   )
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'seedling', hint: `a branch with only two commits, at its start and its last push: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-commit', label: LANDED_LABEL, hint: `a merge dot in the tag colour on the branch: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right, as git log --graph; each branch is a repo, forking off the trunk where their part in it starts. ${
@@ -734,6 +817,7 @@ function minimapLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boo
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   ]
   if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'hollow-token', label: 'seedling', hint: `a hollow token: ${SEEDLING_HINT}` })
+  if (anyLanded(timeline)) items.push({ kind: 'landed-token', label: LANDED_LABEL, hint: `a square in the editor's accent on the line: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
     intro: `time runs left to right in a code editor; each line of code is a repo, in the order they started, its tokens where it was active. ${

@@ -2,7 +2,8 @@
  * Canvas drawing for the constellation (PROFILE_SPEC.md section 5, view 3): the shared time axis
  * (lifeAxis.ts), a faint fill behind every other language band, gridlines at the years, the links
  * between repos active at the same time, every repo as a star in its language's band (sized by
- * activity, glowing by stars), the bands' names, the milestones on the horizon, and the marks of the
+ * activity, glowing by stars, with a diamond in the accent at its upper left once a pull request of
+ * theirs has landed in it), the bands' names, the milestones on the horizon, and the marks of the
  * hover and the selection. The labels go on top (useLifeLabels), placed by starAnchor,
  * starLabelOrder and constellationKeepOut.
  *
@@ -13,7 +14,7 @@
  */
 import type { LifeInk, LifeViewport } from './lifeTypes'
 import type { LifeViewPaintInput } from './lifeView'
-import { LIFE_YEAR_FONT, paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from './lifeAxis'
+import { LANDED_PX, LIFE_YEAR_FONT, drawLandedMark, paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from './lifeAxis'
 import { horizonY } from './lifeGeometry'
 import type { ConstellationLayout, LifeStar } from './constellationLayout'
 import { starPlotY, type ConstellationGeom } from './constellationGeometry'
@@ -40,6 +41,8 @@ const MIN_GROWN_R = 0.35
 const HOLLOW_PX = 1.5
 /** A fork's companion: this far beyond the core, up and to the right, TWIN_R of its radius. */
 const TWIN_GAP_PX = 2.5
+/** A landed pull request's diamond: this far beyond the core, up and to the left. */
+const LANDED_GAP_PX = 3
 const TWIN_R = 0.4
 const TWIN_MIN_PX = 1
 /** A repo with SPARKLE_STARS stars or more (as the legend says) gets a sparkle: a cross reaching SPARKLE_REACH of the glow past the core. */
@@ -96,7 +99,7 @@ function bandNameShown(top: number, foot: number): boolean {
   return foot - top >= BAND_NAME_MIN_PX
 }
 
-function drawStar(ctx: CanvasRenderingContext2D, star: LifeStar, x: number, y: number, r: number, glow: number, colour: string, alpha: number, ink: LifeInk): void {
+function drawStar(ctx: CanvasRenderingContext2D, star: LifeStar, x: number, y: number, r: number, glow: number, colour: string, alpha: number, ink: LifeInk, landed: boolean): void {
   ctx.fillStyle = colour
   if (glow > 0) {
     for (const [reach, a] of GLOW_DISCS) {
@@ -125,6 +128,11 @@ function drawStar(ctx: CanvasRenderingContext2D, star: LifeStar, x: number, y: n
     ctx.beginPath()
     ctx.arc(x + d, y - d, Math.max(TWIN_MIN_PX, r * TWIN_R), 0, TWO_PI)
     ctx.fill()
+  }
+  if (landed) {
+    const d = (r + LANDED_GAP_PX) * Math.SQRT1_2
+    drawLandedMark(ctx, x - d, y - d, LANDED_PX, ink)
+    ctx.fillStyle = colour
   }
   if (star.stars >= SPARKLE_STARS && glow > 0) {
     const arm = r + SPARKLE_REACH * glow
@@ -236,10 +244,12 @@ export function paintConstellation(ctx: CanvasRenderingContext2D, input: Constel
     const x = g.x[i]
     const r = grownRadius(g.r[i], share[i])
     const glow = g.glow[i] * share[i]
-    const reach = r * (1 + TWIN_R) + TWIN_GAP_PX + glow + TWIN_MIN_PX
+    const reach = r * (1 + TWIN_R) + Math.max(TWIN_GAP_PX, LANDED_GAP_PX + LANDED_PX) + glow + TWIN_MIN_PX
     if (x + reach < 0 || x - reach > W) continue
     const alpha = (sel >= 0 && sel !== i ? ink.dimAlpha : 1) * (star.seedling ? SEEDLING_ALPHA : 1)
-    drawStar(ctx, star, x, g.y[i], r, glow, starColour(star, ink, colourOf), alpha, ink)
+    // the landed mark once the time-lapse has reached the first day a pull request landed
+    const landed = star.landed.length > 0 && (at === null || star.landed[0] <= at)
+    drawStar(ctx, star, x, g.y[i], r, glow, starColour(star, ink, colourOf), alpha, ink, landed)
   }
   ctx.globalAlpha = 1
 

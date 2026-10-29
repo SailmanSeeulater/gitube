@@ -26,6 +26,10 @@ import LifeGarden from '../src/profile/LifeGarden'
 import type { LifeCamera, LifeGardenLayout, LifeHover, LifeInk, LifeViewport } from '../src/profile/lifeTypes'
 import type { ProfileData, ProfileRepo } from '../src/types'
 import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/recordingCtx'
+import { LANDED_PX as GARDEN_LANDED_PX } from '../src/profile/lifeAxis'
+import { pointAt as stemPointAt } from '../src/profile/lifeGeometry'
+import { dayKey as toDayKey } from '../src/profile/timeline'
+import type { LifeLanded, PlantGeom as LandedPlantGeom } from '../src/profile/lifeTypes'
 
 /** 2024-06-15 12:00 in Los Angeles (PDT). */
 const NOW = Date.parse('2024-06-15T19:00:00Z')
@@ -82,6 +86,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
     restrictedContributions: 0,
     truncated: false,
     lostWindows: [],
+    landed: [],
     fallback: null,
     ...over,
   }
@@ -549,5 +554,78 @@ describe('LifeGarden markup', () => {
     const one = scene(profile({ repos: [REPOS[0]] }))
     const html = renderToStaticMarkup(h(LifeGarden, { timeline: one.timeline, layout: one.layout, theme: one.theme, colourOf: one.input.colourOf, name: repoNamer(new Set(), false), login: 'Me' }))
     expect(html).toContain('aria-label="life garden of Me: 1 repo, 2019 to 2024"')
+  })
+})
+
+// ---------- landed pull requests ----------
+
+describe('landed pull requests in the garden', () => {
+  /** The REPOS plus a repo known only by a landed pull request, and the landed entries. */
+  const landedProfile = () =>
+    profile({
+      repos: [...REPOS, repo('upstream/tool', { isOwn: false, createdAt: iso('2016-01-01'), firstActiveAt: iso('2021-05-05'), lastActiveAt: iso('2021-05-05') })],
+      landed: [
+        { day: '2023-01-15', repo: 'someone/big-project' },
+        { day: '2022-08-01', repo: 'Someone/Big-Project' },
+        { day: '2022-08-01', repo: 'someone/big-project' },
+        { day: '2021-05-05', repo: 'upstream/tool' },
+      ],
+    })
+
+  /** Whether the mark of landed day l is drawn on a plant: a diamond whose top corner is on the stem at its day. */
+  function markAt(rec: RecordingCtx, g: LandedPlantGeom, l: LifeLanded, grown = 1): boolean {
+    const [x, y] = stemPointAt(g, Math.min(l.t, grown))
+    const r = GARDEN_LANDED_PX * g.scale
+    return argsOf(rec, 'moveTo').some(([mx, my]) => Math.abs((mx as number) - x) < 1e-9 && Math.abs((my as number) - (y - r)) < 1e-9)
+  }
+
+  it('lays one mark per landed day on the stem, at that day', () => {
+    const s = scene(landedProfile())
+    const plant = s.layout.plants.find((p) => p.key === 'someone/big-project')!
+    expect(plant.landed.map((l) => toDayKey(l.day))).toEqual(['2022-08-01', '2023-01-15'])
+    for (const l of plant.landed) {
+      expect(l.t).toBeGreaterThan(0)
+      expect(l.t).toBeLessThan(1)
+    }
+    // a repo known only by its landed pull requests is a seedling rooted on that day, with its mark
+    const tool = s.layout.plants.find((p) => p.key === 'upstream/tool')!
+    expect(tool.seedling).toBe(true)
+    expect(tool.visiting).toBe(true)
+    expect(tool.landed.map((l) => toDayKey(l.day))).toEqual(['2021-05-05'])
+    expect(s.timeline.lanes[tool.lane].root).toBe('2021-05-05')
+    expect(REPOS.every((r) => s.layout.plants[s.layout.byKey.get(r.nameWithOwner.toLowerCase())!].landed.length === 0 || r.nameWithOwner === 'someone/big-project')).toBe(true)
+  })
+
+  it('draws the mark as an accent diamond, only once the time-lapse has reached its day, never on a hidden plant', () => {
+    const s = scene(landedProfile())
+    const plant = s.layout.plants.find((p) => p.key === 'someone/big-project')!
+    const g = s.input.geoms[s.layout.plants.indexOf(plant)]
+    const tool = s.layout.plants.find((p) => p.key === 'upstream/tool')!
+    const tg = s.input.geoms[s.layout.plants.indexOf(tool)]
+
+    const full = paint(s)
+    for (const l of plant.landed) expect(markAt(full, g, l)).toBe(true)
+    expect(markAt(full, tg, tool.landed[0])).toBe(true)
+    // the diamond is filled in the accent over a halo stroke
+    const fills = full.calls('fill').filter((c) => c.style.fillStyle === s.ink.accent)
+    expect(fills.length).toBeGreaterThanOrEqual(3)
+
+    // before the plant is sown: nothing; between its two days: the first, where the stem has grown to
+    expect(markAt(paint(s, { at: plant.startDay - 1 }), g, plant.landed[0], 0)).toBe(false)
+    const between = dayNumber('2022-12-01')
+    const grown = grownShare(plant, between)
+    const rec = paint(s, { at: between })
+    expect(markAt(rec, g, plant.landed[0], grown)).toBe(true)
+    expect(markAt(rec, g, plant.landed[1], grown)).toBe(false)
+    expect(markAt(rec, g, plant.landed[1], 1)).toBe(false)
+    // on its very day it is drawn
+    expect(markAt(paint(s, { at: plant.landed[1].day }), g, plant.landed[1], grownShare(plant, plant.landed[1].day))).toBe(true)
+
+    // hidden: no mark either
+    const hidden = paint(s, { hidden: new Set([plant.key]) })
+    for (const l of plant.landed) expect(markAt(hidden, g, l)).toBe(false)
+    // a profile without landed pull requests draws no accent diamond on any stem
+    const none = scene()
+    expect(none.layout.plants.every((p) => p.landed.length === 0)).toBe(true)
   })
 })

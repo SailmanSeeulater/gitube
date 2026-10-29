@@ -57,6 +57,8 @@ export interface GitBranch extends LifeViewItem {
   visiting: boolean
   /** world x of each commit, a day's middle, ascending, no two on the same day */
   commits: Float64Array
+  /** world x of each day a pull request of theirs was merged into it, a day's middle, ascending, one per day */
+  landed: Float64Array
   /** seven hex digits from its lane index, days and flags: never its name */
   hash: string
   /** world x free on its lane before it (since the last branch there ended); Infinity for the first */
@@ -120,6 +122,16 @@ function commitDays(lane: Lane, tip: number): number[] {
   return days.filter((day, i) => day <= tip && day >= lane.startDay && (i === 0 || day !== days[i - 1]))
 }
 
+/** The world x of each day a lane's pull requests landed, a day's middle, one per day. */
+function landedX(lane: Pick<Lane, 'landed'>, startDay: number): Float64Array {
+  const out: number[] = []
+  for (const key of lane.landed) {
+    const x = dayNumber(key) - startDay + 0.5
+    if (Number.isFinite(x) && out[out.length - 1] !== x) out.push(x)
+  }
+  return Float64Array.from(out)
+}
+
 /** With a token a lane weighs its counted commits; without one, its active days. */
 function laneWeight(lane: Lane, source: ProfileData['source']): number {
   if (source === 'graphql') return lane.commits
@@ -168,6 +180,7 @@ export function layoutGitLog(timeline: LifeTimeline, source: ProfileData['source
       fork: lane.isFork,
       visiting: !lane.isOwn,
       commits: Float64Array.from(commitDays(lane, tip), (day) => day - startDay + 0.5),
+      landed: landedX(lane, startDay),
       hash: branchHash(i, lane.rootDay, lane.startDay, tip, flags),
       room,
       weight: laneWeight(lane, source),

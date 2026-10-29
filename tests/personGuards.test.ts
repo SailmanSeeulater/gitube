@@ -1,10 +1,10 @@
 /**
  * Person mode's privacy rule, end to end (PROFILE_SPEC.md section 2, "Privacy rule", and risk 8.3):
- * on the recordings with some repos made private, one of them private only in a stale copy, no
- * private name reaches the panel, the inspector, the legend, the milestones, the status strip or
- * PersonApp's markup (text or any attribute), nor any text the canvas draws or measures, in any of
- * the three views, by default or after a reveal for another login; and the address bar only ever
- * names the user and the view.
+ * on the recordings with some repos made private, one of them private only in a stale copy and one
+ * with pull requests landed in it, no private name reaches the panel, the inspector, the legend, the
+ * milestones, the status strip or PersonApp's markup (text or any attribute), nor any text the
+ * canvas draws or measures, in any of the views, by default or after a reveal for another login;
+ * and the address bar only ever names the user and the view.
  */
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -45,8 +45,9 @@ const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'ht
 
 /**
  * kepano's repos made private: the top-starred one (a derived milestone names it), one of his own,
- * one he only contributed to, a fork GitHub counted no commits to, and an archived one. aloha is
- * private only in a stale copy, so its lane may read public.
+ * one he only contributed to (wordgard, which also has pull requests of his landed in it), a fork
+ * GitHub counted no commits to, and an archived one. aloha is private only in a stale copy, so its
+ * lane may read public.
  */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 const KEPANO_STALE = ['kepano/aloha']
@@ -134,6 +135,7 @@ function states(g: Grown, c: Case): Array<Partial<PersonState>> {
   // every day a private repo was active on, or rooted on, and every milestone's day
   const days = new Set<number>()
   for (const [day, repos] of g.days.repos) if (repos.some((r) => g.privateKeys.has(repoKey(r.repo)))) days.add(day)
+  for (const [day, rows] of g.days.landed) if (rows.some((r) => g.privateKeys.has(repoKey(r.repo)))) days.add(day)
   for (const lane of g.timeline.lanes) if (g.privateKeys.has(repoKey(lane.repo))) days.add(lane.rootDay)
   g.timeline.milestones.forEach((m, i) => out.push({ hover: { kind: 'day', day: dayNumber(m.day), milestone: i } }))
   for (const day of days) out.push({ hover: { kind: 'day', day, milestone: null } })
@@ -158,6 +160,8 @@ describe('private repo names', () => {
       for (const name of others) expectNoSecret(c, name, 'another repo\'s name')
       // the stale copy counts: the timeline merged it into a lane that may read public
       expect(grow(c.profile, c.now, theme).privateKeys.size).toBe(c.names.length)
+      // with a token, a private repo has pull requests landed in it, so the checks below cover their marks and lines
+      if (c.token) expect(c.profile.landed.some((l) => c.names.some((n) => repoKey(n) === repoKey(l.repo)))).toBe(true)
     }
   })
 

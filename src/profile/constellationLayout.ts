@@ -20,7 +20,7 @@ import type { ProfileData } from '../types'
 import { hash01 } from '../components/gardenLook'
 import { bloomOfStars } from './lifeGardenLayout'
 import { repoKey } from './privacy'
-import type { Lane, LifeTimeline, Span } from './timeline'
+import { dayNumber, type Lane, type LifeTimeline, type Span } from './timeline'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
 
 const DAY_MS = 86_400_000
@@ -79,6 +79,8 @@ export interface LifeStar extends LifeViewItem {
   /** the lane's last day number */
   endDay: number
   stars: number
+  /** the days pull requests of theirs were merged into it, as day numbers, ascending, one per day (lane.landed) */
+  landed: number[]
   /**
    * How far the star has grown through the time-lapse, piecewise linear: growthShares[i] by the
    * start of day growthDays[i]. 0 before the first day, 1 from the last. Each active span adds its
@@ -335,6 +337,16 @@ function linksOf(lanes: ReadonlyArray<Lane>, weights: ReadonlyArray<number>, lin
     .map(({ a, b, strength, fromDay }) => ({ a, b, strength, fromDay }))
 }
 
+/** The days a lane's pull requests landed, as day numbers, one per day. */
+function landedDays(lane: Pick<Lane, 'landed'>): number[] {
+  const out: number[] = []
+  for (const key of lane.landed) {
+    const day = dayNumber(key)
+    if (Number.isFinite(day) && out[out.length - 1] !== day) out.push(day)
+  }
+  return out
+}
+
 /** The smallest first, then the faintest, then lane order: the order stars are painted in. */
 function comparePaint(a: LifeStar, b: LifeStar): number {
   return a.size - b.size || a.glow - b.glow || a.lane - b.lane
@@ -382,6 +394,7 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
       language: lane.language,
       endDay: lane.endDay,
       stars: lane.stars,
+      landed: landedDays(lane),
       growthDays: growth.days,
       growthShares: growth.shares,
     }

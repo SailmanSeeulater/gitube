@@ -2,7 +2,8 @@
  * Canvas drawing for the htop view: a system monitor's screen whatever the app theme. A header strip
  * of years at the top, a dim gridline at each new year, then one row per repo, its meter a run of
  * "|" ticks along the time axis between "[" and "]": active stretches lit in the language's colour
- * (brighter the busier), dormant ones a dim baseline. A dim PID gutter numbers the rows at the left;
+ * (brighter the busier), dormant ones a dim baseline, and a cell in the accent, full height, on each
+ * day a pull request of theirs landed in the repo. A dim PID gutter numbers the rows at the left;
  * the selected row gets htop's cursor bar, the hovered one a fainter bar. Under the rows the horizon,
  * the language ribbon, today, the milestones and the hovered day's guide, from the shared axis.
  *
@@ -42,6 +43,9 @@ const GUTTER_FONT = '9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospac
 const YEAR_GAP_PX = 34
 /** Rows this far off screen are skipped. */
 const CULL_PX = 8
+/** A landed pull request's cell: this wide, and this share of the pitch tall. */
+export const LANDED_CELL_PX = HTOP_CELL_PX
+const LANDED_SHARE = 0.9
 
 /** A language's colour on the console: its slot's, or the no-language colour. */
 export function htopLanguageColour(layout: Pick<HtopLayout, 'slots'>, language: string | null): string {
@@ -81,8 +85,11 @@ export function htopKeepOut(_layout: HtopLayout, view: LifeViewport): Float32Arr
   )
 }
 
-/** One row's meter: its dormant baseline, its ticks by level and its brackets, filled to the screen x `end`; nothing past `limit` (the time-lapse's day). */
-function drawMeter(ctx: CanvasRenderingContext2D, row: HtopRow, g: HtopGeom, y: number, end: number, limit: number, W: number, alpha: number): void {
+/**
+ * One row's meter: its dormant baseline, its ticks by level, its landed cells and its brackets,
+ * filled to the screen x `end`; nothing past `limit` (the time-lapse's day, `reached` in world x).
+ */
+function drawMeter(ctx: CanvasRenderingContext2D, row: HtopRow, g: HtopGeom, y: number, end: number, limit: number, reached: number, W: number, alpha: number): void {
   const { k, tx } = g.camera
   const sx = (x: number) => tx + x * k
   const colour = htopRowColour(row)
@@ -120,6 +127,23 @@ function drawMeter(ctx: CanvasRenderingContext2D, row: HtopRow, g: HtopGeom, y: 
         drew = true
       }
       if (!drew) ctx.rect(a, y - h / 2, Math.min(1, hi - a), h)
+      any = true
+    }
+    if (any) ctx.fill()
+  }
+
+  // a landed pull request: a cell in the accent, full height, on its day, once reached
+  if (row.landed.length > 0) {
+    ctx.globalAlpha = alpha
+    ctx.fillStyle = HTOP_PALETTE.accent
+    ctx.beginPath()
+    const lh = Math.max(1, g.pitch * LANDED_SHARE)
+    let any = false
+    for (const lx of row.landed) {
+      if (Math.floor(lx) > reached) break
+      const cx = sx(lx)
+      if (cx < -CULL_PX || cx > W + CULL_PX) continue
+      ctx.rect(Math.round(cx - LANDED_CELL_PX / 2), y - lh / 2, LANDED_CELL_PX, lh)
       any = true
     }
     if (any) ctx.fill()
@@ -228,7 +252,7 @@ export function paintHtop(ctx: CanvasRenderingContext2D, input: HtopPaintInput):
       const end = sx(htopDrawnTo(row, layout.startDay, at))
       if (end < -CULL_PX || sx(row.x0) > W + CULL_PX) continue
       const alpha = sel >= 0 && sel !== i && hov !== i ? DIM_ALPHA : 1
-      drawMeter(ctx, row, g, rowY(g, i), end, sx(reached), W, alpha)
+      drawMeter(ctx, row, g, rowY(g, i), end, sx(reached), reached, W, alpha)
     }
   }
 
