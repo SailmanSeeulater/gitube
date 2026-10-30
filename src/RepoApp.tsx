@@ -431,7 +431,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       const image = kit.composeGraphImage(canvas, theme, {
         title: `${data.owner}/${data.repo}`,
         detail: parts.join(' · '),
-        credit: `repo-garden · ${day}`,
+        credit: `gitube · ${day}`,
       })
       kit.downloadBlob(await kit.canvasToPng(image), kit.gardenFileName(data, 'png'))
       setExportError(null)
@@ -554,7 +554,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       {showGrowing && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="animate-pulse text-[13px] text-garden-muted">
-            growing {shownOwner}/{shownRepo}…
+            loading {shownOwner}/{shownRepo}…
           </p>
         </div>
       )}
@@ -652,7 +652,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       {battleRef &&
         data &&
         (battleCode.status === 'ready' ? (
-          <LazySlot frame={BATTLE_FRAME} label="setting up the battle" onFailed={battleFailed}>
+          <LazySlot frame={BATTLE_FRAME} label="setting up vs" onFailed={battleFailed}>
             <GardenBattle
               a={data}
               b={challenger.data}
@@ -666,7 +666,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           </LazySlot>
         ) : (
           // its code is still on the way (a failure drops the battle: see battleFailed)
-          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up the battle" />
+          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up vs" />
         ))}
     </div>
   )

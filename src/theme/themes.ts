@@ -1,5 +1,5 @@
 /**
- * Colour themes: the one source of every colour repo-garden paints, in the DOM and on the canvas.
+ * Colour themes: the one source of every colour gitube paints, in the DOM and on the canvas.
  *
  * Ten themes, two dark and eight light. Obsidian, the default, is the original look token for
  * token. The token values come from the judge-corrected theme design (themes.json: palettes
@@ -25,7 +25,7 @@ export type ThemeId = (typeof THEME_IDS)[number]
 export const DEFAULT_THEME_ID: ThemeId = 'obsidian'
 
 /** localStorage key of the chosen theme id. */
-export const THEME_STORAGE_KEY = 'repo-garden:theme'
+export { THEME_STORAGE_KEY } from '../storageKeys.ts'
 
 /** Label plates (useLabelPlacer): canvas at this alpha behind the text... */
 export const LABEL_PLATE_FILL_ALPHA = 0.92

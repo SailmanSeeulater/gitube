@@ -66,27 +66,27 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
     case 'network':
       return {
         title: "couldn't reach GitHub",
-        hint: 'check your connection and press Grow again.',
+        hint: 'check your connection and press Go again.',
       }
     case 'aborted':
       return {
         title: 'fetch cancelled',
-        hint: 'press Grow to start again.',
+        hint: 'press Go to start again.',
       }
     case 'empty_repo':
       return {
         title: 'this repository has no commits',
-        hint: 'push a first commit and press Grow again.',
+        hint: 'push a first commit and press Go again.',
       }
     case 'unknown':
       return {
         title: 'something went wrong',
-        hint: message ? `${message} press Grow to try again.` : 'press Grow to try again.',
+        hint: message ? `${message} press Go to try again.` : 'press Go to try again.',
       }
     case 'bad_file':
       return {
         title: "couldn't open that file",
-        hint: message ?? 'pick a .json file saved from repo-garden.',
+        hint: message ?? 'pick a .json file saved from gitube.',
       }
     case 'export_failed':
       return {
@@ -95,7 +95,7 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
       }
     case 'chunk_failed':
       return {
-        title: "couldn't load that part of repo-garden",
+        title: "couldn't load that part of gitube",
         hint: 'the connection may have dropped, or the site was updated since this tab was opened. reload the page to fetch it again.',
         reloadAction: 'reload',
       }

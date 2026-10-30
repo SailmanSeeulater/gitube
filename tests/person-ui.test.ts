@@ -282,7 +282,7 @@ describe('personErrorCopy', () => {
     expect(withToken.tokenAction).toBe(true)
     expect(withToken.title).toBeUndefined()
     expect(withToken.hint).not.toContain('repo')
-    expect(personErrorCopy(error, 'me', false)).toEqual({ title: 'GitHub refused the request', hint: 'press Grow to try again in a while.', tokenAction: false })
+    expect(personErrorCopy(error, 'me', false)).toEqual({ title: 'GitHub refused the request', hint: 'press Go to try again in a while.', tokenAction: false })
   })
 
   it('words not_a_user by the account type the identity call names, never offering a token', () => {
@@ -317,9 +317,9 @@ describe('personErrorCopy', () => {
     }
     const offline = textOf(renderToStaticMarkup(h(ErrorCard, { code: 'network', message: 'Network error while looking up me: fetch failed' })))
     expect(offline).toContain("couldn't reach GitHub")
-    expect(offline).toContain('press Grow again')
+    expect(offline).toContain('press Go again')
     expect(offline).not.toMatch(/repo/)
-    expect(textOf(renderToStaticMarkup(h(ErrorCard, { code: 'aborted' })))).toContain('press Grow to start again')
+    expect(textOf(renderToStaticMarkup(h(ErrorCard, { code: 'aborted' })))).toContain('press Go to start again')
   })
 
   it("keeps the card's own copy for every other code", () => {

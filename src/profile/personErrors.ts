@@ -35,7 +35,7 @@ export function personErrorCopy(error: GitHubFetchError, login: string, hasToken
       if (/secondary/i.test(error.message)) {
         return {
           title: 'GitHub asked for a short pause',
-          hint: `too many requests in a short time (a secondary rate limit). ${reset ? `try again after ${reset}.` : 'wait a minute and press Grow again.'}`,
+          hint: `too many requests in a short time (a secondary rate limit). ${reset ? `try again after ${reset}.` : 'wait a minute and press Go again.'}`,
           tokenAction: false,
         }
       }
@@ -47,7 +47,7 @@ export function personErrorCopy(error: GitHubFetchError, login: string, hasToken
       return { tokenAction: true }
     case 'unauthorized':
       if (hasToken) return { hint: 'it may be expired or revoked. edit or clear it and try again.', tokenAction: true }
-      return { title: 'GitHub refused the request', hint: 'press Grow to try again in a while.', tokenAction: false }
+      return { title: 'GitHub refused the request', hint: 'press Go to try again in a while.', tokenAction: false }
     default:
       return { tokenAction: false }
   }

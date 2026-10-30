@@ -85,13 +85,13 @@ interface Measure {
 
 /** The face-off, in the order shown. */
 export const MEASURES: ReadonlyArray<Measure> = [
-  { key: 'branches', label: 'branches', hint: 'bushier: more live branches', better: 'more' },
-  { key: 'people', label: 'people', hint: 'more gardeners in the loaded commits (bots left out)', better: 'more' },
+  { key: 'branches', label: 'branches', hint: 'busier: more live branches', better: 'more' },
+  { key: 'people', label: 'people', hint: 'more people in the loaded commits (bots left out)', better: 'more' },
   { key: 'perWeek', label: 'commits / week', hint: 'busier: loaded commits per week of the loaded window', better: 'more' },
   { key: 'merges', label: 'merges', hint: 'more merge commits: work flowing back together', better: 'more' },
   { key: 'lastCommitDays', label: 'last commit', hint: 'fresher: the newest commit is more recent', better: 'less' },
-  { key: 'weeds', label: 'weeds', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
-  { key: 'thorny', label: 'thorns', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
+  { key: 'weeds', label: 'cleanup', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
+  { key: 'thorny', label: 'diverged', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
   { key: 'stale', label: 'stale', hint: `livelier: fewer branches quiet for ${STALE_DAYS}+ days`, better: 'less' },
 ]
 

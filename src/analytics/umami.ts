@@ -25,7 +25,7 @@ export const MAX_VALUE_LENGTH = 50
 /** How many events wait for the tracker while it loads; the first ones are kept, the rest dropped. */
 export const MAX_QUEUED_EVENTS = 20
 /** The global the tracker's data-before-send attribute names. */
-export const BEFORE_SEND_GLOBAL = 'repoGardenBeforeSend'
+export const BEFORE_SEND_GLOBAL = 'gitubeBeforeSend'
 
 /** The complete list of custom events; nothing else is sent. */
 export type AnalyticsEvent =

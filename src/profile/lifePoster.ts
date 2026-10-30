@@ -107,9 +107,9 @@ export function posterYears(timeline: Pick<LifeTimeline, 'start' | 'today'>): st
   return from === to ? from : `${from}–${to}`
 }
 
-/** 'repo-garden · Oct 25, 2026' */
+/** 'gitube · Oct 25, 2026' */
 export function posterCredit(now: Date, locale?: string): string {
-  return `repo-garden · ${now.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })}`
+  return `gitube · ${now.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })}`
 }
 
 /**

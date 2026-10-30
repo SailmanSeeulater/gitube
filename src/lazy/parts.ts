@@ -1,5 +1,5 @@
 /**
- * The parts of repo-garden that load only when they are used, each its own chunk. Growing a repo
+ * The parts of gitube that load only when they are used, each its own chunk. Growing a repo
  * and looking at it in the organic layout needs none of them, so a first visit downloads none.
  *
  * Everything else is eager on purpose: the graph and its canvas (react-force-graph), the GitHub

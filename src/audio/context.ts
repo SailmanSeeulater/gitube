@@ -7,9 +7,9 @@
  *
  * Browser only, apart from readSound and writeSound, which also work without storage.
  */
+import { SOUND_STORAGE_KEY } from '../storageKeys'
 
-/** localStorage key of the music box switch. */
-export const SOUND_STORAGE_KEY = 'repo-garden:sound'
+export { SOUND_STORAGE_KEY }
 
 export function readSound(): boolean {
   try {

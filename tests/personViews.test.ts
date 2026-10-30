@@ -148,7 +148,7 @@ describe('the panel and the inspector', () => {
         const text = textOf(html)
         expect(text, where).toContain(INTROS[view])
         for (const other of VIEWS) if (other !== view) expect(text, where).not.toContain(INTROS[other])
-        expect(text).toContain('watch it grow')
+        expect(text).toContain('replay')
         expect(html).not.toContain('aria-label="Time-lapse"')
       }
     }
@@ -287,7 +287,7 @@ describe('the time-lapse', () => {
           painter.paint(rec.ctx, g.view, g.camera, 16)
           return rec.calls('fillText').slice(-3).map((c) => String(c.args[0]))
         })
-        expect(huds[0], `${label} at ${p}`).toEqual([captions[0].year, `${captions[0].sown} repo${captions[0].sown === 1 ? '' : 's'}`, `${g.profile.login} · repo-garden`])
+        expect(huds[0], `${label} at ${p}`).toEqual([captions[0].year, `${captions[0].sown} repo${captions[0].sown === 1 ? '' : 's'}`, `${g.profile.login} · gitube`])
         for (const hud of huds) expect(hud, `${label} at ${p}`).toEqual(huds[0])
       }
     }
@@ -462,7 +462,7 @@ describe('the recording', () => {
       const { painter } = viewPainterFor(g, view, {}, { timelapse: { progress: { current: 0.6 }, title: 'kepano', live: true } })
       const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
       expect(painter.paint(rec.ctx, g.view, g.camera, 33), view).toBe(true)
-      expect(String(rec.calls('fillText').at(-1)?.args[0]), view).toBe('kepano · repo-garden')
+      expect(String(rec.calls('fillText').at(-1)?.args[0]), view).toBe('kepano · gitube')
       // in the view's own ink: a console view's caption reads on its dark screen whatever the theme
       const ink = viewInk(g.ink, LIFE_VIEWS[view])
       expect(rec.calls('fillRect').some((c) => c.style.fillStyle === ink.accent && c.args[1] === g.view.height - 3), view).toBe(true)

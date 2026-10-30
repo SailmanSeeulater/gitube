@@ -157,7 +157,7 @@ describe('posterYears and posterCredit', () => {
   })
 
   it('credits the app with the day', () => {
-    expect(posterCredit(new Date(2026, 9, 25, 12), 'en-US')).toBe('repo-garden · Oct 25, 2026')
+    expect(posterCredit(new Date(2026, 9, 25, 12), 'en-US')).toBe('gitube · Oct 25, 2026')
   })
 })
 
@@ -282,7 +282,7 @@ const TEXT: PosterText = {
     { day: '2015-02-02', label: 'most starred repo: 900 stars', repo: { text: PRIVATE_REPO_LABEL, locked: true } },
     { day: '2018-06-01', label: 'longest streak: 40 days', repo: null },
   ],
-  credit: 'repo-garden · Oct 25, 2026',
+  credit: 'gitube · Oct 25, 2026',
 }
 
 function frame(text: PosterText, avatar: CanvasImageSource | null, t: Theme = theme): RecordingCtx {

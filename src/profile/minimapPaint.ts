@@ -6,7 +6,7 @@
  * whitespace dots (while the rows are tall enough to show them) and a square in the accent, a
  * little taller than its tokens, on each day a pull request of theirs landed in it; the milestones and the hovered
  * day's guide; then the chrome over it all, in screen px whatever the camera: the gutter's line
- * numbers, the tab bar ("life.garden"), and the minimap strip at the right edge with a box over the
+ * numbers, the tab bar ("life.tube"), and the minimap strip at the right edge with a box over the
  * stretch of time on screen. The labels go on top (useLifeLabels) and are the only repo names on the
  * canvas: this draws none, only line numbers, the tab's file name, years and "today".
  *
@@ -39,7 +39,7 @@ import {
 export type MinimapPaintInput = LifeViewPaintInput<MinimapLayout, MinimapGeom>
 
 /** The tab's file name: never a repo's. */
-export const TAB_NAME = 'life.garden'
+export const TAB_NAME = 'life.tube'
 /** The tab's close mark. */
 const TAB_CLOSE = '×'
 const TAB_FONT = '11px ui-sans-serif, system-ui, -apple-system, sans-serif'
@@ -209,7 +209,7 @@ function drawGutter(ctx: CanvasRenderingContext2D, layout: MinimapLayout, g: Min
   }
 }
 
-/** The tab bar: one active tab, the file "life.garden". */
+/** The tab bar: one active tab, the file "life.tube". */
 function drawTabBar(ctx: CanvasRenderingContext2D, g: MinimapGeom, view: LifeViewport): void {
   const top = g.tabTop
   ctx.fillStyle = P.tabBar

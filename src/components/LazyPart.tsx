@@ -46,7 +46,7 @@ export function lazyPart<P extends object>(chunk: Chunk<{ default: ComponentType
 export function ReloadNotice() {
   return (
     <p role="status" className="text-[12px] leading-snug text-garden-muted">
-      couldn't load this part. the connection may have dropped, or repo-garden was updated since this tab was opened.{' '}
+      couldn't load this part. the connection may have dropped, or gitube was updated since this tab was opened.{' '}
       <button type="button" onClick={reloadPage} className="font-medium text-garden-accent hover:underline">
         reload
       </button>

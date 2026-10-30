@@ -8,7 +8,9 @@
 import { parseRepoUrl } from '../api/parseRepoUrl'
 import type { Branch, Commit, RepoData } from '../types'
 
-export const GARDEN_FILE_FORMAT = 'repo-garden'
+export const GARDEN_FILE_FORMAT = 'gitube'
+/** The format name files had before the rename; they open as they always did. */
+export const LEGACY_FILE_FORMAT = 'repo-garden'
 export const GARDEN_FILE_VERSION = 1
 
 export interface GardenFile {
@@ -32,8 +34,8 @@ export function serializeGarden(data: RepoData, now: Date = new Date()): string 
   return JSON.stringify(file)
 }
 
-/** 'owner-repo-garden-2026-10-21.png' (local date); kind replaces 'garden' ('timelapse'). */
-export function gardenFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date(), kind = 'garden'): string {
+/** 'owner-repo-gitube-2026-10-21.png' (local date); kind replaces 'gitube' ('timelapse'). */
+export function gardenFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date(), kind = 'gitube'): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   return `${data.owner}-${data.repo}-${kind}-${day}.${ext}`
@@ -127,11 +129,11 @@ export function parseGardenFile(text: string): GardenFile {
   } catch {
     throw new GardenFileError('this is not a JSON file.')
   }
-  if (!isObject(parsed) || parsed.format !== GARDEN_FILE_FORMAT) {
-    throw new GardenFileError('this JSON file was not saved by repo-garden.')
+  if (!isObject(parsed) || (parsed.format !== GARDEN_FILE_FORMAT && parsed.format !== LEGACY_FILE_FORMAT)) {
+    throw new GardenFileError('this JSON file was not saved by gitube.')
   }
   if (typeof parsed.version !== 'number' || parsed.version > GARDEN_FILE_VERSION) {
-    throw new GardenFileError('this file was saved by a newer repo-garden. reload the page and try again.')
+    throw new GardenFileError('this file was saved by a newer gitube. reload the page and try again.')
   }
   if (parsed.version !== GARDEN_FILE_VERSION) throw new GardenFileError(`unsupported file version ${parsed.version}.`)
 

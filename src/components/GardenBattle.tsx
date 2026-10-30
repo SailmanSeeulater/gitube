@@ -88,7 +88,7 @@ export default function GardenBattle({ a, b, bRef, bFetching, bError, theme, onR
   const nameB = b ? `${b.owner}/${b.repo}` : `${bRef.owner}/${bRef.repo}`
 
   return (
-    <div role="dialog" aria-label={`Garden battle: ${nameA} vs ${nameB}`} className="absolute inset-0 z-30 flex flex-col bg-garden-bg text-[13px]">
+    <div role="dialog" aria-label={`vs: ${nameA} and ${nameB}`} className="absolute inset-0 z-30 flex flex-col bg-garden-bg text-[13px]">
       <header className="flex items-center gap-2.5 border-b border-garden-border bg-garden-panel/95 px-4 py-2.5">
         <span className="text-garden-accent">
           <SwordsIcon size={16} />
@@ -109,7 +109,7 @@ export default function GardenBattle({ a, b, bRef, bFetching, bError, theme, onR
         <button
           type="button"
           onClick={onClose}
-          aria-label="End the battle"
+          aria-label="Close vs"
           className="shrink-0 rounded-lg p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
         >
           <CloseIcon />
@@ -128,12 +128,12 @@ export default function GardenBattle({ a, b, bRef, bFetching, bError, theme, onR
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
               {bFetching ? (
                 <>
-                  <p className="animate-pulse text-garden-muted">growing {nameB}…</p>
+                  <p className="animate-pulse text-garden-muted">loading {nameB}…</p>
                   {progress?.message && <p className="text-[11px] text-garden-muted">{progress.message}</p>}
                 </>
               ) : bError ? (
                 <>
-                  <p className="font-medium text-garden-text">couldn't grow {nameB}</p>
+                  <p className="font-medium text-garden-text">couldn't load {nameB}</p>
                   <p className="max-w-[320px] text-[12px] leading-snug text-garden-muted">{bError.message}</p>
                   <div className="mt-1 flex gap-2">
                     <button type="button" onClick={onRetry} className="rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25">

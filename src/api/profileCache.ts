@@ -51,7 +51,8 @@ export async function rememberProfile(store: ProfileStore, profile: ProfileData,
 
 /**
  * This browser's profile store, or null where IndexedDB does not exist (tests, some private modes).
- * Every operation swallows storage errors: the app then simply fetches.
+ * Every operation swallows storage errors: the app then simply fetches. The database keeps the
+ * app's old name, as the repo cache's does (repoCache.ts).
  */
 export function browserProfileStore(): ProfileStore | null {
   return indexedDbStore<ProfileData>('repo-garden-profiles', 'profiles')

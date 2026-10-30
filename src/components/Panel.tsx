@@ -69,17 +69,17 @@ function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean
             }
           }}
           placeholder="vs owner/repo"
-          aria-label="Repo to battle"
+          aria-label="Repo to compare"
           spellCheck={false}
           autoComplete="off"
           className="min-w-0 flex-1 rounded-lg bg-garden-field px-2 py-1 text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
         />
         <button type="submit" className="shrink-0 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25">
-          fight
+          go
         </button>
       </div>
       <p className={`text-[11px] leading-snug ${bad ? 'text-garden-danger' : 'text-garden-muted'}`}>
-        {bad ? "that doesn't look like a GitHub repo." : 'grows both side by side and scores them, measure by measure.'}
+        {bad ? "that doesn't look like a GitHub repo." : 'opens both side by side and scores them, measure by measure.'}
       </p>
     </form>
   )
@@ -140,7 +140,7 @@ function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProp
   const tabs: ReadonlyArray<{ id: PanelTab; label: string; count: number }> = [
     { id: 'branches', label: 'branches', count: branchCount },
     { id: 'contributors', label: 'people', count: peopleCount },
-    { id: 'weeds', label: 'weeds', count: weedCount },
+    { id: 'weeds', label: 'cleanup', count: weedCount },
   ]
   return (
     <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-garden-border px-2">
@@ -529,8 +529,8 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
             setBattleOpen(!battleOpen)
           }}
           aria-expanded={battleOpen}
-          title="Garden battle: grow another repo beside this one and score them"
-          aria-label="Garden battle"
+          title="vs: open another repo beside this one and score them"
+          aria-label="vs"
           className={`rounded p-1 hover:bg-garden-hover ${battleOpen ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'}`}
         >
           <SwordsIcon />
@@ -588,7 +588,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
           />
         )
       ) : panelTab === 'weeds' ? (
-        <LazySlot key="weeds" frame={TAB_FRAME} label="loading weeds">
+        <LazySlot key="weeds" frame={TAB_FRAME} label="loading cleanup">
           <WeedsTab
             report={weeds}
             owner={data.owner}

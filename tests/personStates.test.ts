@@ -149,12 +149,13 @@ beforeEach(() => {
 })
 
 describe('loading', () => {
-  it('grows a first fetch with its login, and the strip says the stage', () => {
+  it('loads a first fetch with its login, and the strip says the stage', () => {
     const html = personApp('Ghost-X', '', { fetching: true })
     const text = textOf(html)
-    expect(text).toContain('growing Ghost-X…')
+    expect(text).toContain('loading Ghost-X…')
     expect(text).toContain('starting')
-    expect(text).toContain('growing') // the Grow button, busy
+    // the Go button, busy: 'loading' twice, once over the canvas and once on the button
+    expect(text.match(/\bloading\b/g)).toHaveLength(2)
     expect(card(html)).toBe('')
     expect(html).not.toContain('<aside')
     expect(html).not.toContain('<canvas')
@@ -166,7 +167,7 @@ describe('loading', () => {
     const text = textOf(html)
     expect(html).toContain('aria-label="life lines of octo: 2 repos')
     expect(html).toContain('<aside')
-    expect(text).not.toContain('growing octo…')
+    expect(text).not.toContain('loading octo…')
     expect(text).toContain('listing repos')
     expect(text).toContain('2 requests')
     expect(text).toContain(`54 left · resets ${formatClock(RESET)}`)
@@ -235,7 +236,7 @@ describe('a fetch that failed', () => {
   it('says the network failed (offline included) or the fetch was cancelled, and to grow again', () => {
     const offline = card(personApp('octo', '', { error: new GitHubFetchError('Network error while looking up octo: fetch failed', 'network') }))
     expect(textOf(offline)).toContain("couldn't reach GitHub")
-    expect(textOf(offline)).toContain('press Grow again')
+    expect(textOf(offline)).toContain('press Go again')
     const cancelled = card(personApp('octo', '', { error: new GitHubFetchError('Fetch aborted while looking up octo', 'aborted') }))
     expect(textOf(cancelled)).toContain('fetch cancelled')
     for (const html of [offline, cancelled]) expect(buttons(html)).toEqual([])
@@ -244,7 +245,7 @@ describe('a fetch that failed', () => {
   it('shows no card while the next fetch runs', () => {
     const html = personApp('octo', '', { error: new GitHubFetchError('Network error', 'network'), fetching: true })
     expect(card(html)).toBe('')
-    expect(textOf(html)).toContain('growing octo…')
+    expect(textOf(html)).toContain('loading octo…')
   })
 
   it('leaves the profile on show after a failed refetch, under a card that can be closed', () => {

@@ -342,7 +342,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
       {!profile && isFetching && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-[13px] text-garden-muted">growing {login}…</p>
+          <p className="animate-pulse text-[13px] text-garden-muted">loading {login}…</p>
         </div>
       )}
 

@@ -58,11 +58,11 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
         <button
           type="button"
           onClick={onTimelapse}
-          title="Replay this life growing from its start, and record it as a video"
+          title="Replay this life from its start, and record it as a video"
           className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
         >
           <PlayIcon size={11} />
-          watch it grow
+          replay
         </button>
       )}
       <span className="text-garden-text-dim">

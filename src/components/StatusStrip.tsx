@@ -94,11 +94,11 @@ export default function StatusStrip({
           onClick={onTimelapse}
           onPointerEnter={preloadTimelapse}
           onFocus={preloadTimelapse}
-          title="Replay the garden growing from its first loaded commit, and record it as a video"
+          title="Replay the map being built from its first loaded commit, and record it as a video"
           className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
         >
           <PlayIcon size={11} />
-          watch it grow
+          replay
         </button>
       )}
       <span className="text-garden-text-dim">
@@ -135,7 +135,7 @@ export default function StatusStrip({
       {fileSavedAt !== null && (
         <span
           className="rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
-          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Grow to load it live from GitHub.`}
+          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Go to load it live from GitHub.`}
         >
           from file{fileSavedAt && relativeTime(fileSavedAt) ? ` · saved ${relativeTime(fileSavedAt)}` : ''}
         </span>

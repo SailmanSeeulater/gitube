@@ -296,7 +296,7 @@ export default function PersonTimelapse({
           aria-valuetext={date || undefined}
           className="min-w-0 flex-1 accent-garden-accent disabled:opacity-60"
         />
-        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-garden-text-dim" title="how far the life has grown, in GitHub's days">
+        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-garden-text-dim" title="how far the replay has reached, in GitHub's days">
           {date}
         </span>
         <select

@@ -586,7 +586,7 @@ describe('theme storage', () => {
   }
 
   it('reads the saved theme, falling back to Obsidian', () => {
-    expect(THEME_STORAGE_KEY).toBe('repo-garden:theme')
+    expect(THEME_STORAGE_KEY).toBe('gitube:theme')
     expect(readStoredThemeId(fake())).toBe('obsidian') // first visit
     expect(readStoredThemeId(fake({ [THEME_STORAGE_KEY]: 'paper' }))).toBe('paper')
     expect(readStoredThemeId(fake({ [THEME_STORAGE_KEY]: 'neon' }))).toBe('obsidian')
@@ -595,10 +595,10 @@ describe('theme storage', () => {
     expect(readStoredThemeId()).toBe('obsidian') // node: no localStorage at all
   })
 
-  it('writes the choice under repo-garden:theme and survives storage that throws', () => {
+  it('writes the choice under gitube:theme and survives storage that throws', () => {
     const storage = fake()
     writeStoredThemeId('midnight', storage)
-    expect(storage.data.get('repo-garden:theme')).toBe('midnight')
+    expect(storage.data.get('gitube:theme')).toBe('midnight')
     expect(readStoredThemeId(storage)).toBe('midnight')
     expect(() => writeStoredThemeId('sky', throwing)).not.toThrow()
     expect(() => writeStoredThemeId('sky', null)).not.toThrow()
@@ -699,6 +699,42 @@ describe('first paint (index.html boot)', () => {
       expect(result.scheme).toBe('')
       expect(result.attrs.get('data-theme')).toBe('obsidian')
     }
+  })
+
+  it("moves settings saved under the app's old name to their gitube: keys, once, before the theme is read", () => {
+    const data = new Map<string, string>([
+      ['repo-garden:token', 'ghp_example'],
+      ['repo-garden:theme', 'paper'],
+      ['repo-garden:layout', 'organic'],
+      ['repo-garden:sound', 'on'],
+      // a value already under the new key wins over the old one
+      ['gitube:sound', 'off'],
+      ['unrelated', 'kept'],
+    ])
+    const localStorage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+      removeItem: (key: string) => void data.delete(key),
+    }
+    const attrs = new Map<string, string>()
+    const document = {
+      documentElement: { style: { colorScheme: '', setProperty: () => {} }, setAttribute: (name: string, value: string) => void attrs.set(name, value) },
+      querySelector: () => null,
+    }
+    new Function('window', 'document', themeBootScript())({ localStorage }, document)
+    expect(Object.fromEntries(data)).toEqual({
+      'gitube:token': 'ghp_example',
+      'gitube:theme': 'paper',
+      'gitube:layout': 'organic',
+      'gitube:sound': 'off',
+      unrelated: 'kept',
+    })
+    // the moved theme is the one applied
+    expect(attrs.get('data-theme')).toBe('paper')
+    // a second load finds nothing to move and changes nothing
+    const before = Object.fromEntries(data)
+    new Function('window', 'document', themeBootScript())({ localStorage }, document)
+    expect(Object.fromEntries(data)).toEqual(before)
   })
 
   it('ships the default theme as CSS for the very first paint', () => {

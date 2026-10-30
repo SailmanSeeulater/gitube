@@ -73,6 +73,7 @@ export function sharedRepoStore(): RepoStore | null {
 /**
  * This browser's store, or null where IndexedDB does not exist (tests, some private modes).
  * Every operation swallows storage errors (quota, a blocked database): the app then simply fetches.
+ * The database keeps the app's old name: renaming it would only orphan every visitor's cache.
  */
 export function browserRepoStore(): RepoStore | null {
   return indexedDbStore<RepoData>('repo-garden', 'repos')

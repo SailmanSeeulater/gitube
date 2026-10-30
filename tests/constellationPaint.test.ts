@@ -621,7 +621,7 @@ describe("the constellation's frame under the shared painter", () => {
     expect(caption(early)).toEqual(['0 repos'])
     const done = painterFor(s, {}, false, 1).rec
     expect(caption(done)).toEqual([`${s.layout.stars.length} repos`])
-    expect(argsOf(done, 'fillText').map(([text]) => String(text))).toContain('Me · repo-garden')
+    expect(argsOf(done, 'fillText').map(([text]) => String(text))).toContain('Me · gitube')
   })
 })
 

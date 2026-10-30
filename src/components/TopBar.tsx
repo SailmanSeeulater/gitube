@@ -208,7 +208,7 @@ export default function TopBar({
           disabled={busy}
           className="rounded-lg bg-garden-accent/15 px-3 py-1 font-medium text-garden-accent transition-colors hover:bg-garden-accent/25 disabled:cursor-progress disabled:opacity-60"
         >
-          {busy ? 'growing' : 'Grow'}
+          {busy ? 'loading' : 'Go'}
         </button>
         <button
           type="button"

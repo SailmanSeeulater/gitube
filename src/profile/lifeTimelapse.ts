@@ -137,7 +137,7 @@ export function paintLapseHud(ctx: CanvasRenderingContext2D, view: LifeViewport,
   ctx.fillStyle = ink.muted
   text(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`, W - 18, 58)
   ctx.font = `11px ${HUD_FONT}`
-  text(`${title} · repo-garden`, W - 14, H - 14)
+  text(`${title} · gitube`, W - 14, H - 14)
   ctx.globalAlpha = 0.85
   ctx.fillStyle = ink.accent
   ctx.fillRect(0, H - 3, W * p, 3)
@@ -290,6 +290,6 @@ export class LapseRecorder {
  * carries; anything else in its own words.
  */
 export function lapseSaveError(err: unknown): { chunkFailed: boolean; message: string } {
-  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of repo-garden that saves videos" }
+  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of gitube that saves videos" }
   return { chunkFailed: false, message: err instanceof Error ? err.message : String(err) }
 }

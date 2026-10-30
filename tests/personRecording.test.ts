@@ -114,7 +114,7 @@ function record(g: Grown) {
       progress: progress.current,
       year: typeof year === 'string' ? year : undefined,
       strokes: rec.calls('lineTo').length,
-      credited: texts.includes(`${g.profile.login} · repo-garden`),
+      credited: texts.includes(`${g.profile.login} · gitube`),
     })
     rec.clear()
     if (tick.next === 'save') break

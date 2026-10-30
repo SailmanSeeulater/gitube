@@ -97,11 +97,11 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
     <div className="garden-scroll min-h-0 flex-1 overflow-y-auto px-3 py-2.5 text-[12px]">
       <section aria-labelledby="weeds-heading">
         <h3 id="weeds-heading" className="text-[11px] uppercase tracking-wide text-garden-muted">
-          weeds
+          merged, not deleted
         </h3>
         {weeds.length === 0 ? (
           <p className="mt-1 leading-snug text-garden-muted">
-            no weeds: every branch has commits <span className="font-mono">{defaultBranch}</span> lacks.
+            nothing to clean up: every branch has commits <span className="font-mono">{defaultBranch}</span> lacks.
           </p>
         ) : (
           <>
@@ -196,15 +196,15 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
 
       <section aria-labelledby="thorns-heading" className="mt-4">
         <h3 id="thorns-heading" className="text-[11px] uppercase tracking-wide text-garden-muted">
-          thorns
+          diverged
         </h3>
         {thorny.length === 0 ? (
-          <p className="mt-1 leading-snug text-garden-muted">no thorny branches: nothing has drifted far from {defaultBranch} on both sides.</p>
+          <p className="mt-1 leading-snug text-garden-muted">no diverged branches: nothing has drifted far from {defaultBranch} on both sides.</p>
         ) : (
           <>
             <p className="mt-1 leading-snug text-garden-muted">
               far apart from <span className="font-mono">{defaultBranch}</span> on both sides, so merging or rebasing will likely
-              conflict. thorns grow with commits ahead × behind.
+              conflict. the spikes grow with commits ahead × behind.
             </p>
             <ul className="-mx-1.5 mt-1.5">
               {thorny.map((t) => (
@@ -213,7 +213,7 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
                   <span className="shrink-0 font-mono text-[11px] tabular-nums text-garden-muted" title="ahead / behind the default branch">
                     +{t.aheadBy} <span className="text-garden-border">/</span> -{t.behindBy}
                   </span>
-                  <span className="flex w-[2.75rem] shrink-0 justify-end text-garden-text-dim" title={`${t.level} of 3`} aria-label={`${t.level} of 3 thorns`}>
+                  <span className="flex w-[2.75rem] shrink-0 justify-end text-garden-text-dim" title={`${t.level} of 3`} aria-label={`${t.level} of 3 spikes`}>
                     {Array.from({ length: t.level }, (_, i) => (
                       <ThornIcon key={i} size={12} />
                     ))}

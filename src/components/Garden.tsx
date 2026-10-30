@@ -252,7 +252,7 @@ function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: GardenTimela
   ctx.fillStyle = theme.muted
   text(`${commits} commit${commits === 1 ? '' : 's'}`, W - 18, 58)
   ctx.font = `11px ${LABEL_FONT}`
-  text(`${timelapse.title} · repo-garden`, W - 14, H - 14)
+  text(`${timelapse.title} · gitube`, W - 14, H - 14)
   ctx.globalAlpha = 0.85
   ctx.fillStyle = theme.accent
   ctx.fillRect(0, H - 3, W * progress, 3)

@@ -30,6 +30,16 @@ describe('garden files', () => {
     const file = parseGardenFile(serializeGarden(data, now))
     expect(file.savedAt).toBe('2026-10-21T12:00:00.000Z')
     expect(file.data).toEqual(data)
+    expect(JSON.parse(serializeGarden(data, now)).format).toBe('gitube')
+  })
+
+  it('opens a file saved under the old name, repo-garden, as it always did', () => {
+    const data = hexRepo()
+    const old = JSON.parse(serializeGarden(data, new Date('2026-10-21T12:00:00Z')))
+    old.format = 'repo-garden'
+    const file = parseGardenFile(JSON.stringify(old))
+    expect(file.data).toEqual(data)
+    expect(file.format).toBe('gitube')
   })
 
   it('round-trips every graph fixture (merges, octopus, truncated history) once its shas are hex', () => {
@@ -53,8 +63,8 @@ describe('garden files', () => {
 
   it('explains files it cannot read', () => {
     expect(() => parseGardenFile('not json')).toThrow('not a JSON file')
-    expect(() => parseGardenFile('{"hello":1}')).toThrow('not saved by repo-garden')
-    expect(roundTrip((f) => (f.version = 2))).toThrow('newer repo-garden')
+    expect(() => parseGardenFile('{"hello":1}')).toThrow('not saved by gitube')
+    expect(roundTrip((f) => (f.version = 2))).toThrow('newer gitube')
     expect(roundTrip((f) => delete f.data.commits.aaa1.parents)).toThrow('no parent list')
     expect(roundTrip((f) => (f.data.defaultBranch = 'nope'))).toThrow('default branch')
     expect(roundTrip((f) => (f.data.branches = []))).toThrow('no branches')
@@ -97,7 +107,7 @@ describe('garden files', () => {
 
   it('names files after the repo and the local date', () => {
     expect(gardenFileName({ owner: 'expressjs', repo: 'express' }, 'png', new Date(2026, 9, 21, 23, 30))).toBe(
-      'expressjs-express-garden-2026-10-21.png',
+      'expressjs-express-gitube-2026-10-21.png',
     )
   })
 })

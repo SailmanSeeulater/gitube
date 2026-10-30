@@ -146,7 +146,7 @@ const ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
   { kind: 'fork', label: 'fork', hint: 'two or more children' },
   { kind: 'merge', label: 'merge', hint: 'two or more parents' },
   { kind: 'root', label: 'root', hint: 'history cut off here' },
-  { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
+  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
@@ -155,7 +155,7 @@ const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string 
   { kind: 'origin', label: 'root', hint: 'history cut off here (dashed lead-in)' },
   { kind: 'muted', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
   { kind: 'run', label: '+N hidden', hint: 'commits collapsed in skeleton view; the count shows beside the line when zoomed in enough' },
-  { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
+  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const PR_HALVES =

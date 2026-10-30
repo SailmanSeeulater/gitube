@@ -2,7 +2,7 @@
  * Person mode's share link and the Phase 5 controls (PROFILE_SPEC.md Phase 5): a copied
  * ?user=…&view=lines link reads back as the same person and view, PersonApp leaves it as it is,
  * and opening it starts clean (nothing hidden, selected or revealed, so the names a copier had
- * revealed stay hidden); the panel's copy-link and poster buttons, the strip's "watch it grow", the
+ * revealed stay hidden); the panel's copy-link and poster buttons, the strip's "replay", the
  * top bar's save menu (the poster as its image, never JSON), and PersonApp's wiring of them: the
  * time-lapse through openLifeTimelapse (the privacy toggle locked while it records), the poster
  * through saveLifePoster with the screen's namer, the reload card for a part that could not be
@@ -139,7 +139,7 @@ describe('a copied link', () => {
     expect(html).toContain('aria-label="Collapse panel"')
     expect(html).toContain('aria-label="Copy a link to this view"')
     expect(html).toContain('aria-label="Save a poster"')
-    expect(html).toContain('watch it grow')
+    expect(html).toContain('replay')
     // the whole life on show: the time-lapse waits for its button
     expect(html).not.toContain('aria-label="Time-lapse"')
     // and no JSON save in person mode: the top bar's save menu offers the poster only
@@ -197,9 +197,9 @@ describe('the controls', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, cachedAt: null, hasToken: true, onRefresh: noop, onAddToken: noop }
     const offered = renderToStaticMarkup(h(PersonStatus, { ...base, onTimelapse: noop }))
-    expect(offered).toContain('watch it grow')
+    expect(offered).toContain('replay')
     expect(offered).toContain('record it as a video')
-    expect(renderToStaticMarkup(h(PersonStatus, base))).not.toContain('watch it grow')
+    expect(renderToStaticMarkup(h(PersonStatus, base))).not.toContain('replay')
   })
 
   it("offers the top bar's image save apart from its data save, the data following the image when not given (repo mode)", () => {

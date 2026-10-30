@@ -238,7 +238,7 @@ describe('a play from the join year to today', () => {
       const texts = rec.calls('fillText').map((c) => String(c.args[0]))
       expect(texts).toContain(caption.year)
       expect(texts).toContain(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`)
-      expect(texts).toContain('kepano · repo-garden')
+      expect(texts).toContain('kepano · gitube')
       // over the labels, so a label never covers it
       const year = rec.log.findIndex((e) => e.kind === 'call' && e.name === 'fillText' && e.args[0] === caption.year && e.style.font === HUD_YEAR_FONT)
       // (the repos so far share the labels' 12 px type)
@@ -248,12 +248,12 @@ describe('a play from the join year to today', () => {
       expect(rec.calls('fillRect').some((c) => c.args[0] === 0 && c.args[1] === g.view.height - 3 && c.args[2] === g.view.width * p)).toBe(true)
     }
     const still = paint(g).rec.calls('fillText').map((c) => String(c.args[0]))
-    expect(still.some((text) => text.includes('repo-garden'))).toBe(false)
+    expect(still.some((text) => text.includes('gitube'))).toBe(false)
     // a title given names the caption instead of the login
     const titled = painterFor(g, {}, { timelapse: { progress: { current: 0.5 }, title: 'Kepano' } }).painter
     const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
     titled.paint(rec.ctx, g.view, g.camera, 16)
-    expect(rec.texts()).toContain('Kepano · repo-garden')
+    expect(rec.texts()).toContain('Kepano · gitube')
   })
 
   it('never names a repo before it appears: a hit on where it will grow is a day', () => {
@@ -327,7 +327,7 @@ describe('paintLapseHud', () => {
     expect(fills.map((c) => c.args.slice(0, 3))).toEqual([
       ['2019', g.view.width - 18, 38],
       ['1 repo', g.view.width - 18, 58],
-      ['kepano · repo-garden', g.view.width - 14, g.view.height - 14],
+      ['kepano · gitube', g.view.width - 14, g.view.height - 14],
     ])
     expect(fills[0].style).toMatchObject({ fillStyle: g.ink.text, font: HUD_YEAR_FONT })
     expect(fills[1].style.fillStyle).toBe(g.ink.muted)
@@ -569,7 +569,7 @@ describe('a recording, from rec to its download', () => {
     const err = await recorder.finish('kepano', () => Promise.reject(failure), NOW).catch((e: unknown) => e)
     expect(err).toBe(failure)
     // the reload case, in the app's words: no module URL
-    expect(lapseSaveError(err)).toEqual({ chunkFailed: true, message: "couldn't load the part of repo-garden that saves videos" })
+    expect(lapseSaveError(err)).toEqual({ chunkFailed: true, message: "couldn't load the part of gitube that saves videos" })
     expect(lapseSaveError(err).message).not.toMatch(/https?:|\.js|import/)
     expect(recorder.hasKept).toBe(true)
     expect(k.downloads).toEqual([])

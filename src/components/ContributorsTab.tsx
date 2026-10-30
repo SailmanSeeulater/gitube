@@ -19,7 +19,7 @@ const AVATAR_PX = 20
 const SPARK_H = 22
 
 const LOADED_ONLY =
-  'Counts cover the commits repo-garden loaded: up to 500 on the default branch and 250 per other branch, so older history is not included.'
+  'Counts cover the commits gitube loaded: up to 500 on the default branch and 250 per other branch, so older history is not included.'
 
 /** GitHub serves avatars at any size through ?s=; ask for a crisp one at twice the drawn size. */
 function avatarSrc(url: string, px: number): string {
