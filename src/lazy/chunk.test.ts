@@ -22,7 +22,7 @@ function flaky<T>(value: T, failures: number) {
 
 const noWait = () => Promise.resolve()
 
-const ORIGIN = 'https://repogarden.test'
+const ORIGIN = 'https://gitube.test'
 const CHUNK_URL = `${ORIGIN}/assets/ThemePicker-B8x_d3-q.js`
 const chromiumError = (url: string) => new TypeError(`Failed to fetch dynamically imported module: ${url}`)
 

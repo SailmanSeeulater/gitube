@@ -92,7 +92,7 @@ function hostileData(token: string): Record<string, unknown> {
     embedded: `code-${token.slice(10, 30)}-x`,
     tail: token.slice(-10),
     search: SEARCH,
-    searchInUrl: `https://repogarden.latesailor.dev/${SEARCH}#top`,
+    searchInUrl: `https://gitube.latesailor.dev/${SEARCH}#top`,
     repoParam: 'repo=acme/secret',
     repoParamQuery: '?repo=acme/secret',
     byParam: '&by=alice',
@@ -271,7 +271,7 @@ describe('privacy', () => {
     const umamiTrack = stubTracker(SEARCH)
     track('grow', {
       search: SEARCH,
-      searchInUrl: `https://repogarden.latesailor.dev/${SEARCH}`,
+      searchInUrl: `https://gitube.latesailor.dev/${SEARCH}`,
       repoParam: 'repo=acme/secret',
       byParam: '&by=alice',
       branchAndBy: 'branch=x&by=alice',
@@ -296,31 +296,31 @@ describe('beforeSend', () => {
   it('strips the query string and fragment from the page and referrer URLs', () => {
     const payload = {
       website: 'site',
-      hostname: 'repogarden.latesailor.dev',
+      hostname: 'gitube.latesailor.dev',
       title: 'repo-garden',
-      url: `https://repogarden.latesailor.dev/${SEARCH}#top`,
+      url: `https://gitube.latesailor.dev/${SEARCH}#top`,
       referrer: `/${SEARCH}`,
     }
     expect(beforeSend('event', payload)).toEqual({
       website: 'site',
-      hostname: 'repogarden.latesailor.dev',
+      hostname: 'gitube.latesailor.dev',
       title: 'repo-garden',
-      url: 'https://repogarden.latesailor.dev/',
+      url: 'https://gitube.latesailor.dev/',
       referrer: '/',
     })
-    expect(beforeSend('event', { url: 'https://repogarden.latesailor.dev/#/x?repo=acme/secret', referrer: 'https://example.com/a?b=c' })).toEqual({
-      url: 'https://repogarden.latesailor.dev/',
+    expect(beforeSend('event', { url: 'https://gitube.latesailor.dev/#/x?repo=acme/secret', referrer: 'https://example.com/a?b=c' })).toEqual({
+      url: 'https://gitube.latesailor.dev/',
       referrer: 'https://example.com',
     })
     // the input is left as it was
-    expect(payload.url).toBe(`https://repogarden.latesailor.dev/${SEARCH}#top`)
+    expect(payload.url).toBe(`https://gitube.latesailor.dev/${SEARCH}#top`)
   })
 
   it('sends the page as its origin, whatever path it was on', () => {
     const url = (value: string) => beforeSend('pageview', { url: value }).url
-    expect(url('https://repogarden.latesailor.dev/acme/secret?repo=x#y')).toBe('https://repogarden.latesailor.dev/')
-    expect(url('https://repogarden.latesailor.dev/acme/secret-repo')).toBe('https://repogarden.latesailor.dev/')
-    expect(url('https://repogarden.latesailor.dev/')).toBe('https://repogarden.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/acme/secret?repo=x#y')).toBe('https://gitube.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/acme/secret-repo')).toBe('https://gitube.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/')).toBe('https://gitube.latesailor.dev/')
     expect(url('http://localhost:4173/acme/secret')).toBe('http://localhost:4173/')
     // not a URL, or one with no origin of its own: no path either way
     for (const value of ['', '/', '/acme/secret?repo=x', 'acme/secret', 'not a url', 'data:text/html,acme/secret']) {
@@ -350,14 +350,14 @@ describe('beforeSend', () => {
     vi.stubGlobal('window', { location: { search: SEARCH } })
     useAppStore.setState({ token: CLASSIC })
     const out = beforeSend('event', {
-      url: `https://repogarden.latesailor.dev/${SEARCH}`,
-      referrer: `https://repogarden.latesailor.dev/?repo=acme/other`,
+      url: `https://gitube.latesailor.dev/${SEARCH}`,
+      referrer: `https://gitube.latesailor.dev/?repo=acme/other`,
       name: 'grow',
       data: { ...hostileData(CLASSIC), branches: '2-5', count: 3, nan: NaN, long: 'x'.repeat(80), nested: { a: 1 } },
     })
     expect(out).toEqual({
-      url: 'https://repogarden.latesailor.dev/',
-      referrer: 'https://repogarden.latesailor.dev',
+      url: 'https://gitube.latesailor.dev/',
+      referrer: 'https://gitube.latesailor.dev',
       name: 'grow',
       data: { branches: '2-5', count: 3, long: 'x'.repeat(50) },
     })
@@ -477,14 +477,14 @@ describe('initAnalytics', () => {
       'data-exclude-search': 'true',
       'data-exclude-hash': 'true',
       'data-do-not-track': 'true',
-      'data-domains': 'repogarden.latesailor.dev',
+      'data-domains': 'gitube.latesailor.dev',
       'data-before-send': BEFORE_SEND_GLOBAL,
     })
     expect(script.listeners).toEqual([
       { type: 'load', listener: expect.any(Function), options: { once: true } },
       { type: 'error', listener: expect.any(Function), options: { once: true } },
     ])
-    expect(UMAMI_DOMAINS).toBe('repogarden.latesailor.dev')
+    expect(UMAMI_DOMAINS).toBe('gitube.latesailor.dev')
     expect(win[BEFORE_SEND_GLOBAL]).toBe(beforeSend)
   })
 
