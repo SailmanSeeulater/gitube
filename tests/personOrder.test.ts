@@ -15,7 +15,7 @@ import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import { dayKey, dayNumber } from '../src/profile/timeline'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData, ProfileRepo } from '../src/types'
-import { grow, setGarden, setPerson, type Grown } from './helpers/personScene'
+import { grow, setApp, setPerson, type Grown } from './helpers/personScene'
 
 const theme = getTheme('obsidian')
 const noop = () => {}
@@ -98,7 +98,7 @@ const VARIANTS: Array<[string, [string, string, string]]> = [
 beforeEach(() => {
   usePersonStore.getState().resetFor('me')
   setPerson({ tab: 'repos', hover: null, selected: null, hidden: new Set(), search: '', revealFor: null })
-  setGarden({ panelOpen: true, token: 'not-a-token', themeId: theme.id })
+  setApp({ panelOpen: true, token: 'not-a-token', themeId: theme.id })
 })
 
 /** Where a repo's lane is: what the views tie a repo to, in place of its name. */

@@ -1,41 +1,41 @@
 /**
- * Saving a loaded garden to a file and opening it again: the RepoData behind the graph, tagged
+ * Saving a loaded repo to a file and opening it again: the RepoData behind the graph, tagged
  * with a format name and version. Opening a file costs no GitHub API requests.
  *
- * Pure. A file can come from anywhere, so parseGardenFile checks every field the graph code reads,
+ * Pure. A file can come from anywhere, so parseRepoFile checks every field the graph code reads,
  * drops anything else, and only keeps links and avatars that point at GitHub.
  */
 import { parseRepoUrl } from '../api/parseRepoUrl'
 import type { Branch, Commit, RepoData } from '../types'
 
-export const GARDEN_FILE_FORMAT = 'gitube'
+export const REPO_FILE_FORMAT = 'gitube'
 /** The format name files had before the rename; they open as they always did. */
 export const LEGACY_FILE_FORMAT = 'repo-garden'
-export const GARDEN_FILE_VERSION = 1
+export const REPO_FILE_VERSION = 1
 
-export interface GardenFile {
-  format: typeof GARDEN_FILE_FORMAT
-  version: typeof GARDEN_FILE_VERSION
+export interface RepoFile {
+  format: typeof REPO_FILE_FORMAT
+  version: typeof REPO_FILE_VERSION
   /** ISO time the file was saved */
   savedAt: string
   data: RepoData
 }
 
 /** Why a file could not be opened, worded for the person who picked it. */
-export class GardenFileError extends Error {
+export class RepoFileError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = 'GardenFileError'
+    this.name = 'RepoFileError'
   }
 }
 
-export function serializeGarden(data: RepoData, now: Date = new Date()): string {
-  const file: GardenFile = { format: GARDEN_FILE_FORMAT, version: GARDEN_FILE_VERSION, savedAt: now.toISOString(), data }
+export function serializeRepoFile(data: RepoData, now: Date = new Date()): string {
+  const file: RepoFile = { format: REPO_FILE_FORMAT, version: REPO_FILE_VERSION, savedAt: now.toISOString(), data }
   return JSON.stringify(file)
 }
 
 /** 'owner-repo-gitube-2026-10-21.png' (local date); kind replaces 'gitube' ('timelapse'). */
-export function gardenFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date(), kind = 'gitube'): string {
+export function exportFileName(data: Pick<RepoData, 'owner' | 'repo'>, ext: string, now: Date = new Date(), kind = 'gitube'): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
   return `${data.owner}-${data.repo}-${kind}-${day}.${ext}`
@@ -53,7 +53,7 @@ function isObject(value: unknown): value is Json {
 }
 
 function fail(what: string): never {
-  throw new GardenFileError(`the file is damaged: ${what}`)
+  throw new RepoFileError(`the file is damaged: ${what}`)
 }
 
 function str(value: unknown, what: string): string {
@@ -121,21 +121,21 @@ function readCommit(key: string, raw: unknown, owner: string, repo: string): Com
   return commit
 }
 
-/** Reads a file written by serializeGarden. Throws GardenFileError with a readable reason. */
-export function parseGardenFile(text: string): GardenFile {
+/** Reads a file written by serializeRepoFile. Throws RepoFileError with a readable reason. */
+export function parseRepoFile(text: string): RepoFile {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new GardenFileError('this is not a JSON file.')
+    throw new RepoFileError('this is not a JSON file.')
   }
-  if (!isObject(parsed) || (parsed.format !== GARDEN_FILE_FORMAT && parsed.format !== LEGACY_FILE_FORMAT)) {
-    throw new GardenFileError('this JSON file was not saved by gitube.')
+  if (!isObject(parsed) || (parsed.format !== REPO_FILE_FORMAT && parsed.format !== LEGACY_FILE_FORMAT)) {
+    throw new RepoFileError('this JSON file was not saved by gitube.')
   }
-  if (typeof parsed.version !== 'number' || parsed.version > GARDEN_FILE_VERSION) {
-    throw new GardenFileError('this file was saved by a newer gitube. reload the page and try again.')
+  if (typeof parsed.version !== 'number' || parsed.version > REPO_FILE_VERSION) {
+    throw new RepoFileError('this file was saved by a newer gitube. reload the page and try again.')
   }
-  if (parsed.version !== GARDEN_FILE_VERSION) throw new GardenFileError(`unsupported file version ${parsed.version}.`)
+  if (parsed.version !== REPO_FILE_VERSION) throw new RepoFileError(`unsupported file version ${parsed.version}.`)
 
   const raw = parsed.data
   if (!isObject(raw)) fail('it holds no repository')
@@ -159,8 +159,8 @@ export function parseGardenFile(text: string): GardenFile {
   const truncatedAt = raw.truncatedAt.map((s, i) => sha(s, `truncation entry ${i + 1}`))
 
   return {
-    format: GARDEN_FILE_FORMAT,
-    version: GARDEN_FILE_VERSION,
+    format: REPO_FILE_FORMAT,
+    version: REPO_FILE_VERSION,
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
     data: { owner, repo, defaultBranch, branches, commits, truncated: raw.truncated, truncatedAt },
   }

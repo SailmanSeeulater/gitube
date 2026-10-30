@@ -3,7 +3,7 @@ import { branchUnchecked, nodePrs } from '../graph/pulls'
 import type { PullsView } from '../hooks/usePulls'
 import { pullsChunk } from '../lazy/parts'
 import { useTheme } from '../theme/useTheme'
-import { formatDateTime, relativeTime, shortSha } from './gardenUtils'
+import { formatDateTime, relativeTime, shortSha } from './graphUtils'
 import { CloseIcon, ExternalIcon } from './icons'
 import { LazySlot, lazyPart } from './LazyPart'
 
@@ -64,15 +64,15 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
     <div
       role="dialog"
       aria-label={`Commit ${shortSha(commit.sha)}`}
-      className="absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-garden-border bg-garden-panel/95 p-3 text-[13px] shadow-soft backdrop-blur"
+      className="absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel/95 p-3 text-[13px] shadow-soft backdrop-blur"
     >
       <div className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ownerColour }} title={`owned by ${node.owner}`} />
-        <span className="font-mono text-garden-text" title={commit.sha}>
+        <span className="font-mono text-ui-text" title={commit.sha}>
           {shortSha(commit.sha)}
         </span>
         {kinds.map((kind) => (
-          <span key={kind} className="rounded bg-garden-hover px-1.5 py-px text-[10px] uppercase tracking-wide text-garden-muted">
+          <span key={kind} className="rounded bg-ui-hover px-1.5 py-px text-[10px] uppercase tracking-wide text-ui-muted">
             {kind}
           </span>
         ))}
@@ -81,26 +81,26 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+          className="rounded p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
         >
           <CloseIcon />
         </button>
       </div>
 
-      <p className="mt-2 break-words leading-snug text-garden-text">{commit.message || '(no message)'}</p>
+      <p className="mt-2 break-words leading-snug text-ui-text">{commit.message || '(no message)'}</p>
 
-      <p className="mt-1.5 text-[12px] text-garden-muted">
+      <p className="mt-1.5 text-[12px] text-ui-muted">
         {authorKey !== null && onShowAuthor ? (
           <button
             type="button"
             onClick={() => onShowAuthor(authorKey)}
             title={`Highlight every commit by ${commit.author || 'this author'}`}
-            className="text-garden-text-dim underline decoration-garden-border underline-offset-2 hover:text-garden-accent hover:decoration-garden-accent"
+            className="text-ui-text-dim underline decoration-ui-border underline-offset-2 hover:text-ui-accent hover:decoration-ui-accent"
           >
             {commit.author || 'unknown'}
           </button>
         ) : (
-          <span className="text-garden-text-dim">{commit.author || 'unknown'}</span>
+          <span className="text-ui-text-dim">{commit.author || 'unknown'}</span>
         )}
         {commit.login && commit.login.toLowerCase() !== commit.author.toLowerCase() && <span> (@{commit.login})</span>}
         {' · '}
@@ -113,7 +113,7 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
           {node.tips.map((tip) => (
             <span
               key={tip}
-              className="flex items-center gap-1.5 rounded-full border border-garden-border px-2 py-px text-[11px] text-garden-text-dim"
+              className="flex items-center gap-1.5 rounded-full border border-ui-border px-2 py-px text-[11px] text-ui-text-dim"
             >
               <span className="h-2 w-2 rounded-full" style={{ background: palette[tip] ?? fallback }} />
               {tip}
@@ -123,10 +123,10 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
       )}
 
       {showPrs && pulls && (
-        <div className="mt-2.5 border-t border-garden-border pt-2.5">
+        <div className="mt-2.5 border-t border-ui-border pt-2.5">
           <LazySlot
             fallback={
-              <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+              <p role="status" className="animate-pulse text-[12px] text-ui-muted">
                 checking pull requests…
               </p>
             }
@@ -137,7 +137,7 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
       )}
 
       <div className="mt-2.5 flex items-center justify-between text-[12px]">
-        <span className="text-garden-muted">
+        <span className="text-ui-muted">
           in {node.reach} branch{node.reach === 1 ? '' : 'es'}
           {' · '}
           {commit.parents.length} parent{commit.parents.length === 1 ? '' : 's'}
@@ -146,7 +146,7 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
           href={commit.url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1 text-garden-accent hover:underline"
+          className="flex items-center gap-1 text-ui-accent hover:underline"
         >
           open on GitHub <ExternalIcon size={12} />
         </a>

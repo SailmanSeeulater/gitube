@@ -1,9 +1,9 @@
 import type { GitHubFetchError } from '../types'
-import { formatClock } from './gardenUtils'
+import { formatClock } from './graphUtils'
 import { AlertIcon, CloseIcon } from './icons'
 
 /**
- * A fetch failure, bad_file (a saved garden that could not be opened), export_failed (the image
+ * A fetch failure, bad_file (a saved repo file that could not be opened), export_failed (the image
  * could not be made; for these two, message says why) or chunk_failed (a part of the app that loads
  * on demand could not be fetched, even on its retry: the connection dropped, or the tab is older
  * than the earlier builds the server keeps. A reload fetches it afresh; see lazy/chunk.ts).
@@ -107,20 +107,20 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
   return (
     <div
       role="alert"
-      className="absolute left-1/2 top-1/2 z-20 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-garden-border bg-garden-panel/95 p-4 text-[13px] shadow-soft backdrop-blur"
+      className="absolute left-1/2 top-1/2 z-20 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-ui-border bg-ui-panel/95 p-4 text-[13px] shadow-soft backdrop-blur"
     >
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 shrink-0 text-garden-muted">
+        <span className="mt-0.5 shrink-0 text-ui-muted">
           <AlertIcon size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-garden-text">{title ?? copy.title}</p>
-          <p className="mt-1 leading-snug text-garden-muted">{hint ?? copy.hint}</p>
+          <p className="font-medium text-ui-text">{title ?? copy.title}</p>
+          <p className="mt-1 leading-snug text-ui-muted">{hint ?? copy.hint}</p>
           {copy.tokenAction && onAddToken && (
             <button
               type="button"
               onClick={onAddToken}
-              className="mt-3 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+              className="mt-3 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25"
             >
               {copy.tokenAction}
             </button>
@@ -129,7 +129,7 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             <button
               type="button"
               onClick={onReload}
-              className="mt-3 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+              className="mt-3 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25"
             >
               {copy.reloadAction}
             </button>
@@ -140,7 +140,7 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="shrink-0 rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+            className="shrink-0 rounded p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
           >
             <CloseIcon />
           </button>

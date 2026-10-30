@@ -1,5 +1,5 @@
 /**
- * Garden upkeep from the compare data every branch already has (aheadBy / behindBy against the
+ * Branch cleanup from the compare data every branch already has (aheadBy / behindBy against the
  * default branch):
  * - weeds: branches with nothing the default branch lacks, so deleting them loses no commits;
  * - thorns: branches far apart from the default branch on both sides, where a merge or rebase is

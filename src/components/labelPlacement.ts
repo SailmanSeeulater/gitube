@@ -1,5 +1,5 @@
 /**
- * Screen-space placement of branch-name labels for the garden canvas.
+ * Screen-space placement of branch-name labels for the map canvas.
  *
  * Once per frame, LabelPlacer decides which tip labels to show and where: it works through the
  * labels in priority order and tries eight spots around each node (right, left, the diagonals,

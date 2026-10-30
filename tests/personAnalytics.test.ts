@@ -8,13 +8,13 @@ import {
   type PersonAnalyticsState,
   type ProfileOnShow,
 } from '../src/profile/analytics'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { GitHubFetchError, type ProfileData } from '../src/types'
 
 const TOKEN = 'ghp_' + 'R8vK2mW5qT9xL3nB7cJ4hF6dS1aG0eY2uI8o'
 
 afterEach(() => {
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 /** The only fields the rule reads; a public login, spelt as GitHub spells it. */
@@ -187,13 +187,13 @@ describe('ProfileGrowCounter', () => {
 
   it('takes the token from the fetch result, never from the token set now', () => {
     // a token set after a tokenless fetch: the rule still says tokenless (track() drops the name)
-    useGardenStore.setState({ token: TOKEN })
+    useAppStore.setState({ token: TOKEN })
     const live = new ProfileGrowCounter()
     live.arm('octocat', nothing)
     expect(live.observe(showing(octo, T1))).toEqual(OCTO_EVENT)
 
     // a token cleared between a token fetch and its arrival: no name goes
-    useGardenStore.setState({ token: '' })
+    useAppStore.setState({ token: '' })
     for (const profile of [kepano, fellBack]) {
       const counter = new ProfileGrowCounter()
       counter.arm('kepano', nothing)
@@ -209,7 +209,7 @@ describe('PersonAnalytics', () => {
   const at = (login: string, request: number, on: ProfileOnShow): PersonAnalyticsState => ({ ...on, login, request })
 
   it('counts a mount with the profile already on show once, even observed twice', () => {
-    // a ?user= link or a switch back from the repo garden, the profile still in TanStack's memory
+    // a ?user= link or a switch back from repo mode, the profile still in TanStack's memory
     const analytics = new PersonAnalytics()
     expect(analytics.observe(at('octocat', 0, showing(octo, T1)))).toEqual([['grow', OCTO_EVENT]])
     // StrictMode runs the effect again

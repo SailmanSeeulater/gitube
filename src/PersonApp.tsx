@@ -3,7 +3,7 @@ import { parseSubject } from './api/parseSubject'
 import type { RepoInitial } from './RepoApp'
 import type { GitHubFetchError, ProfileData } from './types'
 import { writeUserShare, type PersonView } from './share/shareUrl'
-import { useGardenStore } from './store/useGardenStore'
+import { useAppStore } from './store/useAppStore'
 import { useTheme } from './theme/useTheme'
 import TopBar from './components/TopBar'
 import ErrorCard from './components/ErrorCard'
@@ -37,13 +37,13 @@ export interface PersonAppProps {
   view: PersonView | null
   /** reached from the input, whose element the switch replaced: focus this one's input */
   focusInput: boolean
-  /** a repo typed, or a saved file opened or dropped: back to the repo garden */
+  /** a repo typed, or a saved file opened or dropped: back to repo mode */
   onRepo: (initial: RepoInitial) => void
   /** a login typed */
   onUser: (login: string) => void
 }
 
-/** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap, as in the repo garden. */
+/** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap, as in repo mode. */
 const PANEL_INSET = 324
 
 const NO_KEYS: ReadonlySet<string> = new Set<string>()
@@ -76,13 +76,13 @@ function EmptyLife({ profile, lanes, hasToken, onAddToken }: {
   if (!note) return null
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 px-4" role="status">
-      <p className="text-center text-[13px] text-garden-text-dim">{note.title}</p>
-      {note.hint && <p className="text-center text-[12px] leading-snug text-garden-muted">{note.hint}</p>}
+      <p className="text-center text-[13px] text-ui-text-dim">{note.title}</p>
+      {note.hint && <p className="text-center text-[12px] leading-snug text-ui-muted">{note.hint}</p>}
       {note.action && (
         <button
           type="button"
           onClick={note.action.kind === 'token' ? onAddToken : showAll}
-          className="pointer-events-auto mt-1 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25"
+          className="pointer-events-auto mt-1 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25"
         >
           {note.action.label}
         </button>
@@ -138,8 +138,8 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
 
   const theme = useTheme()
-  const panelOpen = useGardenStore((s) => s.panelOpen)
-  const hasToken = useGardenStore((s) => s.token.trim() !== '')
+  const panelOpen = useAppStore((s) => s.panelOpen)
+  const hasToken = useAppStore((s) => s.token.trim() !== '')
   const revealFor = usePersonStore((s) => s.revealFor)
   const setReveal = usePersonStore((s) => s.setReveal)
 
@@ -260,7 +260,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     }
   }, [login, view])
 
-  // the input takes both kinds, as in the repo garden
+  // the input takes both kinds, as in repo mode
   const submit = useCallback(() => {
     const subject = parseSubject(input)
     if (!subject) {
@@ -272,7 +272,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     else onUser(subject.login)
   }, [input, onRepo, onUser])
 
-  // a switch from the repo garden's input lands typing in this one, as Grow leaves it in the input
+  // a switch from repo mode's input lands typing in this one, as Grow leaves it in the input
   useEffect(() => {
     if (focusInput) inputRef.current?.focus()
     // on mount only: later grows keep this input, and its focus
@@ -280,7 +280,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   }, [])
 
   const showToken = useCallback((open: boolean) => {
-    if (open && panelCoversTokenField(window.innerWidth)) useGardenStore.getState().setPanelOpen(false)
+    if (open && panelCoversTokenField(window.innerWidth)) useAppStore.getState().setPanelOpen(false)
     setTokenOpen(open)
   }, [])
   const toggleToken = useCallback(() => showToken(!tokenOpen), [showToken, tokenOpen])
@@ -290,7 +290,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   /** the status strip's refresh: a new request for the person on show, from GitHub */
   const refresh = useCallback(() => refreshProfile(login, { noteGrow, refetch }), [login, noteGrow, refetch])
 
-  // a saved .json dropped anywhere on the page opens it in the repo garden
+  // a saved .json dropped anywhere on the page opens it in repo mode
   useEffect(() => {
     const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false
     const onDragOver = (event: DragEvent) => {
@@ -320,7 +320,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
       setPosterError(null)
       setChunkFailed(false)
       setTokenOpen(false)
-      // the time-lapse stays on (its controls are always in), as in the repo garden
+      // the time-lapse stays on (its controls are always in), as in repo mode
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -330,7 +330,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const shown = profile !== undefined && timeline !== null
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
+    <div className="relative h-full w-full overflow-hidden bg-ui-bg text-ui-text">
       {/* The canvas stops short of the side panel so the fitted life never hides behind it. One canvas
           serves every view, so a switch keeps its camera, and a recording of it keeps going. */}
       <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: shown && panelOpen ? PANEL_INSET : 0 }}>
@@ -342,7 +342,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
       {!profile && isFetching && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-[13px] text-garden-muted">loading {login}…</p>
+          <p className="animate-pulse text-[13px] text-ui-muted">loading {login}…</p>
         </div>
       )}
 
@@ -399,7 +399,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         />
       )}
 
-      {/* the time-lapse controls take the status strip's place while it is on, as in the repo garden */}
+      {/* the time-lapse controls take the status strip's place while it is on, as in repo mode */}
       {lapseOpen && profile && timeline && layout ? (
         <PersonTimelapse
           onClose={closeLapse}

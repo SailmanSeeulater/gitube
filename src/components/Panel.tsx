@@ -8,9 +8,9 @@ import type { PullsView } from '../hooks/usePulls'
 import { preload, type Chunk } from '../lazy/chunk'
 import { battleChunk, contributorsTabChunk, metroChunk, weedsTabChunk } from '../lazy/parts'
 import { useChunk } from '../lazy/useChunk'
-import { useGardenStore, type LayoutMode, type PanelTab } from '../store/useGardenStore'
+import { useAppStore, type LayoutMode, type PanelTab } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
-import { STALE_OPTIONS, formatClock, isStale, relativeTime } from './gardenUtils'
+import { STALE_OPTIONS, formatClock, isStale, relativeTime } from './graphUtils'
 import { QUERY_HELP, hasIsPr, matchesBranchQuery, parseBranchQuery, toggleIsPr } from './branchQuery'
 import { PrStatusLine, PrSwatch } from './PrGlyph'
 import { prRowSuffix } from './prMark'
@@ -31,7 +31,7 @@ export interface PanelProps {
   palette: Record<string, string>
   contributors: ContributorIndex
   weeds: WeedReport
-  /** starts a garden battle against the repo typed in; false when that is not a repo */
+  /** starts a vs against the repo typed in; false when that is not a repo */
   onBattle: (value: string) => boolean
   /** the repo's open pull requests (null for a saved file): row glyphs, the count line, search qualifiers */
   pulls?: PullsView | null
@@ -52,7 +52,7 @@ function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean
         if (onBattle(value)) onDone()
         else setBad(true)
       }}
-      className="flex flex-col gap-1 border-b border-garden-border px-3 py-2"
+      className="flex flex-col gap-1 border-b border-ui-border px-3 py-2"
     >
       <div className="flex items-center gap-1.5">
         <input
@@ -72,13 +72,13 @@ function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean
           aria-label="Repo to compare"
           spellCheck={false}
           autoComplete="off"
-          className="min-w-0 flex-1 rounded-lg bg-garden-field px-2 py-1 text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
+          className="min-w-0 flex-1 rounded-lg bg-ui-field px-2 py-1 text-[12px] text-ui-text outline-none placeholder:text-ui-muted"
         />
-        <button type="submit" className="shrink-0 rounded-lg bg-garden-accent/15 px-2.5 py-1 text-[12px] font-medium text-garden-accent hover:bg-garden-accent/25">
+        <button type="submit" className="shrink-0 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25">
           go
         </button>
       </div>
-      <p className={`text-[11px] leading-snug ${bad ? 'text-garden-danger' : 'text-garden-muted'}`}>
+      <p className={`text-[11px] leading-snug ${bad ? 'text-ui-danger' : 'text-ui-muted'}`}>
         {bad ? "that doesn't look like a GitHub repo." : 'opens both side by side and scores them, measure by measure.'}
       </p>
     </form>
@@ -114,8 +114,8 @@ export function CopyLinkButton() {
       onClick={copy}
       title={label}
       aria-label={label}
-      className={`flex items-center gap-1 rounded p-1 text-[11px] hover:bg-garden-hover ${
-        state === 'copied' ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'
+      className={`flex items-center gap-1 rounded p-1 text-[11px] hover:bg-ui-hover ${
+        state === 'copied' ? 'text-ui-accent' : 'text-ui-muted hover:text-ui-text'
       }`}
     >
       {state === 'idle' ? <LinkIcon /> : state === 'copied' ? <CheckIcon /> : <span>copy failed</span>}
@@ -143,7 +143,7 @@ function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProp
     { id: 'weeds', label: 'cleanup', count: weedCount },
   ]
   return (
-    <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-garden-border px-2">
+    <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-ui-border px-2">
       {tabs.map((tab) => {
         const active = tab.id === value
         return (
@@ -156,11 +156,11 @@ function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProp
             onPointerEnter={() => preloadTab(tab.id)}
             onFocus={() => preloadTab(tab.id)}
             className={`-mb-px flex items-center gap-1.5 border-b-2 px-2 py-1.5 text-[12px] transition-colors ${
-              active ? 'border-garden-accent text-garden-accent' : 'border-transparent text-garden-muted hover:text-garden-text'
+              active ? 'border-ui-accent text-ui-accent' : 'border-transparent text-ui-muted hover:text-ui-text'
             }`}
           >
             {tab.label}
-            <span className="rounded bg-garden-hover px-1 font-mono text-[10px] tabular-nums text-garden-muted">{tab.count}</span>
+            <span className="rounded bg-ui-hover px-1 font-mono text-[10px] tabular-nums text-ui-muted">{tab.count}</span>
           </button>
         )
       })}
@@ -181,7 +181,7 @@ interface SegmentedProps<T extends string | number> {
 
 function Segmented<T extends string | number>({ ariaLabel, options, value, onChange, onIntent, pending = null }: SegmentedProps<T>) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-lg bg-garden-field p-0.5">
+    <div role="radiogroup" aria-label={ariaLabel} className="flex rounded-lg bg-ui-field p-0.5">
       {options.map((option) => {
         const active = option.value === value
         return (
@@ -195,7 +195,7 @@ function Segmented<T extends string | number>({ ariaLabel, options, value, onCha
             onPointerEnter={onIntent ? () => onIntent(option.value) : undefined}
             onFocus={onIntent ? () => onIntent(option.value) : undefined}
             className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${
-              active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'
+              active ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:text-ui-text'
             } ${option.value === pending ? 'animate-pulse' : ''}`}
           >
             {option.label}
@@ -268,12 +268,12 @@ function SelectedPrLine({ pr, more, pulls }: { pr: PullSummary; more: number; pu
           type="button"
           onClick={() => pulls.lookup(pr)}
           title="Look its review and checks up (3 of this hour's GitHub requests)"
-          className="shrink-0 text-garden-accent hover:underline"
+          className="shrink-0 text-ui-accent hover:underline"
         >
           load
         </button>
       )}
-      <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title} className="shrink-0 text-garden-accent hover:underline">
+      <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title} className="shrink-0 text-ui-accent hover:underline">
         #{pr.number} ↗{more > 0 ? ` +${more}` : ''}
       </a>
     </div>
@@ -305,7 +305,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
             : undefined
         }
         className={`group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
-          selected ? 'bg-garden-accent/10' : 'hover:bg-garden-hover'
+          selected ? 'bg-ui-accent/10' : 'hover:bg-ui-hover'
         } ${hidden ? 'opacity-40' : ''}`}
       >
         {prSwatch ? (
@@ -313,18 +313,18 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
         ) : (
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />
         )}
-        <span className={`min-w-0 flex-1 truncate ${selected ? 'text-garden-accent' : 'text-garden-text'}`}>
+        <span className={`min-w-0 flex-1 truncate ${selected ? 'text-ui-accent' : 'text-ui-text'}`}>
           {branch.name}
           {branch.isDefault && (
-            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-garden-muted">default</span>
+            <span className="ml-1.5 text-[10px] uppercase tracking-wide text-ui-muted">default</span>
           )}
         </span>
         {!branch.isDefault && (
-          <span className="shrink-0 font-mono text-[11px] tabular-nums text-garden-muted" title="ahead / behind the default branch">
-            +{branch.aheadBy} <span className="text-garden-border">/</span> -{branch.behindBy}
+          <span className="shrink-0 font-mono text-[11px] tabular-nums text-ui-muted" title="ahead / behind the default branch">
+            +{branch.aheadBy} <span className="text-ui-border">/</span> -{branch.behindBy}
           </span>
         )}
-        <span className="w-[3.25rem] shrink-0 whitespace-nowrap text-right text-[11px] text-garden-muted" title={branch.tipDate}>
+        <span className="w-[3.25rem] shrink-0 whitespace-nowrap text-right text-[11px] text-ui-muted" title={branch.tipDate}>
           {relativeTime(branch.tipDate, now)}
         </span>
         <button
@@ -335,7 +335,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
             event.stopPropagation()
             onToggleHidden()
           }}
-          className={`shrink-0 rounded p-0.5 text-garden-muted transition-opacity hover:text-garden-text ${
+          className={`shrink-0 rounded p-0.5 text-ui-muted transition-opacity hover:text-ui-text ${
             hidden ? '' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100'
           }`}
         >
@@ -344,7 +344,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
       </div>
       {selected && pulls && prs.length > 0 && <SelectedPrLine pr={prs[0]} more={prs.length - 1} pulls={pulls} />}
       {selected && pulls && prs.length === 0 && unchecked && (
-        <p className="pb-1 pl-[30px] pr-2 text-[11px] leading-[18px] text-garden-muted">PRs not checked (GitHub did not answer)</p>
+        <p className="pb-1 pl-[30px] pr-2 text-[11px] leading-[18px] text-ui-muted">PRs not checked (GitHub did not answer)</p>
       )}
     </li>
   )
@@ -358,7 +358,7 @@ function BranchRow({ branch, colour, selected, hidden, now, onSelect, onToggleHi
  */
 function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: string; onSearch: (value: string) => void }) {
   const { status, index, error } = pulls
-  const dot = <span className="text-garden-border">·</span>
+  const dot = <span className="text-ui-border">·</span>
   if (status === 'loading') {
     return (
       <span className="flex items-center gap-2">
@@ -385,7 +385,7 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
       <span className="flex items-center gap-2">
         {dot}
         {error.retriable ? (
-          <button type="button" onClick={pulls.retry} title={`${title} Click to try again.`} className="hover:text-garden-text hover:underline">
+          <button type="button" onClick={pulls.retry} title={`${title} Click to try again.`} className="hover:text-ui-text hover:underline">
             PRs not checked
           </button>
         ) : (
@@ -408,7 +408,7 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
             aria-pressed={on}
             onClick={() => onSearch(toggleIsPr(search))}
             title={on ? 'Show every branch again (takes is:pr out of the search)' : `List only the branches with an open pull request (${countPulls(index)} open from branches here)`}
-            className={`text-garden-accent hover:underline ${on ? 'font-medium' : ''}`}
+            className={`text-ui-accent hover:underline ${on ? 'font-medium' : ''}`}
           >
             {withPrs} with PRs
           </button>
@@ -429,23 +429,23 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
 export default function Panel({ data, palette, contributors, weeds, onBattle, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
   const [battleOpen, setBattleOpen] = useState(false)
   const theme = useTheme()
-  const panelOpen = useGardenStore((s) => s.panelOpen)
-  const togglePanel = useGardenStore((s) => s.togglePanel)
-  const panelTab = useGardenStore((s) => s.panelTab)
-  const setPanelTab = useGardenStore((s) => s.setPanelTab)
-  const viewMode = useGardenStore((s) => s.viewMode)
-  const setViewMode = useGardenStore((s) => s.setViewMode)
-  const layoutMode = useGardenStore((s) => s.layoutMode)
-  const setLayoutMode = useGardenStore((s) => s.setLayoutMode)
-  const search = useGardenStore((s) => s.search)
-  const setSearch = useGardenStore((s) => s.setSearch)
-  const staleDays = useGardenStore((s) => s.staleDays)
-  const setStaleDays = useGardenStore((s) => s.setStaleDays)
-  const hiddenBranches = useGardenStore((s) => s.hiddenBranches)
-  const toggleBranchHidden = useGardenStore((s) => s.toggleBranchHidden)
-  const clearHiddenBranches = useGardenStore((s) => s.clearHiddenBranches)
-  const selectedBranch = useGardenStore((s) => s.selectedBranch)
-  const toggleSelectedBranch = useGardenStore((s) => s.toggleSelectedBranch)
+  const panelOpen = useAppStore((s) => s.panelOpen)
+  const togglePanel = useAppStore((s) => s.togglePanel)
+  const panelTab = useAppStore((s) => s.panelTab)
+  const setPanelTab = useAppStore((s) => s.setPanelTab)
+  const viewMode = useAppStore((s) => s.viewMode)
+  const setViewMode = useAppStore((s) => s.setViewMode)
+  const layoutMode = useAppStore((s) => s.layoutMode)
+  const setLayoutMode = useAppStore((s) => s.setLayoutMode)
+  const search = useAppStore((s) => s.search)
+  const setSearch = useAppStore((s) => s.setSearch)
+  const staleDays = useAppStore((s) => s.staleDays)
+  const setStaleDays = useAppStore((s) => s.setStaleDays)
+  const hiddenBranches = useAppStore((s) => s.hiddenBranches)
+  const toggleBranchHidden = useAppStore((s) => s.toggleBranchHidden)
+  const clearHiddenBranches = useAppStore((s) => s.clearHiddenBranches)
+  const selectedBranch = useAppStore((s) => s.selectedBranch)
+  const toggleSelectedBranch = useAppStore((s) => s.toggleSelectedBranch)
   // metro picked, its engine still on the way (App loads it and keeps the old layout until then)
   const metroLoading = useChunk(metroChunk, false).status === 'loading' && layoutMode === 'metro'
   const pickView = (view: ViewMode) => {
@@ -494,7 +494,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         onClick={togglePanel}
         title="Open panel"
         aria-label="Open panel"
-        className="absolute right-0 top-4 z-20 rounded-l-lg border border-r-0 border-garden-border bg-garden-panel/95 px-1.5 py-2.5 text-garden-muted shadow-soft backdrop-blur hover:text-garden-text"
+        className="absolute right-0 top-4 z-20 rounded-l-lg border border-r-0 border-ui-border bg-ui-panel/95 px-1.5 py-2.5 text-ui-muted shadow-soft backdrop-blur hover:text-ui-text"
       >
         <ChevronLeftIcon />
       </button>
@@ -504,21 +504,21 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
   const repoUrl = `https://github.com/${data.owner}/${data.repo}`
 
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-garden-border bg-garden-panel/95 text-[13px] shadow-soft backdrop-blur">
-      <header className="flex items-start gap-2 border-b border-garden-border px-3 py-2.5">
+    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 text-[13px] shadow-soft backdrop-blur">
+      <header className="flex items-start gap-2 border-b border-ui-border px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <a
             href={repoUrl}
             target="_blank"
             rel="noreferrer"
             title={repoUrl}
-            className="block truncate font-medium text-garden-text hover:text-garden-accent"
+            className="block truncate font-medium text-ui-text hover:text-ui-accent"
           >
             {data.owner}/{data.repo}
           </a>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-garden-muted">
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ui-muted">
             <span>default</span>
-            <span className="rounded bg-garden-hover px-1 font-mono text-garden-text-dim">{data.defaultBranch}</span>
+            <span className="rounded bg-ui-hover px-1 font-mono text-ui-text-dim">{data.defaultBranch}</span>
           </div>
         </div>
         <button
@@ -531,7 +531,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
           aria-expanded={battleOpen}
           title="vs: open another repo beside this one and score them"
           aria-label="vs"
-          className={`rounded p-1 hover:bg-garden-hover ${battleOpen ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'}`}
+          className={`rounded p-1 hover:bg-ui-hover ${battleOpen ? 'text-ui-accent' : 'text-ui-muted hover:text-ui-text'}`}
         >
           <SwordsIcon />
         </button>
@@ -541,7 +541,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
           onClick={togglePanel}
           title="Collapse panel"
           aria-label="Collapse panel"
-          className="rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+          className="rounded p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
         >
           <ChevronRightIcon />
         </button>
@@ -602,8 +602,8 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         </LazySlot>
       ) : (
         <>
-          <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
-            <label className="flex items-center gap-2 rounded-lg bg-garden-field px-2 py-1 text-garden-muted focus-within:text-garden-text">
+          <div className="flex flex-col gap-2 border-b border-ui-border px-3 py-2.5">
+            <label className="flex items-center gap-2 rounded-lg bg-ui-field px-2 py-1 text-ui-muted focus-within:text-ui-text">
               <SearchIcon />
               <input
                 type="search"
@@ -613,18 +613,18 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
                 aria-label="Find a branch"
                 title={hasPrs ? QUERY_HELP : undefined}
                 spellCheck={false}
-                className="min-w-0 flex-1 bg-transparent text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-ui-text outline-none placeholder:text-ui-muted"
               />
             </label>
             <div className="flex items-center gap-2">
-              <span className="w-9 shrink-0 text-[11px] text-garden-muted">stale</span>
+              <span className="w-9 shrink-0 text-[11px] text-ui-muted">stale</span>
               <div className="flex-1">
                 <Segmented ariaLabel="Hide branches older than" options={STALE_SEGMENTS} value={staleDays} onChange={setStaleDays} />
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-2 px-3 pt-2 text-[11px] text-garden-muted">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 px-3 pt-2 text-[11px] text-ui-muted">
             <span className="flex flex-wrap items-center gap-x-2">
               <span>
                 {rows.length === data.branches.length ? `${rows.length} branches` : `${rows.length} of ${data.branches.length} branches`}
@@ -633,20 +633,20 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
             </span>
             <span className="flex items-center gap-2">
               {hiddenBranches.size > 0 && (
-                <button type="button" onClick={clearHiddenBranches} className="text-garden-accent hover:underline">
+                <button type="button" onClick={clearHiddenBranches} className="text-ui-accent hover:underline">
                   show {hiddenBranches.size} hidden
                 </button>
               )}
               {selectedBranch !== null && (
-                <button type="button" onClick={() => toggleSelectedBranch(selectedBranch)} className="text-garden-accent hover:underline">
+                <button type="button" onClick={() => toggleSelectedBranch(selectedBranch)} className="text-ui-accent hover:underline">
                   clear selection
                 </button>
               )}
             </span>
           </div>
 
-          <ul className="garden-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-            {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-garden-muted">no branches match</li>}
+          <ul className="ui-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
+            {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-ui-muted">no branches match</li>}
             {rows.map((branch) => (
               <BranchRow
                 key={branch.name}
@@ -667,7 +667,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         </>
       )}
 
-      <footer className="border-t border-garden-border px-3 py-2.5">
+      <footer className="border-t border-ui-border px-3 py-2.5">
         <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} />
       </footer>
     </aside>

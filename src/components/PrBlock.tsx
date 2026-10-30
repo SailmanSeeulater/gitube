@@ -5,7 +5,7 @@ import { branchUnchecked, combineMarks, defaultTipSummary, headMoved, lookupPlan
 import type { InspectorPulls } from './NodeInspector'
 import { PrGlyph, PrStatusLine } from './PrGlyph'
 import { prMeta } from './prMark'
-import { formatClock, relativeTime } from './gardenUtils'
+import { formatClock, relativeTime } from './graphUtils'
 import { ExternalIcon } from './icons'
 
 /** Pull requests listed per tip; the rest are a "+N more" link to GitHub's list. */
@@ -21,7 +21,7 @@ export interface PrBlockProps {
   fallback: string
 }
 
-const linkClass = 'text-garden-accent hover:underline'
+const linkClass = 'text-ui-accent hover:underline'
 
 /**
  * The node inspector's pull request block (in the pulls chunk, see lazy/parts.ts): under a tip's
@@ -61,12 +61,12 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
   return (
     <div className="flex flex-col gap-2 text-[12px]">
       {status === 'loading' && prs.length === 0 && (
-        <p role="status" className="animate-pulse text-garden-muted">
+        <p role="status" className="animate-pulse text-ui-muted">
           checking pull requests…
         </p>
       )}
       {status === 'error' && error && (
-        <p className="leading-snug text-garden-muted" title={error.message}>
+        <p className="leading-snug text-ui-muted" title={error.message}>
           pull requests could not be loaded ({error.code === 'rate_limited' ? `rate limited${error.resetAt ? ` until ${formatClock(error.resetAt)}` : ''}` : error.code.replace('_', ' ')})
           {error.retriable && (
             <>
@@ -85,26 +85,26 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
             <a href={baseList} target="_blank" rel="noreferrer" className={`shrink-0 font-medium ${linkClass}`}>
               {summary.into !== null ? `${summary.into} open PR${summary.into === 1 ? '' : 's'}` : `${summary.total ?? 0} open PRs`}
             </a>
-            <span className="min-w-0 flex-1 truncate text-garden-text-dim">
+            <span className="min-w-0 flex-1 truncate text-ui-text-dim">
               {summary.into !== null ? `into ${data.defaultBranch}` : 'in the repo'}
             </span>
-            <a href={baseList} target="_blank" rel="noreferrer" aria-label="Open the list on GitHub" className="shrink-0 text-garden-muted hover:text-garden-accent">
+            <a href={baseList} target="_blank" rel="noreferrer" aria-label="Open the list on GitHub" className="shrink-0 text-ui-muted hover:text-ui-accent">
               <ExternalIcon size={12} />
             </a>
           </p>
           {summary.notDrawn > 0 &&
             (summary.unchecked > 0 ? (
-              <p className="text-garden-muted">
+              <p className="text-ui-muted">
                 {summary.notDrawn} not drawn (forks, branches not loaded, or {summary.unchecked} branch{summary.unchecked === 1 ? '' : 'es'} GitHub did
                 not answer for)
               </p>
             ) : (
-              <p className="text-garden-muted">
+              <p className="text-ui-muted">
                 {summary.notDrawn} from {summary.onlyForks ? 'forks' : 'forks or branches not loaded'} (no branch on the graph, so not drawn)
               </p>
             ))}
           {summary.mapped > 0 && (
-            <p className="text-garden-muted">
+            <p className="text-ui-muted">
               {summary.mapped} from branches on the graph
               {summary.failing + summary.drafts > 0 && ': '}
               {[summary.failing > 0 ? `${summary.failing} failing checks` : '', summary.drafts > 0 ? `${summary.drafts} draft${summary.drafts === 1 ? '' : 's'}` : '']
@@ -114,17 +114,17 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
           )}
           {index?.truncated &&
             (index.source === 'rest' ? (
-              <p className="text-garden-muted">
+              <p className="text-ui-muted">
                 checked the {index.listed} most recently updated of ~{index.total ?? index.listed}
               </p>
             ) : (
-              <p className="text-garden-muted">some branches have more open pull requests than were read</p>
+              <p className="text-ui-muted">some branches have more open pull requests than were read</p>
             ))}
         </div>
       )}
 
       {unchecked.length > 0 && (
-        <p className="leading-snug text-garden-muted" title={unchecked.join(', ')}>
+        <p className="leading-snug text-ui-muted" title={unchecked.join(', ')}>
           PRs not checked (GitHub did not answer)
         </p>
       )}
@@ -141,24 +141,24 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
               <a href={pr.url} target="_blank" rel="noreferrer" className={`shrink-0 font-medium ${linkClass}`}>
                 #{pr.number}
               </a>
-              <span className="min-w-0 flex-1 truncate text-garden-text" title={pr.title}>
+              <span className="min-w-0 flex-1 truncate text-ui-text" title={pr.title}>
                 {pr.title}
               </span>
-              <a href={pr.url} target="_blank" rel="noreferrer" aria-label={`Open pull request ${pr.number} on GitHub`} className="shrink-0 text-garden-muted hover:text-garden-accent">
+              <a href={pr.url} target="_blank" rel="noreferrer" aria-label={`Open pull request ${pr.number} on GitHub`} className="shrink-0 text-ui-muted hover:text-ui-accent">
                 <ExternalIcon size={12} />
               </a>
             </p>
             <div className={`pl-[22px] ${plan === 'running' ? 'animate-pulse' : ''}`}>
               <PrStatusLine pr={pr} />
             </div>
-            <p className="pl-[22px] text-[11px] text-garden-muted">{prMeta(pr, data.defaultBranch).join(' · ')}</p>
+            <p className="pl-[22px] text-[11px] text-ui-muted">{prMeta(pr, data.defaultBranch).join(' · ')}</p>
             {plan === 'running' && (
-              <p role="status" className="pl-[22px] text-[11px] text-garden-muted">
+              <p role="status" className="pl-[22px] text-[11px] text-ui-muted">
                 checking review and checks…
               </p>
             )}
             {plan === 'failed' && (
-              <p className="pl-[22px] text-[11px] text-garden-muted" title={lookupErrors.get(pr.number)}>
+              <p className="pl-[22px] text-[11px] text-ui-muted" title={lookupErrors.get(pr.number)}>
                 couldn't look up its review and checks ·{' '}
                 <button type="button" onClick={() => view.lookup(pr)} className={linkClass}>
                   retry
@@ -166,7 +166,7 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
               </p>
             )}
             {plan === 'ask' && (
-              <p className="pl-[22px] text-[11px] text-garden-muted">
+              <p className="pl-[22px] text-[11px] text-ui-muted">
                 {remaining === null || remaining >= cost ? (
                   <button type="button" onClick={() => view.lookup(pr)} className={linkClass}>
                     load review and checks ({cost} requests)
@@ -188,7 +188,7 @@ export default function PrBlock({ node, prs, pulls, palette, fallback }: PrBlock
               </p>
             )}
             {branch && headMoved(branch, pr) && (
-              <p className="pl-[22px] text-[11px] text-garden-muted">
+              <p className="pl-[22px] text-[11px] text-ui-muted">
                 PR head is newer than this tip{graphAge ? ` (graph fetched ${graphAge})` : ''} ·{' '}
                 <button type="button" onClick={pulls.onRefresh} className={linkClass}>
                   refresh

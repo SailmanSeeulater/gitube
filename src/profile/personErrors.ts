@@ -5,7 +5,7 @@
  * whether a token would help.
  */
 import type { GitHubFetchError, ProfileData } from '../types'
-import { formatClock } from '../components/gardenUtils'
+import { formatClock } from '../components/graphUtils'
 import { repoKey } from './privacy'
 
 export interface PersonErrorCopy {

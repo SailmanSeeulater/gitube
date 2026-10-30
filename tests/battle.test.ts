@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RepoData } from '../src/types'
-import { MEASURES, STALE_DAYS, battle, gardenStats, type GardenStats } from '../src/graph/battle'
+import { MEASURES, STALE_DAYS, battle, repoStats, type RepoStats } from '../src/graph/battle'
 import { makeRepo } from './fixtures/repos'
 
 const NOW = Date.parse('2026-10-21T12:00:00Z')
@@ -24,9 +24,9 @@ function merged(): RepoData {
   return data
 }
 
-describe('garden stats', () => {
-  it('counts a garden from its loaded data', () => {
-    const s = gardenStats(merged(), NOW)
+describe('repo stats', () => {
+  it('counts a map from its loaded data', () => {
+    const s = repoStats(merged(), NOW)
     expect(s.name).toBe('octo/a')
     expect(s.branches).toBe(2)
     expect(s.commits).toBe(5)
@@ -41,7 +41,7 @@ describe('garden stats', () => {
   })
 })
 
-const stats = (over: Partial<GardenStats>): GardenStats => ({
+const stats = (over: Partial<RepoStats>): RepoStats => ({
   name: 'x/y',
   branches: 10,
   people: 5,

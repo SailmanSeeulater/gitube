@@ -184,7 +184,7 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('theme %s', (_i
   })
 })
 
-// The metro view paints its own stations, routes and run markers (Garden's paintNode/paintMetro, the
+// The metro view paints its own stations, routes and run markers (RepoGraph's paintNode/paintMetro, the
 // label halo, the metro legend); these keep them readable on every canvas.
 describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in %s', (_id, theme) => {
   const d = theme.derived
@@ -224,7 +224,7 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('metro view in 
   })
 
   // A full route at 3:1 on the canvas is also what makes a run marker's break show: the break is a
-  // canvas-coloured (textHalo) cut across the route (Garden's paintMetro, strokeRunBars).
+  // canvas-coloured (textHalo) cut across the route (RepoGraph's paintMetro, strokeRunBars).
   it('keeps full routes at 3:1, muted routes and lead-ins visible, and dimmed routes faint', () => {
     expect([METRO_MIN_LINE_CONTRAST, METRO_MIN_STUB_CONTRAST, METRO_MIN_MUTED_CONTRAST]).toEqual([3, 2, 1.8])
     for (const colour of routeColours) {
@@ -279,7 +279,7 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('pull request m
   })
 
   // A half not looked up yet is drawn in the outline the tip has without a pull request: the branch
-  // colour (organic) or the station colour (metro, garden), at full strength. Both must stand on the canvas.
+  // colour (organic) or the station colour (metro), at full strength. Both must stand on the canvas.
   it('draws a ring not looked up yet at 3:1 on the canvas: the station colour, the accent and every branch colour', () => {
     expect(contrastRatio(theme.stationRing, theme.canvas), 'stationRing').toBeGreaterThanOrEqual(3)
     expect(contrastRatio(theme.accent, theme.canvas), 'accent').toBeGreaterThanOrEqual(3)
@@ -349,21 +349,21 @@ describe('Obsidian is the original look', () => {
     expect(o.muted).toBe('#999999')
     expect(o.accent).toBe('#a78bfa')
     expect(o.hover).toBe('#2e2e2e')
-    expect(o.badgeBg).toBe('#2a2a2a') // --color-garden-raised and Garden's BADGE_BG
+    expect(o.badgeBg).toBe('#2a2a2a') // --color-ui-raised and RepoGraph's BADGE_BG
     expect(o.textDim).toBe('#b8b8b8')
     expect(o.warn).toBe('#d9b35b')
     expect(o.danger).toBe('#e06c75')
     expect(o.shadow).toBe('0 10px 30px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4)')
     expect(o.mode).toBe('dark')
-    // inputs were bg-garden-bg/70 over the panel
+    // inputs were bg-ui-bg/70 over the panel
     expect(o.field).toBe(blendHex(o.canvas, o.panel, 0.7))
     expect(o.field).toBe('#202020')
-    // gardenUtils.ts
+    // graphUtils.ts
     expect(o.rootFill).toBe('#5a5a5a')
     expect(o.rootRing).toBe('#8a8a8a')
     expect(o.fallback).toBe('#8b8b8b')
     expect(o.dimAlpha).toBe(0.2)
-    // Garden.tsx
+    // RepoGraph.tsx
     expect(o.badgeText).toBe('#b8b8b8')
     expect(o.derived.searchHaloFill).toBe('rgba(167, 139, 250, 0.22)')
     expect(o.derived.searchHaloRing).toBe('rgba(167, 139, 250, 0.7)')
@@ -376,7 +376,7 @@ describe('Obsidian is the original look', () => {
     // useLabelPlacer.ts
     expect(o.derived.labelPlateFill).toBe('rgba(30, 30, 30, 0.92)')
     expect(o.derived.labelPlateRing).toBe('rgba(220, 221, 222, 0.25)')
-    // the metro view (Garden.tsx paintNode/paintMetro, useLabelPlacer's halo, Legend), before themes
+    // the metro view (RepoGraph.tsx paintNode/paintMetro, useLabelPlacer's halo, Legend), before themes
     expect(o.stationRing).toBe('#e8e8e8') // STATION_WHITE: tip outlines, interchange rings
     expect(o.metroLineAlpha).toBe(0.9) // METRO_ALPHA
     expect(o.metroMutedAlpha).toBe(0.45) // METRO_MUTED_ALPHA, and the tween's straight links
@@ -547,13 +547,13 @@ describe('colour helpers', () => {
 })
 
 describe('CSS variables', () => {
-  it('give every theme the same set of --garden-* properties, all defined', () => {
+  it('give every theme the same set of --ui-* properties, all defined', () => {
     const keys = Object.keys(themeCssVariables(DEFAULT_THEME)).sort()
     for (const theme of THEMES) {
       const vars = themeCssVariables(theme)
       expect(Object.keys(vars).sort()).toEqual(keys)
       for (const [name, value] of Object.entries(vars)) {
-        expect(name).toMatch(/^--garden-[a-z-]+$/)
+        expect(name).toMatch(/^--ui-[a-z-]+$/)
         expect(value.length, name).toBeGreaterThan(0)
       }
     }
@@ -561,7 +561,7 @@ describe('CSS variables', () => {
 
   it('cover exactly what src/index.css reads, and index.css holds no colour of its own', () => {
     const provided = new Set(Object.keys(themeCssVariables(DEFAULT_THEME)))
-    const read = new Set([...indexCss.matchAll(/var\((--garden-[a-z-]+)\)/g)].map((m) => m[1]))
+    const read = new Set([...indexCss.matchAll(/var\((--ui-[a-z-]+)\)/g)].map((m) => m[1]))
     expect([...read].sort()).toEqual([...provided].sort())
     expect(indexCss).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
   })
@@ -759,7 +759,7 @@ describe('no stray colour literals', () => {
   const FUNCTION_LITERAL = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\(\s*[\d.]/i
 
   it('finds the sources it scans, and its patterns catch colours', () => {
-    expect(Object.keys(sources)).toContain('../components/Garden.tsx')
+    expect(Object.keys(sources)).toContain('../components/RepoGraph.tsx')
     expect(Object.keys(sources)).toContain('../components/useLabelPlacer.ts')
     expect(Object.keys(sources)).toContain('../graph/color.ts')
     expect(Object.keys(sources)).toContain('../index.css')

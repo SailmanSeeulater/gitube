@@ -16,7 +16,7 @@ import { buildContributors, buildGraph } from '../src/graph'
 import { findWeeds } from '../src/graph/weeds'
 import { describePullsError, resetWakeDelay, type PullsView } from '../src/hooks/usePulls'
 import { getTheme } from '../src/theme/themes'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { GitHubFetchError, type PullIndex, type PullSummary, type RepoData } from '../src/types'
 import { makeRepo, singleFork } from './fixtures/repos'
 
@@ -92,9 +92,9 @@ function chromeButtons(html: string): number {
  * Server rendering reads a store's initial state (useSyncExternalStore's server snapshot), so the
  * state a test sets goes into both. (Each test file has its own copy of the store.)
  */
-function setStore(partial: Partial<ReturnType<typeof useGardenStore.getState>>): void {
-  useGardenStore.setState(partial)
-  Object.assign(useGardenStore.getInitialState(), partial)
+function setStore(partial: Partial<ReturnType<typeof useAppStore.getState>>): void {
+  useAppStore.setState(partial)
+  Object.assign(useAppStore.getInitialState(), partial)
 }
 
 beforeEach(() => {
@@ -226,7 +226,7 @@ describe('legend', () => {
   })
 
   it('draws what the canvas draws: the gapped ring in the tip’s own colour until some review or checks are known', () => {
-    const theme = getTheme(useGardenStore.getState().themeId)
+    const theme = getTheme(useAppStore.getState().themeId)
     for (const layout of ['organic', 'metro'] as const) {
       setStore({ layoutMode: layout })
       const unknown = renderToStaticMarkup(h(Legend, { hasPrs: true, prKnown: false }))

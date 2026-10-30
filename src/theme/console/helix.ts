@@ -51,7 +51,7 @@ export const HELIX_PALETTE: HelixPalette = {
 /** Every other thread while one is selected, at this alpha, whatever the theme. */
 export const HELIX_DIM_ALPHA = 0.3
 
-/** The display's LifeInk: base's garden ink kept, every colour the display's amber and the dimming its own. */
+/** The display's LifeInk: base's other fields kept, every colour the display's amber and the dimming its own. */
 export function helixInk(base: LifeInk): LifeInk {
   const p = HELIX_PALETTE
   return {

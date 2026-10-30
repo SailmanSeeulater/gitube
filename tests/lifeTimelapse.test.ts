@@ -13,10 +13,10 @@
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { gardenFileName } from '../src/export/gardenFile'
+import { exportFileName } from '../src/export/repoFile'
 import type { VideoType } from '../src/export/video'
 import { ChunkLoadError } from '../src/lazy/chunk'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { getTheme } from '../src/theme/themes'
 import LifeView from '../src/profile/LifeViewCanvas'
 import { LINES_VIEW } from '../src/profile/lifeViews'
@@ -50,7 +50,7 @@ import { recordingCtx } from './helpers/recordingCtx'
 import { GAEARON_NOW, KEPANO_NOW, VIEW, gaearonProfile, grow, kepanoProfile, paint, painterFor, quietCtx, withPrivate, type Grown } from './helpers/personScene'
 
 const theme = getTheme('obsidian')
-/** The caption's year: the repo garden's time-lapse date, in its LABEL_FONT. */
+/** The caption's year: repo mode's time-lapse date, in its LABEL_FONT. */
 const HUD_YEAR_FONT = '600 22px Inter, ui-sans-serif, system-ui, sans-serif'
 const PROGRESSES = [0, 0.25, 0.5, 0.75, 1]
 
@@ -66,7 +66,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 /** The tracker, stubbed as tests/umami.test.ts does: every event the app sends lands here. */
@@ -400,7 +400,7 @@ describe('frames while the time-lapse is on', () => {
       expect(framesUntilStill(painter, g), `at ${p}`).toBeLessThan(400)
       expect(painter.paint(quiet, g.view, g.camera, 16), `at ${p}`).toBe(false)
     }
-    // and with no time-lapse, a settled garden asks for none
+    // and with no time-lapse, a settled view asks for none
     const still = painterFor(g).painter
     expect(framesUntilStill(still, g)).toBeLessThan(400)
     expect(still.paint(quiet, g.view, g.camera, 16)).toBe(false)
@@ -410,7 +410,7 @@ describe('frames while the time-lapse is on', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     for (const timelapse of [{ progress: { current: 1 }, live: true }, { progress: { current: 1 } }]) {
       const { painter } = painterFor(g, {}, { timelapse })
-      // the labels settled first, as they are on the grown garden a recording holds on
+      // the labels settled first, as they are on the finished map a recording holds on
       for (let i = 0; i < 400 && painter.labels.placer.busy; i++) painter.paint(quiet, g.view, g.camera, 16)
       expect(painter.labels.placer.busy).toBe(false)
       for (let frame = 0; frame <= (LAPSE_HOLD_MS * LAPSE_FPS) / 1000; frame++) expect(painter.paint(quiet, g.view, g.camera, 16), `frame ${frame}`).toBe(true)
@@ -425,7 +425,7 @@ describe('a recording, from rec to its download', () => {
 
   function kit() {
     const downloads: Array<[Blob, string]> = []
-    return { downloads, downloadBlob: (blob: Blob, fileName: string) => void downloads.push([blob, fileName]), gardenFileName }
+    return { downloads, downloadBlob: (blob: Blob, fileName: string) => void downloads.push([blob, fileName]), exportFileName }
   }
 
   /** export/video's recording, stood in for: finished, it hands over video (or fails with it); it counts how it ended. */
@@ -442,7 +442,7 @@ describe('a recording, from rec to its download', () => {
 
   it("downloads the person's recording, then counts it as a webm export with no name", async () => {
     for (const token of ['', 'test-token-not-real']) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker()
       const video = new Blob(['frames'], { type: 'video/webm' })
       const k = kit()

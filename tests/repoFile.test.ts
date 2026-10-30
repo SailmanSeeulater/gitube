@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from '../src/export/gardenFile'
+import { RepoFileError, exportFileName, parseRepoFile, serializeRepoFile } from '../src/export/repoFile'
 import type { RepoData } from '../src/types'
 import { fixtures, makeRepo } from './fixtures/repos'
 
@@ -18,26 +18,26 @@ function hexRepo() {
 }
 
 function roundTrip(mutate: (file: Record<string, any>) => void): () => unknown {
-  const file = JSON.parse(serializeGarden(hexRepo()))
+  const file = JSON.parse(serializeRepoFile(hexRepo()))
   mutate(file)
-  return () => parseGardenFile(JSON.stringify(file))
+  return () => parseRepoFile(JSON.stringify(file))
 }
 
-describe('garden files', () => {
+describe('repo files', () => {
   it('round-trips the repo data exactly', () => {
     const data = hexRepo()
     const now = new Date('2026-10-21T12:00:00Z')
-    const file = parseGardenFile(serializeGarden(data, now))
+    const file = parseRepoFile(serializeRepoFile(data, now))
     expect(file.savedAt).toBe('2026-10-21T12:00:00.000Z')
     expect(file.data).toEqual(data)
-    expect(JSON.parse(serializeGarden(data, now)).format).toBe('gitube')
+    expect(JSON.parse(serializeRepoFile(data, now)).format).toBe('gitube')
   })
 
   it('opens a file saved under the old name, repo-garden, as it always did', () => {
     const data = hexRepo()
-    const old = JSON.parse(serializeGarden(data, new Date('2026-10-21T12:00:00Z')))
+    const old = JSON.parse(serializeRepoFile(data, new Date('2026-10-21T12:00:00Z')))
     old.format = 'repo-garden'
-    const file = parseGardenFile(JSON.stringify(old))
+    const file = parseRepoFile(JSON.stringify(old))
     expect(file.data).toEqual(data)
     expect(file.format).toBe('gitube')
   })
@@ -57,13 +57,13 @@ describe('garden files', () => {
         ),
         truncatedAt: raw.truncatedAt.map(hex),
       }
-      expect(parseGardenFile(serializeGarden(data)).data).toEqual(data)
+      expect(parseRepoFile(serializeRepoFile(data)).data).toEqual(data)
     }
   })
 
   it('explains files it cannot read', () => {
-    expect(() => parseGardenFile('not json')).toThrow('not a JSON file')
-    expect(() => parseGardenFile('{"hello":1}')).toThrow('not saved by gitube')
+    expect(() => parseRepoFile('not json')).toThrow('not a JSON file')
+    expect(() => parseRepoFile('{"hello":1}')).toThrow('not saved by gitube')
     expect(roundTrip((f) => (f.version = 2))).toThrow('newer gitube')
     expect(roundTrip((f) => delete f.data.commits.aaa1.parents)).toThrow('no parent list')
     expect(roundTrip((f) => (f.data.defaultBranch = 'nope'))).toThrow('default branch')
@@ -71,7 +71,7 @@ describe('garden files', () => {
     expect(roundTrip((f) => (f.data.owner = '../evil'))).toThrow('repository name')
     expect(roundTrip((f) => (f.data.branches[1].aheadBy = -1))).toThrow('aheadBy')
     expect(roundTrip((f) => (f.data.commits.aaa2.sha = 'aaa3'))).toThrow('another sha')
-    expect(roundTrip((f) => (f.data.truncatedAt = ['zz']))).toThrow(GardenFileError)
+    expect(roundTrip((f) => (f.data.truncatedAt = ['zz']))).toThrow(RepoFileError)
   })
 
   it('rejects keys that are not commit shas, so nothing lands on the prototype', () => {
@@ -82,10 +82,10 @@ describe('garden files', () => {
   })
 
   it('keeps only github.com links and GitHub avatars, and drops fields it does not know', () => {
-    const file = parseGardenFile(
+    const file = parseRepoFile(
       JSON.stringify(
         (() => {
-          const f = JSON.parse(serializeGarden(hexRepo()))
+          const f = JSON.parse(serializeRepoFile(hexRepo()))
           f.data.commits.aaa1.url = 'javascript:alert(1)'
           f.data.commits.aaa1.avatarUrl = 'https://evil.example/pixel.png'
           f.data.commits.aaa2.login = 'not a login!'
@@ -106,7 +106,7 @@ describe('garden files', () => {
   })
 
   it('names files after the repo and the local date', () => {
-    expect(gardenFileName({ owner: 'expressjs', repo: 'express' }, 'png', new Date(2026, 9, 21, 23, 30))).toBe(
+    expect(exportFileName({ owner: 'expressjs', repo: 'express' }, 'png', new Date(2026, 9, 21, 23, 30))).toBe(
       'expressjs-express-gitube-2026-10-21.png',
     )
   })

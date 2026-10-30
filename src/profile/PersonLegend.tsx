@@ -87,7 +87,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       )
     case 'lock':
       return (
-        <span className="text-garden-muted">
+        <span className="text-ui-muted">
           <LockIcon size={18} />
         </span>
       )
@@ -813,32 +813,32 @@ export default function PersonLegend({ profile, timeline, colourOf, theme, hasPr
 
   return (
     <div>
-      <p className="mb-1.5 text-[11px] leading-snug text-garden-muted">{intro}</p>
+      <p className="mb-1.5 text-[11px] leading-snug text-ui-muted">{intro}</p>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {items.map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
             <Glyph kind={item.kind} theme={theme} />
-            <span className="text-[12px] text-garden-text-dim">{item.label}</span>
+            <span className="text-[12px] text-ui-text-dim">{item.label}</span>
           </li>
         ))}
       </ul>
-      {languages.length > 0 && swatchOf === null && <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>}
+      {languages.length > 0 && swatchOf === null && <p className="mt-2 text-[11px] leading-snug text-ui-muted">{colours}</p>}
       {languages.length > 0 && swatchOf !== null && (
         <>
-          <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>
+          <p className="mt-2 text-[11px] leading-snug text-ui-muted">{colours}</p>
           <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
             {shown.map((language) => (
-              <li key={language ?? ''} className="flex items-center gap-1.5 text-[11px] text-garden-text-dim">
+              <li key={language ?? ''} className="flex items-center gap-1.5 text-[11px] text-ui-text-dim">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatchOf(language) }} />
                 {language ?? 'no language'}
               </li>
             ))}
-            {languages.length > shown.length && <li className="text-[11px] text-garden-muted">+{languages.length - shown.length} more</li>}
+            {languages.length > shown.length && <li className="text-[11px] text-ui-muted">+{languages.length - shown.length} more</li>}
           </ul>
         </>
       )}
-      <p className="mt-2 text-[11px] font-medium text-garden-text-dim">what GitHub&apos;s data leaves out</p>
-      <ul className="mt-1 flex flex-col gap-1 text-[11px] leading-snug text-garden-muted">
+      <p className="mt-2 text-[11px] font-medium text-ui-text-dim">what GitHub&apos;s data leaves out</p>
+      <ul className="mt-1 flex flex-col gap-1 text-[11px] leading-snug text-ui-muted">
         {dataLimits(profile, view).map((limit) => (
           <li key={limit}>{limit}</li>
         ))}

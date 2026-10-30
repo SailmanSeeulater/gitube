@@ -39,8 +39,8 @@ export const timelapseChunk = defineChunk(() => import('../components/TimelapseB
 /** The canvas recorder (export/video) for person mode's time-lapse; TimelapseBar imports it itself. */
 export const videoChunk = defineChunk(() => import('../export/video'))
 
-/** The garden battle overlay and its scoring. */
-export const battleChunk = defineChunk(() => import('../components/GardenBattle'))
+/** The vs overlay and its scoring. */
+export const battleChunk = defineChunk(() => import('../components/VsView'))
 
 /** The panel's people (contributors leaderboard) and weeds tabs. */
 export const contributorsTabChunk = defineChunk(() => import('../components/ContributorsTab'))
@@ -56,7 +56,7 @@ export const metroChunk = defineChunk(() => import('../graph/metro'))
 export const pullsChunk = defineChunk(() => import('./pullsPart'))
 
 /**
- * Person mode (?user=), loaded when a login is grown or a ?user= link is opened. The repo garden's
+ * Person mode (?user=), loaded when a login is grown or a ?user= link is opened. Repo mode's
  * first load carries only the routing that picks it (App, api/parseSubject and the share link).
  */
 export const personAppChunk = defineChunk(() => import('../PersonApp'))

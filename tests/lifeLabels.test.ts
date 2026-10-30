@@ -6,7 +6,7 @@
  * they hit, and a profile without repos.
  */
 import { describe, expect, it } from 'vitest'
-import { LABEL_FONT } from '../src/components/gardenUtils'
+import { LABEL_FONT } from '../src/components/graphUtils'
 import { getTheme } from '../src/theme/themes'
 import { buildLifeTimeline } from '../src/profile/timeline'
 import { layoutLifeLines } from '../src/profile/lifeLinesLayout'

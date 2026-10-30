@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Contributor, ContributorIndex } from '../graph/contributors'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
-import { relativeTime } from './gardenUtils'
+import { relativeTime } from './graphUtils'
 import { ExternalIcon, SearchIcon } from './icons'
 
 export interface ContributorsTabProps {
@@ -65,14 +65,14 @@ function Avatar({ contributor }: { contributor: Contributor }) {
         loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className="shrink-0 rounded-full bg-garden-hover"
+        className="shrink-0 rounded-full bg-ui-hover"
       />
     )
   }
   return (
     <span
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-garden-hover text-[9px] font-medium text-garden-text-dim"
+      className="flex shrink-0 items-center justify-center rounded-full bg-ui-hover text-[9px] font-medium text-ui-text-dim"
       style={{ width: AVATAR_PX, height: AVATAR_PX }}
     >
       {initials(contributor.name)}
@@ -88,7 +88,7 @@ function Activity({ counts }: { counts: number[] }) {
     <svg
       viewBox={`0 0 ${counts.length * step} ${SPARK_H}`}
       preserveAspectRatio="none"
-      className="block h-[22px] w-full text-garden-accent"
+      className="block h-[22px] w-full text-ui-accent"
       aria-hidden
     >
       <line x1={0} x2={counts.length * step} y1={SPARK_H - 0.5} y2={SPARK_H - 0.5} stroke="currentColor" strokeOpacity={0.25} strokeWidth={1} />
@@ -127,25 +127,25 @@ function ContributorRow({ contributor: c, rank, share, selected, now, onSelect }
       onKeyDown={onKeyDown}
       title={c.login ? `${c.name} (@${c.login})` : c.name}
       className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors ${
-        selected ? 'bg-garden-accent/10' : 'hover:bg-garden-hover'
+        selected ? 'bg-ui-accent/10' : 'hover:bg-ui-hover'
       }`}
     >
-      <span className="w-5 shrink-0 text-right font-mono text-[11px] tabular-nums text-garden-muted">{rank}</span>
+      <span className="w-5 shrink-0 text-right font-mono text-[11px] tabular-nums text-ui-muted">{rank}</span>
       <Avatar contributor={c} />
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-1.5">
-          <span className={`truncate ${selected ? 'text-garden-accent' : 'text-garden-text'}`}>{c.name}</span>
-          {c.isBot && <span className="shrink-0 text-[10px] uppercase tracking-wide text-garden-muted">bot</span>}
+          <span className={`truncate ${selected ? 'text-ui-accent' : 'text-ui-text'}`}>{c.name}</span>
+          {c.isBot && <span className="shrink-0 text-[10px] uppercase tracking-wide text-ui-muted">bot</span>}
         </span>
-        <span className="mt-1 block h-[3px] overflow-hidden rounded-full bg-garden-hover">
-          <span className="block h-full rounded-full bg-garden-accent/70" style={{ width: `${Math.max(2, share * 100)}%` }} />
+        <span className="mt-1 block h-[3px] overflow-hidden rounded-full bg-ui-hover">
+          <span className="block h-full rounded-full bg-ui-accent/70" style={{ width: `${Math.max(2, share * 100)}%` }} />
         </span>
       </span>
-      <span className="shrink-0 font-mono text-[12px] tabular-nums text-garden-text-dim" title={`${c.commits} commit${c.commits === 1 ? '' : 's'}`}>
+      <span className="shrink-0 font-mono text-[12px] tabular-nums text-ui-text-dim" title={`${c.commits} commit${c.commits === 1 ? '' : 's'}`}>
         {c.commits}
       </span>
       <span
-        className="w-[3.25rem] shrink-0 whitespace-nowrap text-right text-[11px] text-garden-muted"
+        className="w-[3.25rem] shrink-0 whitespace-nowrap text-right text-[11px] text-ui-muted"
         title={c.lastDate ? `last commit ${shortDate(c.lastDate)}` : undefined}
       >
         {relativeTime(c.lastDate, now)}
@@ -167,13 +167,13 @@ function ContributorDetails({ contributor: c, palette, fallback, windowStart, wi
   const more = c.branches.length - shown.length
   const profile = profileUrl(c)
   return (
-    <div className="mx-1 mb-1.5 mt-0.5 rounded-md bg-garden-field px-2.5 py-2 text-[11px] text-garden-muted">
+    <div className="mx-1 mb-1.5 mt-0.5 rounded-md bg-ui-field px-2.5 py-2 text-[11px] text-ui-muted">
       <div className="flex justify-between gap-2">
         <span>
-          first <span className="text-garden-text-dim">{shortDate(c.firstDate) || 'unknown'}</span>
+          first <span className="text-ui-text-dim">{shortDate(c.firstDate) || 'unknown'}</span>
         </span>
         <span>
-          last <span className="text-garden-text-dim">{shortDate(c.lastDate) || 'unknown'}</span>
+          last <span className="text-ui-text-dim">{shortDate(c.lastDate) || 'unknown'}</span>
         </span>
       </div>
 
@@ -190,7 +190,7 @@ function ContributorDetails({ contributor: c, palette, fallback, windowStart, wi
         {shown.map((b) => (
           <li key={b.name} className="flex items-center gap-1.5">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: palette[b.name] ?? fallback }} />
-            <span className="min-w-0 flex-1 truncate text-garden-text-dim" title={b.name}>
+            <span className="min-w-0 flex-1 truncate text-ui-text-dim" title={b.name}>
               {b.name}
             </span>
             <span className="shrink-0 font-mono tabular-nums">{b.commits}</span>
@@ -208,7 +208,7 @@ function ContributorDetails({ contributor: c, palette, fallback, windowStart, wi
           href={profile}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 inline-flex max-w-full items-center gap-1 text-garden-accent hover:underline"
+          className="mt-2 inline-flex max-w-full items-center gap-1 text-ui-accent hover:underline"
         >
           <span className="truncate">@{c.login}</span> on GitHub <ExternalIcon size={11} className="shrink-0" />
         </a>
@@ -220,8 +220,8 @@ function ContributorDetails({ contributor: c, palette, fallback, windowStart, wi
 /** The side panel's leaderboard: who wrote the loaded commits, and where. Selecting a row highlights their commits on the graph. */
 export default function ContributorsTab({ contributors, palette, now }: ContributorsTabProps) {
   const fallback = useTheme().fallback
-  const selected = useGardenStore((s) => s.selectedContributor)
-  const toggleSelected = useGardenStore((s) => s.toggleSelectedContributor)
+  const selected = useAppStore((s) => s.selectedContributor)
+  const toggleSelected = useAppStore((s) => s.toggleSelectedContributor)
   const [query, setQuery] = useState('')
   const [showBots, setShowBots] = useState(false)
   const listRef = useRef<HTMLUListElement | null>(null)
@@ -254,8 +254,8 @@ export default function ContributorsTab({ contributors, palette, now }: Contribu
 
   return (
     <>
-      <div className="flex flex-col gap-2 border-b border-garden-border px-3 py-2.5">
-        <label className="flex items-center gap-2 rounded-lg bg-garden-field px-2 py-1 text-garden-muted focus-within:text-garden-text">
+      <div className="flex flex-col gap-2 border-b border-ui-border px-3 py-2.5">
+        <label className="flex items-center gap-2 rounded-lg bg-ui-field px-2 py-1 text-ui-muted focus-within:text-ui-text">
           <SearchIcon />
           <input
             type="search"
@@ -264,31 +264,31 @@ export default function ContributorsTab({ contributors, palette, now }: Contribu
             placeholder="find a person"
             aria-label="Find a person"
             spellCheck={false}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-garden-text outline-none placeholder:text-garden-muted"
+            className="min-w-0 flex-1 bg-transparent text-[12px] text-ui-text outline-none placeholder:text-ui-muted"
           />
         </label>
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-3 pt-2 text-[11px] text-garden-muted">
+      <div className="flex items-center justify-between gap-2 px-3 pt-2 text-[11px] text-ui-muted">
         <span title={LOADED_ONLY}>
           {people} {people === 1 ? 'person' : 'people'} · {loaded} loaded commit{loaded === 1 ? '' : 's'}
         </span>
         <span className="flex items-center gap-2">
           {botCount > 0 && (
-            <button type="button" onClick={() => setShowBots((v) => !v)} className="text-garden-accent hover:underline">
+            <button type="button" onClick={() => setShowBots((v) => !v)} className="text-ui-accent hover:underline">
               {showBots ? 'hide bots' : `show ${botCount} bot${botCount === 1 ? '' : 's'}`}
             </button>
           )}
           {selected !== null && (
-            <button type="button" onClick={() => toggleSelected(selected)} className="text-garden-accent hover:underline">
+            <button type="button" onClick={() => toggleSelected(selected)} className="text-ui-accent hover:underline">
               clear
             </button>
           )}
         </span>
       </div>
 
-      <ul ref={listRef} className="garden-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
-        {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-garden-muted">nobody matches</li>}
+      <ul ref={listRef} className="ui-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
+        {rows.length === 0 && <li className="px-2 py-3 text-center text-[12px] text-ui-muted">nobody matches</li>}
         {rows.map(({ c, rank }) => (
           <li key={c.key} data-key={c.key}>
             <ContributorRow

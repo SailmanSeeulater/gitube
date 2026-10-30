@@ -65,7 +65,7 @@ function clock(ms: number): string {
 /**
  * Person mode's time-lapse controls, mounted while the time-lapse is on (it starts playing from the
  * timeline's start): play/pause, a scrubber over the life, the length of a full play, and recording
- * the canvas to a silent video file. The repo garden's TimelapseBar without the music box (a life
+ * the canvas to a silent video file. Repo mode's TimelapseBar without the music box (a life
  * has no score), in the same place and look. A recording is thrown away when the privacy toggle
  * changes, or when the controls unmount before it is saved.
  */
@@ -262,7 +262,7 @@ export default function PersonTimelapse({
     <div
       role="group"
       aria-label="Time-lapse"
-      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-garden-border bg-garden-panel/95 px-2.5 py-2 text-[12px] shadow-soft backdrop-blur ${
+      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-ui-border bg-ui-panel/95 px-2.5 py-2 text-[12px] shadow-soft backdrop-blur ${
         besidePanel ? 'max-w-[max(260px,calc(100vw-344px))]' : 'max-w-[calc(100vw-2rem)]'
       }`}
     >
@@ -272,7 +272,7 @@ export default function PersonTimelapse({
           onClick={togglePlay}
           disabled={busy}
           aria-label={playing ? 'Pause' : 'Play'}
-          className="shrink-0 rounded-lg p-1.5 text-garden-accent hover:bg-garden-hover disabled:opacity-40"
+          className="shrink-0 rounded-lg p-1.5 text-ui-accent hover:bg-ui-hover disabled:opacity-40"
         >
           {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
         </button>
@@ -294,9 +294,9 @@ export default function PersonTimelapse({
           onBlur={endScrub}
           aria-label="Time-lapse position"
           aria-valuetext={date || undefined}
-          className="min-w-0 flex-1 accent-garden-accent disabled:opacity-60"
+          className="min-w-0 flex-1 accent-ui-accent disabled:opacity-60"
         />
-        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-garden-text-dim" title="how far the replay has reached, in GitHub's days">
+        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-ui-text-dim" title="how far the replay has reached, in GitHub's days">
           {date}
         </span>
         <select
@@ -305,7 +305,7 @@ export default function PersonTimelapse({
           onChange={(event) => setLength(Number(event.target.value) as LapseLength)}
           aria-label="Length of a full play"
           title="how long a full play (and a recording) takes"
-          className="shrink-0 rounded-md bg-garden-field px-1 py-0.5 text-[11px] text-garden-text outline-none disabled:opacity-60"
+          className="shrink-0 rounded-md bg-ui-field px-1 py-0.5 text-[11px] text-ui-text outline-none disabled:opacity-60"
         >
           {LAPSE_LENGTHS.map((s) => (
             <option key={s} value={s}>
@@ -319,7 +319,7 @@ export default function PersonTimelapse({
             onClick={stopRecording}
             aria-label="Stop recording and save"
             title="stop now and save what was recorded"
-            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 font-mono text-[11px] tabular-nums text-garden-danger hover:bg-garden-hover"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 font-mono text-[11px] tabular-nums text-ui-danger hover:bg-ui-hover"
           >
             <StopIcon size={12} />
             {clock(elapsed)} / {clock(total)}
@@ -331,7 +331,7 @@ export default function PersonTimelapse({
             disabled={recorder !== 'ready' || saving}
             aria-label="Record a video"
             title={RECORDER_TITLES[recorder]}
-            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-garden-text-dim hover:bg-garden-hover hover:text-garden-danger disabled:opacity-40"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-ui-text-dim hover:bg-ui-hover hover:text-ui-danger disabled:opacity-40"
           >
             <RecordIcon size={12} />
             rec
@@ -341,18 +341,18 @@ export default function PersonTimelapse({
           type="button"
           onClick={onClose}
           aria-label="Close the time-lapse"
-          className="shrink-0 rounded-lg p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+          className="shrink-0 rounded-lg p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
         >
           <CloseIcon />
         </button>
       </div>
       {(busy || error !== null || notice !== null) && (
-        <p className={`px-1 text-[11px] ${error ? 'text-garden-danger' : 'text-garden-muted'}`} role="status">
+        <p className={`px-1 text-[11px] ${error ? 'text-ui-danger' : 'text-ui-muted'}`} role="status">
           {error ?? (busy ? 'recording the canvas: keep this tab in front until it saves' : notice)}
           {error !== null && kept && (
             <>
               . the video is kept:{' '}
-              <button type="button" onClick={() => void retrySave()} disabled={saving} className="font-medium text-garden-accent hover:underline">
+              <button type="button" onClick={() => void retrySave()} disabled={saving} className="font-medium text-ui-accent hover:underline">
                 try again
               </button>
             </>

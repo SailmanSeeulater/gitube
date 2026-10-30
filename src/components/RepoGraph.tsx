@@ -6,7 +6,7 @@ import { clockAt, growth, stemGrowth, type Timeline } from '../graph/timeline'
 import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
 import type { Theme } from '../theme/themes'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import {
   FIT_MAX_ZOOM,
   FIT_PAD,
@@ -26,7 +26,7 @@ import {
   shortSha,
   type LinkColours,
   type TimeForce,
-} from './gardenUtils'
+} from './graphUtils'
 import { TIP_RING_PX, useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
 import { PR_RING_METRO_CUT, drawPrRing, prRingFor } from './prMark'
 import { branchQueryText } from './branchQuery'
@@ -50,20 +50,20 @@ import {
 } from './metroView'
 
 /** Node object as react-force-graph sees it (GraphNode plus runtime x/y and a loose index signature). */
-export type GardenNode = NodeObject<GraphNode>
+export type RepoGraphNode = NodeObject<GraphNode>
 /** Extra fields the canvas attaches to each link once per graph. */
-export type GardenLinkFields = Omit<GraphLink, 'source' | 'target'> & {
-  source: string | GardenNode
-  target: string | GardenNode
+export type RepoGraphLinkFields = Omit<GraphLink, 'source' | 'target'> & {
+  source: string | RepoGraphNode
+  target: string | RepoGraphNode
   /** '+N' label for collapsed runs, '' otherwise. Precomputed so paint never builds strings. */
   badge: string
   /** Bend for links that share both ends (see assignLinkCurvature); 0 for a lone link. */
   curvature: number
 }
-export type GardenLink = LinkObject<GraphNode, GardenLinkFields>
-type GardenMethods = ForceGraphMethods<NodeObject<GraphNode>, LinkObject<GraphNode, GardenLinkFields>>
+export type RepoGraphLink = LinkObject<GraphNode, RepoGraphLinkFields>
+type RepoGraphMethods = ForceGraphMethods<NodeObject<GraphNode>, LinkObject<GraphNode, RepoGraphLinkFields>>
 
-export interface GardenProps {
+export interface RepoGraphProps {
   graph: Graph
   /**
    * branch name -> colour in the active theme. Kept apart from the graph (graph.palette is not
@@ -85,7 +85,7 @@ export interface GardenProps {
   /** The selected contributor's commits, links and labels to keep lit; null when nobody is selected. */
   focus?: ContributorFocus | null
   /** The time-lapse: only what has grown by its progress is drawn. null when it is off. */
-  timelapse?: GardenTimelapse | null
+  timelapse?: RepoGraphTimelapse | null
   /** branch name -> thorn level (1..3) for branches far apart from the default one (see graph/weeds) */
   thorns?: ReadonlyMap<string, number> | null
   /**
@@ -96,7 +96,7 @@ export interface GardenProps {
   prMarks?: ReadonlyMap<string, PrMark> | null
 }
 
-export interface GardenTimelapse {
+export interface RepoGraphTimelapse {
   /** of exactly the graph passed in */
   timeline: Timeline
   /** 0..1, written by the controls every frame and read by every paint (no React render per frame) */
@@ -105,9 +105,9 @@ export interface GardenTimelapse {
   title: string
 }
 
-interface GardenIndex {
-  graphData: { nodes: GardenNode[]; links: GardenLink[] }
-  nodeById: Map<string, GardenNode>
+interface RepoGraphIndex {
+  graphData: { nodes: RepoGraphNode[]; links: RepoGraphLink[] }
+  nodeById: Map<string, RepoGraphNode>
   /** node id -> 1-hop neighbour ids */
   neighbours: Map<string, Set<string>>
   /** branch name -> node ids reachable from its tip */
@@ -120,7 +120,7 @@ interface GardenIndex {
 }
 
 /** Colours for one theme and palette; paint reads these, so a theme switch is a redraw, never a rebuild. */
-interface GardenColours {
+interface RepoGraphColours {
   theme: Theme
   palette: Record<string, string>
   links: LinkColours
@@ -225,7 +225,7 @@ function drawThorns(ctx: CanvasRenderingContext2D, x: number, y: number, base: n
  * The time-lapse caption, drawn on the canvas so recordings carry it: the date the clock has reached
  * and the commits so far (top right), the repo (bottom right), and the progress along the bottom edge.
  */
-function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: GardenTimelapse, theme: Theme): void {
+function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: RepoGraphTimelapse, theme: Theme): void {
   const dpr = typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
   const W = ctx.canvas.width / dpr
   const H = ctx.canvas.height / dpr
@@ -259,7 +259,7 @@ function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: GardenTimela
   ctx.restore()
 }
 
-export default function Garden({
+export default function RepoGraph({
   graph,
   palette,
   theme,
@@ -272,9 +272,9 @@ export default function Garden({
   timelapse = null,
   thorns = null,
   prMarks = null,
-}: GardenProps) {
+}: RepoGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const fgRef = useRef<GardenMethods | undefined>(undefined)
+  const fgRef = useRef<RepoGraphMethods | undefined>(undefined)
   const sizeRef = useRef({ width: 0, height: 0 })
   const [size, setSize] = useState({ width: 0, height: 0 })
 
@@ -289,7 +289,7 @@ export default function Garden({
 
   const fittedRef = useRef(false)
   const tickCountRef = useRef(0)
-  const prevNodesRef = useRef<Map<string, GardenNode>>(new Map())
+  const prevNodesRef = useRef<Map<string, RepoGraphNode>>(new Map())
   const timeForceRef = useRef<TimeForce | null>(null)
   const scaleCache = useRef<ScaleCache>({ scale: -1, px: 1, shaFont: '', badgeFont: '', dash: [3, 2] })
   const metroOn = metro !== null
@@ -304,12 +304,12 @@ export default function Garden({
    * The index whose freshIds are used up: by its first metro tween, or at once when it was built in
    * organic mode (the physics places its new nodes, so a later switch to metro tweens them all).
    */
-  const lastTweenIndexRef = useRef<GardenIndex | null>(null)
+  const lastTweenIndexRef = useRef<RepoGraphIndex | null>(null)
   const wasMetroRef = useRef(metroOn)
 
-  const selectedBranch = useGardenStore((s) => s.selectedBranch)
-  const search = useGardenStore((s) => s.search)
-  const inspectorNodeId = useGardenStore((s) => s.inspectorNodeId)
+  const selectedBranch = useAppStore((s) => s.selectedBranch)
+  const search = useAppStore((s) => s.search)
+  const inspectorNodeId = useAppStore((s) => s.inspectorNodeId)
 
   // ---- size to container ----
   useLayoutEffect(() => {
@@ -329,11 +329,11 @@ export default function Garden({
   }, [])
 
   // ---- graph data + per-graph indexes (keyed only on the graph identity) ----
-  const index = useMemo<GardenIndex>(() => {
+  const index = useMemo<RepoGraphIndex>(() => {
     const previous = prevNodesRef.current
     const freshIds = new Set<string>()
-    const nodes: GardenNode[] = graph.nodes.map((n) => {
-      const copy: GardenNode = { ...n }
+    const nodes: RepoGraphNode[] = graph.nodes.map((n) => {
+      const copy: RepoGraphNode = { ...n }
       const old = previous.get(n.id)
       if (old === undefined || old.x === undefined || old.y === undefined) freshIds.add(n.id)
       else {
@@ -346,12 +346,12 @@ export default function Garden({
       return copy
     })
     const curvatures = assignLinkCurvature(graph.links)
-    const links: GardenLink[] = graph.links.map((l, i) => ({
+    const links: RepoGraphLink[] = graph.links.map((l, i) => ({
       ...l,
       badge: l.collapsedCount > 0 ? `+${l.collapsedCount}` : '',
       curvature: curvatures[i],
     }))
-    const nodeById = new Map<string, GardenNode>()
+    const nodeById = new Map<string, RepoGraphNode>()
     for (const n of nodes) nodeById.set(n.id, n)
 
     const tipLabel = new Map<string, string>()
@@ -378,7 +378,7 @@ export default function Garden({
   // ---- colours, keyed on the theme and its palette only. The paint callbacks depend on them, so a
   // theme switch hands force-graph new callbacks, which it answers with one redraw: graphData,
   // the simulation and the label placer are untouched. ----
-  const colours = useMemo<GardenColours>(() => ({ theme, palette, links: buildLinkColours(palette, theme) }), [theme, palette])
+  const colours = useMemo<RepoGraphColours>(() => ({ theme, palette, links: buildLinkColours(palette, theme) }), [theme, palette])
 
   useEffect(() => {
     prevNodesRef.current = index.nodeById
@@ -516,7 +516,7 @@ export default function Garden({
   }
 
   const paintNode = useCallback(
-    (node: GardenNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (node: RepoGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const x = node.x
       const y = node.y
       if (x === undefined || y === undefined) return
@@ -696,7 +696,7 @@ export default function Garden({
   )
 
   const paintPointerArea = useCallback(
-    (node: GardenNode, colour: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (node: RepoGraphNode, colour: string, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const x = node.x
       const y = node.y
       if (x === undefined || y === undefined) return
@@ -714,7 +714,7 @@ export default function Garden({
   )
 
   const linkColor = useCallback(
-    (link: GardenLink) => {
+    (link: RepoGraphLink) => {
       const s = linkEndId(link.source)
       const t = linkEndId(link.target)
       const hovered = hoverRef.current ?? labelHoverRef.current
@@ -726,12 +726,12 @@ export default function Garden({
     [colours, reachSet, litLinks, hoverVersion],
   )
 
-  const linkWidth = useCallback((link: GardenLink) => (link.collapsedCount > 0 ? 2 : 1), [])
-  const linkCurvature = useCallback((link: GardenLink) => link.curvature, [])
-  const linkMode = useCallback((link: GardenLink) => (link.collapsedCount > 0 ? 'after' : undefined), [])
+  const linkWidth = useCallback((link: RepoGraphLink) => (link.collapsedCount > 0 ? 2 : 1), [])
+  const linkCurvature = useCallback((link: RepoGraphLink) => link.curvature, [])
+  const linkMode = useCallback((link: RepoGraphLink) => (link.collapsedCount > 0 ? 'after' : undefined), [])
 
   const paintLink = useCallback(
-    (link: GardenLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (link: RepoGraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
       // '+N' badges are screen-sized, so only hide them when zoomed far out and they would pile up.
       if (globalScale < 0.7 || link.collapsedCount <= 0) return
       const s = link.source
@@ -768,7 +768,7 @@ export default function Garden({
    * with its '+N' badge once it is whole.
    */
   const paintStem = useCallback(
-    (link: GardenLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (link: RepoGraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const s = link.source
       const t = link.target
       if (typeof s !== 'object' || typeof t !== 'object') return
@@ -794,7 +794,7 @@ export default function Garden({
   const stemMode = useCallback(() => 'replace' as const, [])
   // ungrown links are left out of force-graph's hit canvas too, so they cannot be clicked
   const linkVisible = useMemo(
-    () => (timelapse ? (link: GardenLink) => !metroOn && stemShown(linkEndId(link.source), linkEndId(link.target)) > 0 : !metroOn),
+    () => (timelapse ? (link: RepoGraphLink) => !metroOn && stemShown(linkEndId(link.source), linkEndId(link.target)) > 0 : !metroOn),
     [timelapse, metroOn, stemShown],
   )
 
@@ -943,7 +943,7 @@ export default function Garden({
   )
 
   // ---- interaction ----
-  const handleHover = useCallback((node: GardenNode | null) => {
+  const handleHover = useCallback((node: RepoGraphNode | null) => {
     const id = node ? String(node.id) : null
     if (hoverRef.current !== id) {
       hoverRef.current = id
@@ -962,7 +962,7 @@ export default function Garden({
   }, [handleHover, onPointerLeave])
 
   const handleNodeClick = useCallback(
-    (node: GardenNode) => {
+    (node: RepoGraphNode) => {
       onNodeClick(String(node.id))
     },
     [onNodeClick],
@@ -989,13 +989,13 @@ export default function Garden({
   // Links have no click action of their own, so treat a click on one as a background click.
   // Links are on force-graph's hit canvas (linkWidth + linkHoverPrecision), so without this a
   // click on a label crossed by a link never reaches the label hit test.
-  const handleLinkClick = useCallback((_link: GardenLink, event: MouseEvent) => handleBackgroundClick(event), [handleBackgroundClick])
+  const handleLinkClick = useCallback((_link: RepoGraphLink, event: MouseEvent) => handleBackgroundClick(event), [handleBackgroundClick])
 
   // the dragged node's label rides along on a plate
-  const handleNodeDrag = useCallback((node: GardenNode) => setDragNode(String(node.id)), [setDragNode])
+  const handleNodeDrag = useCallback((node: RepoGraphNode) => setDragNode(String(node.id)), [setDragNode])
 
   const handleDragEnd = useCallback(
-    (node: GardenNode) => {
+    (node: RepoGraphNode) => {
       // release the node so the layout can settle it again (Obsidian behaviour)
       node.fx = undefined
       node.fy = undefined
@@ -1209,7 +1209,7 @@ export default function Garden({
   return (
     <div ref={containerRef} className="h-full w-full" onPointerLeave={handlePointerLeave} onPointerMove={onPointerMove}>
       {ready && (
-        <ForceGraph2D<GraphNode, GardenLinkFields>
+        <ForceGraph2D<GraphNode, RepoGraphLinkFields>
           ref={fgRef}
           width={size.width}
           height={size.height}

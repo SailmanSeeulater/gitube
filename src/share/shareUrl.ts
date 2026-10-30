@@ -1,8 +1,8 @@
 /**
- * Share links: the page URL names what is on show, so a copied link opens the same garden.
+ * Share links: the page URL names what is on show, so a copied link opens the same view.
  *
  * Repo mode: ?repo=owner/repo, plus &branch=<name> or &by=<login> (a contributor without a GitHub
- * account: &by=name:<author name>), and &vs=owner/repo for a garden battle.
+ * account: &by=name:<author name>), and &vs=owner/repo for a vs.
  * Person mode: ?user=<login>, plus &view=<view> for the chosen view (lines, constellation or a
  * console view). A link from before the life garden was retired, &view=garden, opens lines. A repo
  * wins when a link names both.
@@ -17,7 +17,7 @@ export interface ShareState {
   branch: string | null
   /** Contributor.key ('login:<login>' or 'name:<name>') */
   person: string | null
-  /** the other repo of a garden battle; absent (or null) when there is none */
+  /** the other repo of a vs; absent (or null) when there is none */
   vs?: RepoRef | null
 }
 

@@ -7,12 +7,12 @@
  * sent on a failure. Private names stay hidden in everything it draws or measures until revealed.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { gardenFileName } from '../src/export/gardenFile'
+import { exportFileName } from '../src/export/repoFile'
 import type { EventData } from '../src/analytics/umami'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import {
   POSTER_AVATAR_PX,
-  POSTER_GARDEN_VIEW,
+  POSTER_VIEWPORT,
   POSTER_HEIGHT,
   POSTER_PLOT,
   POSTER_SCALE,
@@ -20,14 +20,14 @@ import {
   composeLifePoster,
   loadPosterAvatar,
   paintPosterFrame,
-  paintPosterGarden,
+  paintPosterView,
   posterAvatarUrl,
   posterCredit,
   posterMilestones,
   posterYears,
   saveLifePoster,
   type PosterDeps,
-  type PosterGarden,
+  type PosterView,
   type PosterInput,
   type PosterKit,
   type PosterText,
@@ -37,7 +37,7 @@ import type { LifeMilestone } from '../src/profile/timeline'
 import { LIFE_LABEL_FONT } from '../src/profile/useLifeLabels'
 import { usePersonStore } from '../src/profile/usePersonStore'
 import { LINES_VIEW } from '../src/profile/lifeViews'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { THEMES, getTheme, type Theme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
 import { KEPANO_NOW, grow, kepanoProfile, painterFor, setPerson, withPrivate, type Grown } from './helpers/personScene'
@@ -77,7 +77,7 @@ beforeAll(async () => {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 const milestone = (kind: LifeMilestone['kind'], day: string, label: string, repo?: string): LifeMilestone => ({
@@ -271,7 +271,7 @@ describe('loadPosterAvatar', () => {
 
 // ---------- the frame ----------
 
-const GARDEN = { tag: 'the garden image' } as unknown as CanvasImageSource
+const PLOT_IMAGE = { tag: 'the view image' } as unknown as CanvasImageSource
 const AVATAR = { tag: 'the avatar' } as unknown as CanvasImageSource
 
 const TEXT: PosterText = {
@@ -289,7 +289,7 @@ function frame(text: PosterText, avatar: CanvasImageSource | null, t: Theme = th
   const rec = recordingCtx(POSTER_WIDTH * POSTER_SCALE, POSTER_HEIGHT * POSTER_SCALE)
   rec.ctx.setTransform(POSTER_SCALE, 0, 0, POSTER_SCALE, 0, 0)
   rec.clear()
-  paintPosterFrame(rec.ctx, text, t, GARDEN, avatar)
+  paintPosterFrame(rec.ctx, text, t, PLOT_IMAGE, avatar)
   return rec
 }
 
@@ -321,11 +321,11 @@ describe('paintPosterFrame', () => {
     }
   })
 
-  it('draws the avatar clipped to a circle, and the garden into its plot', () => {
+  it('draws the avatar clipped to a circle, and the view into its plot', () => {
     const rec = frame(TEXT, AVATAR)
     const images = rec.calls('drawImage')
     expect(images.map((c) => c.args)).toEqual([
-      [GARDEN, POSTER_PLOT.x, POSTER_PLOT.y, POSTER_PLOT.width, POSTER_PLOT.height],
+      [PLOT_IMAGE, POSTER_PLOT.x, POSTER_PLOT.y, POSTER_PLOT.width, POSTER_PLOT.height],
       [AVATAR, expect.any(Number), expect.any(Number), POSTER_AVATAR_PX, POSTER_AVATAR_PX],
     ])
     const avatarAt = rec.log.indexOf(images[1])
@@ -337,12 +337,12 @@ describe('paintPosterFrame', () => {
     // the plot lies between the header and the milestones, across the whole width
     expect(POSTER_PLOT.y).toBeGreaterThan(POSTER_AVATAR_PX)
     expect(POSTER_PLOT.y + POSTER_PLOT.height).toBeLessThan(POSTER_HEIGHT - 100)
-    expect(POSTER_GARDEN_VIEW).toMatchObject({ width: POSTER_PLOT.width, height: POSTER_PLOT.height })
+    expect(POSTER_VIEWPORT).toMatchObject({ width: POSTER_PLOT.width, height: POSTER_PLOT.height })
   })
 
   it('draws a placeholder circle with the initial when there is no avatar', () => {
     const rec = frame(TEXT, null)
-    expect(rec.calls('drawImage').map((c) => c.args[0])).toEqual([GARDEN])
+    expect(rec.calls('drawImage').map((c) => c.args[0])).toEqual([PLOT_IMAGE])
     expect(rec.calls('clip')).toHaveLength(0)
     const arcAt = indexOfCall(rec, 'arc')
     const fill = rec.log.slice(arcAt).find((e) => e.kind === 'call' && e.name === 'fill') as Extract<CtxEntry, { kind: 'call' }>
@@ -385,7 +385,7 @@ describe('paintPosterFrame', () => {
 
 // ---------- the view off screen (life lines) ----------
 
-function posterGarden(g: Grown, hidden: ReadonlySet<string> = new Set(), measured: string[] = []): PosterGarden {
+function posterView(g: Grown, hidden: ReadonlySet<string> = new Set(), measured: string[] = []): PosterView {
   return {
     layout: g.layout,
     view: LINES_VIEW,
@@ -402,8 +402,8 @@ function posterGarden(g: Grown, hidden: ReadonlySet<string> = new Set(), measure
   }
 }
 
-function gardenRec(): RecordingCtx {
-  const rec = recordingCtx(POSTER_GARDEN_VIEW.width * POSTER_SCALE, POSTER_GARDEN_VIEW.height * POSTER_SCALE)
+function viewRec(): RecordingCtx {
+  const rec = recordingCtx(POSTER_VIEWPORT.width * POSTER_SCALE, POSTER_VIEWPORT.height * POSTER_SCALE)
   rec.ctx.setTransform(POSTER_SCALE, 0, 0, POSTER_SCALE, 0, 0)
   rec.clear()
   return rec
@@ -426,12 +426,12 @@ const drawnTexts = (log: readonly CtxEntry[]) =>
 /** One frame by life lines' painter in the poster's viewport, fitted. */
 function referenceFrame(g: Grown, state: Parameters<typeof painterFor>[1], progress?: number): RecordingCtx {
   const { painter } = painterFor(g, state, { timelapse: progress === undefined ? null : { progress: { current: progress } } })
-  const rec = gardenRec()
-  painter.paint(rec.ctx, POSTER_GARDEN_VIEW, fitLifeCamera(g.layout.days, POSTER_GARDEN_VIEW), 16)
+  const rec = viewRec()
+  painter.paint(rec.ctx, POSTER_VIEWPORT, fitLifeCamera(g.layout.days, POSTER_VIEWPORT), 16)
   return rec
 }
 
-describe('paintPosterGarden', () => {
+describe('paintPosterView', () => {
   beforeEach(() => {
     usePersonStore.getState().resetFor('nobody')
     setPerson({ hover: null, selected: null, hidden: new Set() })
@@ -439,8 +439,8 @@ describe('paintPosterGarden', () => {
 
   it('paints the view fully grown, until its labels settle', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const rec = gardenRec()
-    paintPosterGarden(rec.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
+    const rec = viewRec()
+    paintPosterView(rec.ctx, POSTER_VIEWPORT, posterView(g))
     const frames = frameStarts(rec.log).length
     expect(frames).toBeGreaterThan(1)
     expect(frames).toBeLessThan(400)
@@ -456,20 +456,20 @@ describe('paintPosterGarden', () => {
 
   it('stops at maxFrames', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const rec = gardenRec()
-    paintPosterGarden(rec.ctx, POSTER_GARDEN_VIEW, posterGarden(g), 3)
+    const rec = viewRec()
+    paintPosterView(rec.ctx, POSTER_VIEWPORT, posterView(g), 3)
     expect(frameStarts(rec.log)).toHaveLength(3)
   })
 
   it('draws no hover or selection, whatever the store holds', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const plain = gardenRec()
-    paintPosterGarden(plain.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
+    const plain = viewRec()
+    paintPosterView(plain.ctx, POSTER_VIEWPORT, posterView(g))
     const key = g.layout.lines[0].key
     const hover = { kind: 'repo' as const, key }
     setPerson({ hover, selected: key })
-    const held = gardenRec()
-    paintPosterGarden(held.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
+    const held = viewRec()
+    paintPosterView(held.ctx, POSTER_VIEWPORT, posterView(g))
     expect(held.log).toEqual(plain.log)
     // the painter would show them: rings and a plate
     const shown = referenceFrame(g, { hover, selected: key })
@@ -480,12 +480,12 @@ describe('paintPosterGarden', () => {
 
   it('leaves out what the eyes hide', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const all = gardenRec()
-    paintPosterGarden(all.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
+    const all = viewRec()
+    paintPosterView(all.ctx, POSTER_VIEWPORT, posterView(g))
     // the line with the most parts
     const line = [...g.layout.lines].sort((a, b) => b.parts.length - a.parts.length)[0]
-    const without = gardenRec()
-    paintPosterGarden(without.ctx, POSTER_GARDEN_VIEW, posterGarden(g, new Set([line.key])))
+    const without = viewRec()
+    paintPosterView(without.ctx, POSTER_VIEWPORT, posterView(g, new Set([line.key])))
     // its parts go, as the painter leaves them out for the eye
     const strokes = countCalls(lastFrame(without), 'lineTo')
     expect(strokes).toBe(countCalls(referenceFrame(g, { hidden: new Set([line.key]) }).log, 'lineTo'))
@@ -496,20 +496,20 @@ describe('paintPosterGarden', () => {
 
   it('draws and measures no private name while hidden, and the names once revealed', () => {
     const hiddenMeasured: string[] = []
-    const hidden = gardenRec()
-    paintPosterGarden(hidden.ctx, POSTER_GARDEN_VIEW, posterGarden(grow(secret, KEPANO_NOW, theme), new Set(), hiddenMeasured))
-    expectNoSecret([...hidden.texts(), ...hiddenMeasured], 'the hidden garden')
+    const hidden = viewRec()
+    paintPosterView(hidden.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme), new Set(), hiddenMeasured))
+    expectNoSecret([...hidden.texts(), ...hiddenMeasured], 'the hidden view')
     expect(drawnTexts(lastFrame(hidden))).toContain(PRIVATE_REPO_LABEL)
 
     // revealed for another login: still hidden
     const otherMeasured: string[] = []
-    const other = gardenRec()
-    paintPosterGarden(other.ctx, POSTER_GARDEN_VIEW, posterGarden(grow(secret, KEPANO_NOW, theme, 'someone-else'), new Set(), otherMeasured))
-    expectNoSecret([...other.texts(), ...otherMeasured], 'the garden revealed for another login')
+    const other = viewRec()
+    paintPosterView(other.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme, 'someone-else'), new Set(), otherMeasured))
+    expectNoSecret([...other.texts(), ...otherMeasured], 'the view revealed for another login')
 
     const shownMeasured: string[] = []
-    const shown = gardenRec()
-    paintPosterGarden(shown.ctx, POSTER_GARDEN_VIEW, posterGarden(grow(secret, KEPANO_NOW, theme, 'kepano'), new Set(), shownMeasured))
+    const shown = viewRec()
+    paintPosterView(shown.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme, 'kepano'), new Set(), shownMeasured))
     const shownText = [...shown.texts(), ...shownMeasured].join('\n')
     expect(SECRETS.some((s) => s.test(shownText))).toBe(true)
   })
@@ -550,7 +550,7 @@ function rig(over: Partial<PosterDeps> = {}): Rig {
   const kit = {
     canvasToPng: vi.fn(async () => PNG),
     downloadBlob: vi.fn(() => steps.push('download')),
-    gardenFileName,
+    exportFileName,
   }
   const deps: Partial<PosterDeps> = {
     loadKit: async () => kit,
@@ -576,7 +576,7 @@ function rig(over: Partial<PosterDeps> = {}): Rig {
 }
 
 describe('composeLifePoster', () => {
-  it('paints the garden off screen, then frames it, at the poster scale', () => {
+  it('paints the view off screen, then frames it, at the poster scale', () => {
     const r = rig()
     const g = grow(kepano, KEPANO_NOW, theme)
     const poster = composeLifePoster(inputOf(g), AVATAR, r.deps as PosterDeps)

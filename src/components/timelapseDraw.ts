@@ -1,6 +1,6 @@
 /**
  * Pure geometry for the time-lapse: stems drawn part of the way along a link, nodes popping in.
- * Works on plain numbers so it can be tested without a canvas; Garden turns the results into paths.
+ * Works on plain numbers so it can be tested without a canvas; RepoGraph turns the results into paths.
  */
 
 /** A node's scale while it grows in (g 0..1): a quick pop that overshoots a little and settles. */

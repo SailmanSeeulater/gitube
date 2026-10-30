@@ -44,7 +44,7 @@ export const HTOP_PALETTE = {
 /** Every other row while one is selected, at this alpha, whatever the theme. */
 export const HTOP_DIM_ALPHA = 0.4
 
-/** The console's LifeInk: base's garden ink kept, every colour the screen's and the dimming the screen's. */
+/** The console's LifeInk: base's other fields kept, every colour the screen's and the dimming the screen's. */
 export function htopInk(base: LifeInk): LifeInk {
   const p = HTOP_PALETTE
   return {

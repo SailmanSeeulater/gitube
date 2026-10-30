@@ -4,7 +4,7 @@ import { fetchRepoData } from '../api/github'
 import type { RepoRef } from '../api/parseRepoUrl'
 import { readFresh, remember, sharedRepoStore } from '../api/repoCache'
 import { GitHubFetchError, type FetchProgress, type RepoData } from '../types'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 
 export interface UseRepoDataResult {
   data: RepoData | undefined
@@ -77,9 +77,9 @@ const INITIAL_PROGRESS: FetchProgress = {
  * refetch asks for GitHub. Every live fetch refreshes the cache. Disabled (idle) while ref is null.
  */
 export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
-  const token = useGardenStore((s) => s.token)
-  const setProgress = useGardenStore((s) => s.setProgress)
-  const noteRate = useGardenStore((s) => s.noteRate)
+  const token = useAppStore((s) => s.token)
+  const setProgress = useAppStore((s) => s.setProgress)
+  const noteRate = useAppStore((s) => s.noteRate)
   /** set by refetch: the next run skips the cache */
   const liveRef = useRef(false)
 

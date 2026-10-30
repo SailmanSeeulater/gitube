@@ -3,4 +3,4 @@
  * encoders, the browser download, and the saved-file reader.
  */
 export { canvasToPng, composeGraphImage, downloadBlob } from './image'
-export { GardenFileError, gardenFileName, parseGardenFile, serializeGarden } from './gardenFile'
+export { RepoFileError, exportFileName, parseRepoFile, serializeRepoFile } from './repoFile'

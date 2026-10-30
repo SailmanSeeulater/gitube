@@ -14,7 +14,7 @@
  */
 import type { ChecksState, PrMark, PullSummary, ReviewState } from '../types'
 import type { Theme } from '../theme/themes'
-import { relativeTime } from './gardenUtils'
+import { relativeTime } from './graphUtils'
 
 export type PrTone = 'success' | 'warn' | 'danger' | 'muted'
 
@@ -122,7 +122,7 @@ export const PR_RING_LAYOUT = {
 } as const
 
 /**
- * The cut Garden strokes in the canvas colour round a metro station with a pull request, so a ring
+ * The cut RepoGraph strokes in the canvas colour round a metro station with a pull request, so a ring
  * half in the branch's own colour (a green line passing, a red one failing) still parts from the
  * disc: centred this far from the disc's edge (screen px), this wide; it ends where the ring starts.
  */

@@ -31,12 +31,12 @@ function Item({ icon, label, hint, disabled = false, onSelect }: ItemProps) {
       role="menuitem"
       disabled={disabled}
       onClick={onSelect}
-      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-garden-hover focus-visible:bg-garden-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+      className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-ui-hover focus-visible:bg-ui-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
     >
-      <span className="mt-0.5 shrink-0 text-garden-muted">{icon}</span>
+      <span className="mt-0.5 shrink-0 text-ui-muted">{icon}</span>
       <span className="min-w-0">
-        <span className="block text-garden-text">{label}</span>
-        <span className="block text-[11px] leading-snug text-garden-muted">{hint}</span>
+        <span className="block text-ui-text">{label}</span>
+        <span className="block text-[11px] leading-snug text-ui-muted">{hint}</span>
       </span>
     </button>
   )
@@ -91,7 +91,7 @@ export default function ExportMenu({ id, canExport, canExportData = canExport, o
       aria-label="Save or open"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
-      className="w-[260px] self-end rounded-xl border border-garden-border bg-garden-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
+      className="w-[260px] self-end rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
     >
       <Item
         icon={<ImageIcon size={14} />}
@@ -107,7 +107,7 @@ export default function ExportMenu({ id, canExport, canExportData = canExport, o
         disabled={!canExportData}
         onSelect={run(onExportData)}
       />
-      <div className="mx-2 my-1 h-px bg-garden-border" role="separator" />
+      <div className="mx-2 my-1 h-px bg-ui-border" role="separator" />
       <Item icon={<OpenIcon size={14} />} label="Open a saved file…" hint="or drop a .json file on the page" onSelect={run(onOpenFile)} />
     </div>
   )

@@ -92,9 +92,9 @@ export function PrHalfGlyph({ side, state }: { side: 'review'; state: ReviewStat
 
 /** Text colour of a tone: success, warn and danger read as text; muted stays the line's muted. */
 const TONE_TEXT: Record<PrTone, string> = {
-  success: 'text-garden-success',
-  warn: 'text-garden-warn',
-  danger: 'text-garden-danger',
+  success: 'text-ui-success',
+  warn: 'text-ui-warn',
+  danger: 'text-ui-danger',
   muted: '',
 }
 
@@ -104,12 +104,12 @@ const TONE_TEXT: Record<PrTone, string> = {
  */
 export function PrStatusLine({ pr, compact = false, children }: { pr: PullSummary; compact?: boolean; children?: ReactNode }) {
   return (
-    <span className={`flex min-w-0 flex-wrap items-center gap-y-0.5 text-garden-muted ${compact ? 'gap-x-2.5' : 'gap-x-3'}`}>
+    <span className={`flex min-w-0 flex-wrap items-center gap-y-0.5 text-ui-muted ${compact ? 'gap-x-2.5' : 'gap-x-3'}`}>
       <span className={`flex items-center gap-1 ${TONE_TEXT[reviewTone(pr.review)]}`}>
         <PrHalfGlyph side="review" state={pr.review} />
         {reviewWords(pr)}
         {!compact && pr.reviewersAsked !== null && pr.reviewersAsked > 0 && pr.review !== 'approved' && (
-          <span className="text-garden-muted"> · {pr.reviewersAsked} asked</span>
+          <span className="text-ui-muted"> · {pr.reviewersAsked} asked</span>
         )}
       </span>
       <span className={`flex items-center gap-1 ${TONE_TEXT[checksTone(pr.checks)]}`}>

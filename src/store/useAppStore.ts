@@ -54,7 +54,7 @@ function writeStoredToken(token: string): void {
   }
 }
 
-export interface GardenState {
+export interface AppState {
   /** GitHub personal access token, '' when unset. Persisted under TOKEN_STORAGE_KEY. */
   token: string
   viewMode: ViewMode
@@ -91,7 +91,7 @@ export interface GardenState {
   rate: RateInfo | null
 }
 
-export interface GardenActions {
+export interface AppActions {
   setToken: (token: string) => void
   setViewMode: (mode: ViewMode) => void
   toggleViewMode: () => void
@@ -128,9 +128,9 @@ export interface GardenActions {
   resetForNewRepo: () => void
 }
 
-export type GardenStore = GardenState & GardenActions
+export type AppStore = AppState & AppActions
 
-export const useGardenStore = create<GardenStore>()((set, get) => ({
+export const useAppStore = create<AppStore>()((set, get) => ({
   token: readStoredToken(),
   viewMode: 'skeleton',
   layoutMode: readStoredLayoutMode(),

@@ -45,9 +45,9 @@ export function lazyPart<P extends object>(chunk: Chunk<{ default: ComponentType
 /** Says a part could not be loaded, after its retry too, and offers the reload. */
 export function ReloadNotice() {
   return (
-    <p role="status" className="text-[12px] leading-snug text-garden-muted">
+    <p role="status" className="text-[12px] leading-snug text-ui-muted">
       couldn't load this part. the connection may have dropped, or gitube was updated since this tab was opened.{' '}
-      <button type="button" onClick={reloadPage} className="font-medium text-garden-accent hover:underline">
+      <button type="button" onClick={reloadPage} className="font-medium text-ui-accent hover:underline">
         reload
       </button>
     </p>
@@ -70,7 +70,7 @@ export function ChunkPlaceholder({ frame = '', label = 'loading', failed = false
       {failed ? (
         <ReloadNotice />
       ) : (
-        <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+        <p role="status" className="animate-pulse text-[12px] text-ui-muted">
           {label}…
         </p>
       )}

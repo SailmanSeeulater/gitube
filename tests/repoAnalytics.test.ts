@@ -11,7 +11,7 @@ import {
   type RepoOnShow,
 } from '../src/analytics/useRepoAnalytics'
 import { withLookup } from '../src/graph/pulls'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { GitHubFetchError, type Branch, type PullIndex, type PullSummary, type RepoData } from '../src/types'
 
 const TOKEN = 'ghp_' + 'R8vK2mW5qT9xL3nB7cJ4hF6dS1aG0eY2uI8o'
@@ -30,7 +30,7 @@ function stubTracker() {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 describe('branchBucket', () => {
@@ -86,7 +86,7 @@ describe('growEventData', () => {
     })
     const data = growEventData(repoWith(3), false, false)
     expect(data.repo).toBe('expressjs/express')
-    useGardenStore.setState({ token: TOKEN })
+    useAppStore.setState({ token: TOKEN })
     track('grow', data)
     expect(umamiTrack).toHaveBeenLastCalledWith('grow', { mode: 'repo', branches: '2-5', cached: false, token: false })
   })

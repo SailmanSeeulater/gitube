@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { viewLayouts } from '../src/PersonApp'
 import personAppSource from '../src/PersonApp.tsx?raw'
 import ErrorCard from '../src/components/ErrorCard'
-import { formatClock } from '../src/components/gardenUtils'
+import { formatClock } from '../src/components/graphUtils'
 import * as icons from '../src/components/icons'
 import PersonInspector, { inspectorCard } from '../src/profile/PersonInspector'
 import PersonLegend, { GRAPHQL_FAILED, dataLimits } from '../src/profile/PersonLegend'
@@ -28,7 +28,7 @@ import { PRIVATE_REPO_LABEL, isRevealed, privateRepoKeys, repoNamer } from '../s
 import { buildLifeTimeline, dayNumber } from '../src/profile/timeline'
 import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import type { PersonView } from '../src/share/shareUrl'
-import { useGardenStore, type GardenState } from '../src/store/useGardenStore'
+import { useAppStore, type AppState } from '../src/store/useAppStore'
 import { getTheme } from '../src/theme/themes'
 import { GitHubFetchError, type ProfileData, type ProfileRepo } from '../src/types'
 
@@ -218,9 +218,9 @@ function setPerson(partial: Partial<PersonState>): void {
   syncPerson()
 }
 
-function setGarden(partial: Partial<GardenState>): void {
-  useGardenStore.setState(partial)
-  Object.assign(useGardenStore.getInitialState(), partial)
+function setApp(partial: Partial<AppState>): void {
+  useAppStore.setState(partial)
+  Object.assign(useAppStore.getInitialState(), partial)
 }
 
 const hoverRepo = (key: string) => setPerson({ hover: { kind: 'repo', key } })
@@ -237,7 +237,7 @@ afterAll(() => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('me')
   setPerson({ tab: 'repos' })
-  setGarden({ panelOpen: true, rate: null })
+  setApp({ panelOpen: true, rate: null })
 })
 
 describe('personErrorCopy', () => {
@@ -447,8 +447,8 @@ describe('PersonStatus', () => {
     expect(textOf(status({ ...PUBLIC, truncated: true }, { cachedAt: '2024-06-15T18:00:00Z' }))).toContain('add a token for commits')
   })
 
-  it('counts the core budget left as the repo garden does: from the store, only for a live fetch', () => {
-    setGarden({ rate: { limit: 5000, remaining: 4990, resetAt: RESET } })
+  it('counts the core budget left as repo mode does: from the store, only for a live fetch', () => {
+    setApp({ rate: { limit: 5000, remaining: 4990, resetAt: RESET } })
     const live = status(TOKEN, { hasToken: true })
     expect(live).toContain('title="GitHub API requests remaining this hour"')
     expect(textOf(live)).toContain('4990 requests left')
@@ -466,7 +466,7 @@ describe('PersonStatus', () => {
     const cached = textOf(status(PUBLIC, { cachedAt: '2024-06-15T18:00:00Z' }))
     expect(cached).toContain('cached')
     expect(cached).toContain('refresh')
-    setGarden({ rate: { limit: 60, remaining: 51, resetAt: RESET } })
+    setApp({ rate: { limit: 60, remaining: 51, resetAt: RESET } })
     expect(textOf(status(PUBLIC))).toContain('51 requests left')
     // a cached profile used no requests: the budget is not its story
     expect(textOf(status(PUBLIC, { cachedAt: '2024-06-15T18:00:00Z' }))).not.toContain('requests left')
@@ -517,7 +517,7 @@ describe('PersonLegend', () => {
 
   it('explains the glyphs the profile has, and its languages', () => {
     /** The glyph grid's labels. */
-    const labels = (html: string) => [...html.matchAll(/<span class="text-\[12px\] text-garden-text-dim">([^<]*)<\/span>/g)].map((m) => m[1])
+    const labels = (html: string) => [...html.matchAll(/<span class="text-\[12px\] text-ui-text-dim">([^<]*)<\/span>/g)].map((m) => m[1])
     expect(labels(legend(TOKEN))).toEqual(['active run', 'dormant', 'start', 'contributed', 'fork', 'archived', 'station', 'milestone', 'seedling', 'private repo'])
     expect(labels(legend(PUBLIC))).toEqual(['active run', 'dormant', 'start', 'fork', 'archived', 'station', 'milestone'])
     const token = textOf(legend(TOKEN))
@@ -615,7 +615,7 @@ describe('PersonLegend', () => {
     /** The glyph grid's hints by label, entities read back. */
     const hints = (html: string) =>
       new Map(
-        [...html.matchAll(/<li class="[^"]*" title="([^"]*)">[\s\S]*?<span class="text-\[12px\] text-garden-text-dim">([^<]*)<\/span><\/li>/g)].map(
+        [...html.matchAll(/<li class="[^"]*" title="([^"]*)">[\s\S]*?<span class="text-\[12px\] text-ui-text-dim">([^<]*)<\/span><\/li>/g)].map(
           (m) => [m[2], textOf(m[1])] as const,
         ),
       )
@@ -946,7 +946,7 @@ describe('PersonPanel', () => {
   })
 
   it('collapses to its open button', () => {
-    setGarden({ panelOpen: false })
+    setApp({ panelOpen: false })
     const html = panel(TOKEN)
     expect(html).toContain('aria-label="Open panel"')
     expect(html).not.toContain('<aside')

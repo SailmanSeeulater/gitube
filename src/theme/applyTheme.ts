@@ -4,10 +4,10 @@ import { themeCssVariables, type Theme } from './themes'
 const SWITCHING_ATTRIBUTE = 'data-theme-switching'
 
 /**
- * Puts a theme on the document: its CSS custom properties (which drive every Tailwind garden-*
+ * Puts a theme on the document: its CSS custom properties (which drive every Tailwind ui-*
  * colour, see src/index.css) as inline styles on <html>, color-scheme (native scrollbars, form
  * controls), data-theme, and <meta name="theme-color"> (the browser's toolbar tint). The canvas
- * is not touched here: Garden paints from the theme object.
+ * is not touched here: RepoGraph paints from the theme object.
  *
  * A switch from another theme recolours the page in one step: CSS transitions are held off for
  * that restyle, so elements with transition-colors do not fade from the old theme while the rest

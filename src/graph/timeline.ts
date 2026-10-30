@@ -1,5 +1,5 @@
 /**
- * The time-lapse clock: when each part of the shown graph appears as the garden grows from its
+ * The time-lapse clock: when each part of the shown graph appears as the map grows from its
  * oldest fetched commit to today.
  *
  * Progress runs 0..1 at an even pace of one step per commit, not per day, so a repo that slept for

@@ -16,7 +16,7 @@
  * MAX_QUEUED_EVENTS of them) and are sent once it has loaded; if it fails to load they are dropped.
  * Unless initAnalytics adds it, track() is a no-op.
  */
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 
 export const UMAMI_HOST = 'https://stats.latesailor.dev'
 /** Where pageviews count; the tracker ignores every other hostname (localhost included). */
@@ -85,7 +85,7 @@ interface Context {
 function currentContext(): Context {
   let token = ''
   try {
-    token = useGardenStore.getState().token
+    token = useAppStore.getState().token
   } catch {
     // no store: treat it as tokenless, but the value checks below still run
   }

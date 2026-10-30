@@ -13,7 +13,7 @@ const LAZY_ONLY = [
   'components/ThemePicker.tsx',
   'components/ExportMenu.tsx',
   'components/TimelapseBar.tsx',
-  'components/GardenBattle.tsx',
+  'components/VsView.tsx',
   'components/ContributorsTab.tsx',
   'components/WeedsTab.tsx',
   'graph/metro.ts',
@@ -22,7 +22,7 @@ const LAZY_ONLY = [
   'audio/musicBox.ts',
   'export/video.ts',
   'export/image.ts',
-  'export/gardenFile.ts',
+  'export/repoFile.ts',
   'export/exporters.ts',
   // the pull request overlay's network client and inspector block (its ring and row glyphs are eager)
   'lazy/pullsPart.ts',
@@ -189,7 +189,7 @@ describe('lazy parts', () => {
     for (const file of LAZY_ONLY) expect(sources.has(file), file).toBe(true)
     // the walk follows the app's real imports
     const eager = eagerModules()
-    for (const file of ['App.tsx', 'RepoApp.tsx', 'components/Garden.tsx', 'theme/themes.ts', 'api/github.ts', 'lazy/parts.ts']) {
+    for (const file of ['App.tsx', 'RepoApp.tsx', 'components/RepoGraph.tsx', 'theme/themes.ts', 'api/github.ts', 'lazy/parts.ts']) {
       expect(eager.has(file), file).toBe(true)
     }
   })
@@ -208,7 +208,7 @@ describe('lazy parts', () => {
         'PersonApp.tsx',
         'components/ContributorsTab.tsx',
         'components/ExportMenu.tsx',
-        'components/GardenBattle.tsx',
+        'components/VsView.tsx',
         'components/ThemePicker.tsx',
         'components/TimelapseBar.tsx',
         'components/WeedsTab.tsx',
@@ -353,7 +353,7 @@ describe('person mode and the first download', () => {
 
   it('reaches the recorder, the exporters and metro only through their chunks in lazy/parts.ts', () => {
     // a value import of one would put it (and the image code it shares) into person mode's chunk; types are fine
-    const chunked = ['export/video.ts', 'export/exporters.ts', 'export/image.ts', 'export/gardenFile.ts', 'graph/metro.ts']
+    const chunked = ['export/video.ts', 'export/exporters.ts', 'export/image.ts', 'export/repoFile.ts', 'graph/metro.ts']
     const direct = person.flatMap(([file]) => staticImports(file).filter((target) => chunked.includes(target)).map((target) => `${file} -> ${target}`))
     expect(direct).toEqual([])
     // nor by way of another module
@@ -432,7 +432,7 @@ describe('person mode and the first download', () => {
     const readers = [...sources.keys()].filter((file) => !isPersonModule(file) && staticImports(file).some(isConsolePalette))
     expect(readers).toEqual([])
     expect(consoles.flatMap((file) => staticImports(file).map((target) => `${file} -> ${target}`))).toEqual([])
-    // it renames the theme chunk, and gardenUtils passes it on
+    // it renames the theme chunk, and graphUtils passes it on
     expect(person.flatMap(([file, text]) => (namedImports(text, /./).includes('hexToRgba') ? [file] : []))).toEqual([])
   })
 })

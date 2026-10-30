@@ -28,6 +28,6 @@ export function useMetroView(graph: Graph | null, data: RepoData | null, viewMod
     hintsRef.current = { data, hints: mergeLaneHints(memory.data === data ? memory.hints : null, layout.laneHints) }
   }, [layout, data])
 
-  // route pieces name their end nodes by index in graph.nodes, the order Garden's node arrays keep
+  // route pieces name their end nodes by index in graph.nodes, the order RepoGraph's node arrays keep
   return useMemo(() => (layout && graph ? buildMetroView(layout, graph.nodes) : null), [layout, graph])
 }

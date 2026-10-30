@@ -23,7 +23,7 @@ import { isRevealed, privateRepoKeys, repoKey, repoNamer } from '../../src/profi
 import { buildLifeTimeline, type LifeTimeline } from '../../src/profile/timeline'
 import type { LifeLabelSet } from '../../src/profile/useLifeLabels'
 import { usePersonStore, type PersonState } from '../../src/profile/usePersonStore'
-import { useGardenStore, type GardenState } from '../../src/store/useGardenStore'
+import { useAppStore, type AppState } from '../../src/store/useAppStore'
 import type { Theme } from '../../src/theme/themes'
 import type { ProfileData } from '../../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './profileReplay'
@@ -236,9 +236,9 @@ export function setPerson(partial: Partial<PersonState>): void {
   Object.assign(usePersonStore.getInitialState(), usePersonStore.getState())
 }
 
-export function setGarden(partial: Partial<GardenState>): void {
-  useGardenStore.setState(partial)
-  Object.assign(useGardenStore.getInitialState(), partial)
+export function setApp(partial: Partial<AppState>): void {
+  useAppStore.setState(partial)
+  Object.assign(useAppStore.getInitialState(), partial)
 }
 
 /** The markup's text, tags and attributes taken out, entities read back. */

@@ -49,7 +49,7 @@ const FOOT_PX = 190
 /** Where the view's image goes on the poster: under the header, over the milestones. */
 export const POSTER_PLOT = Object.freeze({ x: 0, y: HEADER_PX, width: POSTER_WIDTH, height: POSTER_HEIGHT - HEADER_PX - FOOT_PX })
 /** The off-screen view's viewport (every view's): no status strip to clear under its ground marks. */
-export const POSTER_GARDEN_VIEW: LifeViewport = Object.freeze({
+export const POSTER_VIEWPORT: LifeViewport = Object.freeze({
   width: POSTER_PLOT.width,
   height: POSTER_PLOT.height,
   top: VIEW_TOP,
@@ -65,7 +65,7 @@ const SETTLE_DT_MS = 64
 const AVATAR_TIMEOUT_MS = 8000
 const AVATAR_HOST = 'avatars.githubusercontent.com'
 
-/** The app's label and mono fonts (gardenUtils), spelled out here so person mode takes nothing more from the first download. */
+/** The app's label and mono fonts (graphUtils), spelled out here so person mode takes nothing more from the first download. */
 const SANS = 'Inter, ui-sans-serif, system-ui, sans-serif'
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 const LOCK_SIZE = 12
@@ -154,7 +154,7 @@ export function loadPosterAvatar(url: string | null, timeoutMs = AVATAR_TIMEOUT_
   })
 }
 
-export interface PosterGarden {
+export interface PosterView {
   /** the view's layout */
   layout: LifeViewModel
   /** the view on show */
@@ -177,10 +177,10 @@ export interface PosterGarden {
  * (paint() asks for no more frames) or maxFrames, each frame over the last, under the device
  * transform the caller set.
  */
-export function paintPosterGarden(ctx: CanvasRenderingContext2D, view: LifeViewport, garden: PosterGarden, maxFrames = SETTLE_FRAMES): void {
-  const { layout, timeline, ink, colourOf, name, login, hidden, measure } = garden
+export function paintPosterView(ctx: CanvasRenderingContext2D, view: LifeViewport, poster: PosterView, maxFrames = SETTLE_FRAMES): void {
+  const { layout, timeline, ink, colourOf, name, login, hidden, measure } = poster
   const state: LifePaintState = { hidden, hover: null, selected: null }
-  const painter = makeViewPaint(garden.view.scene, { layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
+  const painter = makeViewPaint(poster.view.scene, { layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
   const camera = fitLifeCamera(layout.days, view)
   for (let frame = 0; frame < Math.max(1, maxFrames); frame++) {
     if (!painter.paint(ctx, view, camera, SETTLE_DT_MS)) break
@@ -232,7 +232,7 @@ export function paintPosterFrame(
   ctx: CanvasRenderingContext2D,
   text: PosterText,
   theme: Theme,
-  garden: CanvasImageSource | null,
+  image: CanvasImageSource | null,
   avatar: CanvasImageSource | null,
 ): void {
   ctx.save()
@@ -244,7 +244,7 @@ export function paintPosterFrame(
 
   ctx.save()
   ctx.globalAlpha = 1
-  if (garden) ctx.drawImage(garden, POSTER_PLOT.x, POSTER_PLOT.y, POSTER_PLOT.width, POSTER_PLOT.height)
+  if (image) ctx.drawImage(image, POSTER_PLOT.x, POSTER_PLOT.y, POSTER_PLOT.width, POSTER_PLOT.height)
 
   // the avatar in a circle, or a placeholder circle with the login's initial
   const r = POSTER_AVATAR_PX / 2
@@ -358,7 +358,7 @@ export interface PosterInput {
 export interface PosterKit {
   canvasToPng(canvas: HTMLCanvasElement): Promise<Blob>
   downloadBlob(blob: Blob, fileName: string): void
-  gardenFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
+  exportFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
 }
 
 export interface PosterDeps {
@@ -367,7 +367,7 @@ export interface PosterDeps {
   /** a canvas of width x height backing pixels */
   makeCanvas: (width: number, height: number) => HTMLCanvasElement
   now: () => Date
-  /** measures a garden label's text as drawn; measureLabel when left out */
+  /** measures a map label's text as drawn; measureLabel when left out */
   measure?: (text: string) => number
 }
 
@@ -395,7 +395,7 @@ export function composeLifePoster(
   const plotCtx = context2d(plot)
   plotCtx.setTransform(POSTER_SCALE, 0, 0, POSTER_SCALE, 0, 0)
   const ink = viewInk(lifeInk(theme), view)
-  paintPosterGarden(plotCtx, POSTER_GARDEN_VIEW, { layout, view, timeline, ink, colourOf, name, login: profile.login, hidden, measure: deps.measure })
+  paintPosterView(plotCtx, POSTER_VIEWPORT, { layout, view, timeline, ink, colourOf, name, login: profile.login, hidden, measure: deps.measure })
 
   const poster = deps.makeCanvas(POSTER_WIDTH * POSTER_SCALE, POSTER_HEIGHT * POSTER_SCALE)
   const ctx = context2d(poster)
@@ -424,7 +424,7 @@ export async function saveLifePoster(input: PosterInput, deps: Partial<PosterDep
   const [kit, avatar] = await Promise.all([loadKit(), loadAvatar(url).catch(() => null)])
   const poster = composeLifePoster(input, avatar, { makeCanvas: deps.makeCanvas ?? browserCanvas, now: () => now, measure: deps.measure })
   const blob = await kit.canvasToPng(poster)
-  kit.downloadBlob(blob, kit.gardenFileName({ owner: input.profile.login, repo: 'life' }, 'png', now, 'poster'))
+  kit.downloadBlob(blob, kit.exportFileName({ owner: input.profile.login, repo: 'life' }, 'png', now, 'poster'))
   track('poster-export')
 }
 
@@ -433,7 +433,7 @@ export type PosterFailure = { code: 'chunk_failed' } | { code: 'export_failed'; 
 
 /**
  * What a failed saveLifePoster shows: chunk_failed (its card offers a reload) when the exporters
- * chunk could not be loaded, even on its retry, as the repo garden's saves do, so the card never
+ * chunk could not be loaded, even on its retry, as repo mode's saves do, so the card never
  * shows a module URL; export_failed with the reason for anything else (the canvas would not encode,
  * say).
  */

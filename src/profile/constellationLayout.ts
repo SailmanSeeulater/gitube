@@ -4,7 +4,7 @@
  * by activity and glowing by stars, with faint links between repos active at the same time.
  *
  * World units: x is days since the timeline's start, as in every view (a root sits in the middle of
- * its day), so one camera means the same stretch of time here as in the garden; y is a share of the
+ * its day), so one camera means the same stretch of time here as in every other view; y is a share of the
  * plot, 0 at its top and 1 at its foot. No theme, no camera and no DOM: constellationGeometry turns a
  * star into screen px, and one layout serves every theme, zoom and hidden set (a hidden star is
  * skipped where it is drawn and hit, never re-packed).
@@ -366,7 +366,7 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
   const { bands, bandOf } = bandsOf(lanes, weights)
   const counts = bands.map((band) => band.count)
   const slots = slotsOf(lanes, bandOf, counts, slotGap(axis.days))
-  // Lanes alike in every seeded field are told apart by their turn among them, in lane order (as the garden's are).
+  // Lanes alike in every seeded field are told apart by their turn among them, in lane order.
   const seen = new Map<string, number>()
   const stars = lanes.map((lane, i): LifeStar => {
     const shape = `${lane.born}|${lane.root}|${lane.start}|${lane.language ?? ''}|${lane.isOwn}|${lane.isFork}`

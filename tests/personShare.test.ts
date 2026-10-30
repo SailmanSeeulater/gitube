@@ -6,7 +6,7 @@
  * top bar's save menu (the poster as its image, never JSON), and PersonApp's wiring of them: the
  * time-lapse through openLifeTimelapse (the privacy toggle locked while it records), the poster
  * through saveLifePoster with the screen's namer, the reload card for a part that could not be
- * loaded, share-copy from the repo garden's CopyLinkButton, and no JSON save, no fetch() and no
+ * loaded, share-copy from repo mode's CopyLinkButton, and no JSON save, no fetch() and no
  * audio.
  */
 import { subjectOf } from '../src/subject'
@@ -31,7 +31,7 @@ import { usePersonStore } from '../src/profile/usePersonStore'
 import { readSubject, type PersonView } from '../src/share/shareUrl'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
-import { FAKE_TOKEN, KEPANO_NOW, grow, kepanoProfile, setGarden, setPerson, withPrivate } from './helpers/personScene'
+import { FAKE_TOKEN, KEPANO_NOW, grow, kepanoProfile, setApp, setPerson, withPrivate } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
 import { LINES_VIEW } from '../src/profile/lifeViews'
 
@@ -53,7 +53,7 @@ beforeAll(async () => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos', hover: null, selected: null, hidden: new Set(), search: '', revealFor: null })
-  setGarden({ panelOpen: true, rate: null, token: '', themeId: theme.id })
+  setApp({ panelOpen: true, rate: null, token: '', themeId: theme.id })
 })
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -77,7 +77,7 @@ function propsFor(href: string) {
 
 /** PersonApp's markup for a link, the profile already in the query cache as a grown one would be. */
 function openLink(href: string, profile: ProfileData, token = ''): string {
-  setGarden({ token })
+  setApp({ token })
   const props = propsFor(href)
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(props.login, token), { profile, cachedAt: null })
@@ -175,7 +175,7 @@ describe('the controls', () => {
     const withPoster = renderToStaticMarkup(h(PersonPanel, { ...base, onPoster: noop }))
     expect(withPoster).toContain('aria-label="Save a poster"')
     expect(withPoster).toContain('aria-label="Copy a link to this view"')
-    // login, poster, link, collapse: in that order, as the repo garden's panel has its buttons
+    // login, poster, link, collapse: in that order, as repo mode's panel has its buttons
     const order = ['href="https://github.com/kepano"', 'aria-label="Save a poster"', 'aria-label="Copy a link to this view"', 'aria-label="Collapse panel"'].map((s) =>
       withPoster.indexOf(s),
     )
@@ -207,24 +207,24 @@ describe('the controls', () => {
       renderToStaticMarkup(h(ExportMenu, { id: 'menu', ...flags, onExportImage: noop, onExportData: noop, onOpenFile: noop, onClose: noop, buttonRef: { current: null } }))
     /** each item's label, and whether it is offered */
     const items = (html: string) =>
-      [...html.matchAll(/<button([^>]*)>(?:(?!<\/button>).)*?<span class="block text-garden-text">([^<]*)<\/span>/g)].map((m) => [m[2], !/\sdisabled=""/.test(m[1])])
+      [...html.matchAll(/<button([^>]*)>(?:(?!<\/button>).)*?<span class="block text-ui-text">([^<]*)<\/span>/g)].map((m) => [m[2], !/\sdisabled=""/.test(m[1])])
     const all = (image: boolean, data: boolean) => [
       ['Save image (PNG)', image],
       ['Save data (JSON)', data],
       ['Open a saved file…', true],
     ]
-    // the repo garden, as it always was
+    // repo mode, as it always was
     expect(items(menu({ canExport: true }))).toEqual(all(true, true))
     expect(items(menu({ canExport: false }))).toEqual(all(false, false))
     // person mode: the poster, never JSON
     expect(items(menu({ canExport: true, canExportData: false }))).toEqual(all(true, false))
     expect(items(menu({ canExport: false, canExportData: false }))).toEqual(all(false, false))
-    // the top bar passes it on as it is, and the repo garden leaves it out
+    // the top bar passes it on as it is, and repo mode leaves it out
     expect(topBarSource).toContain('canExportData?: boolean')
     expect(topBarSource).toContain('canExportData={canExportData}')
   })
 
-  it('copies the address bar and sends share-copy with no data, through the repo garden button', () => {
+  it("copies the address bar and sends share-copy with no data, through repo mode's button", () => {
     expect(personPanelSource).toMatch(/^import \{ CopyLinkButton \} from '\.\.\/components\/Panel'$/m)
     const button = panelSource.slice(panelSource.indexOf('export function CopyLinkButton()'))
     expect(button.length).toBeLessThan(panelSource.length)
@@ -286,7 +286,7 @@ describe("PersonApp's Phase 5 wiring", () => {
   it('sends no event of its own, and takes no exporter, recorder, fetch, JSON save or audio', () => {
     expect(code).not.toMatch(/\btrack\(/)
     expect(code).not.toMatch(/\bfetch\(/)
-    expect(code).not.toContain('serializeGarden')
+    expect(code).not.toContain('serializeRepoFile')
     expect(code).not.toMatch(/from '\.\/export\//)
     expect(code).not.toMatch(/from '\.\/audio\//)
     expect(code).not.toMatch(/videoChunk|exportersChunk/)
@@ -339,7 +339,7 @@ describe('a failed poster save', () => {
     const kit: PosterKit = {
       canvasToPng: () => Promise.reject(new Error('could not encode the image')),
       downloadBlob: noop,
-      gardenFileName: () => 'kepano-life-poster.png',
+      exportFileName: () => 'kepano-life-poster.png',
     }
     expect(posterFailure(await rejection(saveLifePoster(input, { ...deps, loadKit: async () => kit })))).toEqual({
       code: 'export_failed',

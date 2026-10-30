@@ -14,7 +14,7 @@
  * label, plate or box width carries a hidden private name or its length. A locked name keeps room
  * for its lock in every width.
  */
-import { endEllipsis } from '../components/gardenUtils'
+import { endEllipsis } from '../components/graphUtils'
 import { LabelPlacer, type LabelSpec } from '../components/labelPlacement'
 import { measureLabel } from '../components/useLabelPlacer'
 import type { LifeTimeline } from './timeline'

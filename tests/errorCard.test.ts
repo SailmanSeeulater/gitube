@@ -1,13 +1,13 @@
 /**
- * The error card's markup for every code, as the repo garden renders it. The snapshot was taken
+ * The error card's markup for every code, as repo mode renders it. The snapshot was taken
  * before the card took its optional title and hint (person mode's user wording), so it proves the
- * repo garden's cards unchanged: repo mode never passes either.
+ * repo mode's cards unchanged: repo mode never passes either.
  */
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import ErrorCard, { type ErrorCardProps, type ErrorCode } from '../src/components/ErrorCard'
-import { formatClock } from '../src/components/gardenUtils'
+import { formatClock } from '../src/components/graphUtils'
 
 const CODES = Object.keys({
   not_found: 1,
@@ -34,7 +34,7 @@ function render(props: ErrorCardProps): string {
   return clock ? html.split(clock).join('HH:MM') : html
 }
 
-/** Every prop the repo garden passes, its actions included. */
+/** Every prop repo mode passes, its actions included. */
 const full = (code: ErrorCode): ErrorCardProps => ({
   code,
   message: 'the reason given',

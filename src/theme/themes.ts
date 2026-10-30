@@ -449,7 +449,7 @@ const THEME_TOKENS = [
     id: 'rose',
     name: 'Rose',
     mode: 'light',
-    blurb: 'Blush-pink petals, a raspberry trunk and a garden of berry and floral colours.',
+    blurb: 'Blush-pink petals, a raspberry trunk and a map of berry and floral colours.',
     canvas: '#fdf0f1',
     panel: '#fffafa',
     panelBorder: '#edd4d6',
@@ -667,25 +667,25 @@ export function linkColourDim(theme: Pick<ThemeTokens, 'linkDimAlpha'>, branchCo
 
 /**
  * The CSS custom properties a theme sets on the root element. src/index.css maps Tailwind's
- * --color-garden-* tokens (bg-garden-panel, text-garden-accent/70, ...) and --shadow-soft onto
+ * --color-ui-* tokens (bg-ui-panel, text-ui-accent/70, ...) and --shadow-soft onto
  * these, so every DOM colour follows the active theme.
  */
 export function themeCssVariables(theme: ThemeTokens): Record<string, string> {
   return {
-    '--garden-canvas': theme.canvas,
-    '--garden-panel': theme.panel,
-    '--garden-border': theme.panelBorder,
-    '--garden-hover': theme.hover,
-    '--garden-field': theme.field,
-    '--garden-text': theme.text,
-    '--garden-text-dim': theme.textDim,
-    '--garden-muted': theme.muted,
-    '--garden-accent': theme.accent,
-    '--garden-accent-text': theme.accentText,
-    '--garden-raised': theme.badgeBg,
-    '--garden-warn': theme.warn,
-    '--garden-danger': theme.danger,
-    '--garden-success': theme.success,
-    '--garden-shadow': theme.shadow,
+    '--ui-canvas': theme.canvas,
+    '--ui-panel': theme.panel,
+    '--ui-border': theme.panelBorder,
+    '--ui-hover': theme.hover,
+    '--ui-field': theme.field,
+    '--ui-text': theme.text,
+    '--ui-text-dim': theme.textDim,
+    '--ui-muted': theme.muted,
+    '--ui-accent': theme.accent,
+    '--ui-accent-text': theme.accentText,
+    '--ui-raised': theme.badgeBg,
+    '--ui-warn': theme.warn,
+    '--ui-danger': theme.danger,
+    '--ui-success': theme.success,
+    '--ui-shadow': theme.shadow,
   }
 }

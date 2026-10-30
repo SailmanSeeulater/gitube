@@ -17,7 +17,7 @@ import PersonApp from '../src/PersonApp'
 import personAppSource from '../src/PersonApp.tsx?raw'
 import PersonInspector from '../src/profile/PersonInspector'
 import PersonPanel from '../src/profile/PersonPanel'
-import { POSTER_GARDEN_VIEW, composeLifePoster, saveLifePoster, type PosterDeps, type PosterInput } from '../src/profile/lifePoster'
+import { POSTER_VIEWPORT, composeLifePoster, saveLifePoster, type PosterDeps, type PosterInput } from '../src/profile/lifePoster'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import { closeLifeTimelapse, lapseCaption, openLifeTimelapse } from '../src/profile/lifeTimelapse'
 import { LIFE_VIEWS, VIEW_OPTIONS, switchView } from '../src/profile/lifeViews'
@@ -30,7 +30,7 @@ import { labelNames } from '../src/profile/useLifeLabels'
 import { profileQueryKey } from '../src/profile/useProfileData'
 import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import type { PersonView } from '../src/share/shareUrl'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { THEMES, getTheme } from '../src/theme/themes'
 import { PHOSPHOR } from '../src/theme/console/phosphor'
 import { HTOP_PALETTE } from '../src/theme/console/htop'
@@ -47,7 +47,7 @@ import {
   growView,
   kepanoProfile,
   paintView,
-  setGarden,
+  setApp,
   setPerson,
   textOf,
   viewPainterFor,
@@ -99,13 +99,13 @@ beforeAll(async () => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos', hover: null, selected: null, hidden: new Set(), search: '', revealFor: null, focus: null })
-  setGarden({ panelOpen: true, rate: null, token: '', themeId: theme.id })
+  setApp({ panelOpen: true, rate: null, token: '', themeId: theme.id })
 })
 
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 /** Umami's tracker stubbed in, as the app sees it once loaded. */
@@ -117,7 +117,7 @@ function stubTracker() {
 
 /** PersonApp's markup for a person and a view (what a ?user=…&view=… link opens), the profile in the query cache. */
 function personApp(profile: ProfileData, view: PersonView | null, token: string, login = profile.login): string {
-  setGarden({ token })
+  setApp({ token })
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(login, token), { profile, cachedAt: null })
   return renderToStaticMarkup(h(QueryClientProvider, { client }, h(PersonApp, { login, request: 0, view, focusInput: false, onRepo: noop, onUser: noop })))
@@ -332,7 +332,7 @@ function posterRig() {
   const measured: string[] = []
   const umamiTrack = vi.fn<(event: string, data?: EventData) => unknown>()
   vi.stubGlobal('window', { umami: { track: umamiTrack }, location: { search: '' } })
-  const kit = { canvasToPng: vi.fn(async () => new Blob(['png'])), downloadBlob: vi.fn(), gardenFileName: () => 'kepano-life-poster.png' }
+  const kit = { canvasToPng: vi.fn(async () => new Blob(['png'])), downloadBlob: vi.fn(), exportFileName: () => 'kepano-life-poster.png' }
   const deps: PosterDeps = {
     loadKit: async () => kit,
     loadAvatar: async () => null,
@@ -386,9 +386,9 @@ describe('the poster', () => {
     expect(count(plots.constellation, 'arc')).toBeGreaterThan(g.timeline.lanes.length)
     // fully grown, the whole life fitted: every mark of the view as the scene draws it with no time-lapse (no lock here, so every arc is the view's)
     for (const view of ['lines', 'constellation'] as const) {
-      const grownArcs = count(sceneLog(g, view, new Set(), null, POSTER_GARDEN_VIEW), 'arc')
+      const grownArcs = count(sceneLog(g, view, new Set(), null, POSTER_VIEWPORT), 'arc')
       expect(count(plots[view], 'arc'), view).toBe(grownArcs)
-      expect(grownArcs, view).toBeGreaterThan(count(sceneLog(g, view, new Set(), dayAt(g.timeline.clock, 0.5), POSTER_GARDEN_VIEW), 'arc'))
+      expect(grownArcs, view).toBeGreaterThan(count(sceneLog(g, view, new Set(), dayAt(g.timeline.clock, 0.5), POSTER_VIEWPORT), 'arc'))
     }
   })
 

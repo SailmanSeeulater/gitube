@@ -13,7 +13,7 @@ import type { PullIndex, RepoData } from '../types'
 import type { ContributorIndex } from './contributors'
 import { countPulls } from './pulls'
 import type { WeedReport } from './weeds'
-import { isStale } from '../components/gardenUtils'
+import { isStale } from '../components/graphUtils'
 
 /** A branch with work on it whose tip is older than this counts as stale (the stale filter's 90d step). */
 export const HEALTH_STALE_DAYS = 90
