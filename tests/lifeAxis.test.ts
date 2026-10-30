@@ -7,19 +7,19 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { getTheme } from '../src/theme/themes'
 import { LIFE_YEAR_FONT, paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from '../src/profile/lifeAxis'
-import { MONO_FONT } from '../src/components/gardenUtils'
+import { MONO_FONT } from '../src/components/graphUtils'
 import { axisHover, axisOf, onCanvas, MILESTONE_HIT_PX } from '../src/profile/lifeView'
 import { horizonY } from '../src/profile/lifeGeometry'
 import { dayAt, dayNumber } from '../src/profile/timeline'
 import type { LifeHover } from '../src/profile/lifeTypes'
-import { KEPANO_NOW, VIEW, grow, kepanoProfile, type Grown } from './helpers/personScene'
+import { KEPANO_NOW, VIEW, load, kepanoProfile, type Loaded } from './helpers/personScene'
 import { recordingCtx, type RecordingCtx } from './helpers/recordingCtx'
 
 const theme = getTheme('obsidian')
-let g: Grown
+let g: Loaded
 
 beforeAll(async () => {
-  g = grow(await kepanoProfile(), KEPANO_NOW, theme)
+  g = load(await kepanoProfile(), KEPANO_NOW, theme)
 })
 
 /** The axis as a view paints it, for g. */

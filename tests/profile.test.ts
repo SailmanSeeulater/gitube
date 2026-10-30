@@ -108,10 +108,10 @@ function paged(items: unknown[], path: string): (page: number) => Route {
 
 // ---------- synthetic data (fictional login, no real person) ----------
 
-const SPROUT = 'quiet-sprout'
-const sproutUser = (overrides: Record<string, unknown> = {}): Route => ({
+const QUIET = 'quiet-dev'
+const quietUser = (overrides: Record<string, unknown> = {}): Route => ({
   body: {
-    login: 'Quiet-Sprout',
+    login: 'Quiet-Dev',
     name: null,
     avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4',
     created_at: '2015-01-01T00:00:00Z',
@@ -123,7 +123,7 @@ const sproutUser = (overrides: Record<string, unknown> = {}): Route => ({
 function rawRepo(i: number, overrides: Record<string, unknown> = {}) {
   const created = new Date(Date.UTC(2015, 0, 2) + i * DAY_MS).toISOString().replace('.000', '')
   return {
-    full_name: `Quiet-Sprout/repo-${i}`,
+    full_name: `Quiet-Dev/repo-${i}`,
     created_at: created,
     pushed_at: created,
     language: 'TypeScript',
@@ -143,7 +143,7 @@ function event(type: string, repo: string, createdAt: string, id?: string) {
 /** n push events, one an hour, newest first, ending at the given time. */
 function hourlyPushes(n: number, newest: number) {
   return Array.from({ length: n }, (_, i) =>
-    event('PushEvent', 'Quiet-Sprout/repo-0', new Date(newest - i * 60 * 60 * 1000).toISOString()),
+    event('PushEvent', 'Quiet-Dev/repo-0', new Date(newest - i * 60 * 60 * 1000).toISOString()),
   )
 }
 
@@ -298,16 +298,16 @@ describe('fetchProfileRest', () => {
 
   it('ends a span at its creation when pushed_at is null', async () => {
     const repos = [rawRepo(0, { pushed_at: null }), rawRepo(1, { pushed_at: '2016-03-01T10:00:00Z', fork: true })]
-    const { fetch } = makeFetch(userRouter(SPROUT, { user: sproutUser(), repos: paged(repos, '/user/1/repos'), events: empty }))
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW })
+    const { fetch } = makeFetch(userRouter(QUIET, { user: quietUser(), repos: paged(repos, '/user/1/repos'), events: empty }))
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW })
     expect(profile.repos.map((r) => r.lastActiveAt)).toEqual([repos[0].created_at, '2016-03-01T10:00:00Z'])
   })
 
   it('reads a user with no public repos and no events in 3 requests', async () => {
-    const { fetch, calls } = makeFetch(userRouter(SPROUT, { user: sproutUser(), repos: empty, events: empty }))
+    const { fetch, calls } = makeFetch(userRouter(QUIET, { user: quietUser(), repos: empty, events: empty }))
     const progress: FetchProgress[] = []
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW, onProgress: (p) => progress.push(p) })
-    expect(profile.login).toBe('Quiet-Sprout')
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW, onProgress: (p) => progress.push(p) })
+    expect(profile.login).toBe('Quiet-Dev')
     expect(profile.name).toBeNull()
     expect(profile.repos).toEqual([])
     expect(profile.recent).toEqual([])
@@ -330,7 +330,7 @@ describe('fetchProfileRest', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].headers.get('authorization')).toBe(`token ${token}`)
 
-    const bot = makeFetch(userRouter('helper-bot', { user: sproutUser({ login: 'helper-bot', type: 'Bot' }) }))
+    const bot = makeFetch(userRouter('helper-bot', { user: quietUser({ login: 'helper-bot', type: 'Bot' }) }))
     const botErr = await expectFetchError(fetchProfileRest('helper-bot', { fetch: bot.fetch, now: NOW }))
     expect(botErr.code).toBe('not_a_user')
     expect(botErr.message).toContain('Bot')
@@ -338,9 +338,9 @@ describe('fetchProfileRest', () => {
 
   it('maps a 404 to not_found in the user wording', async () => {
     const { fetch, calls } = makeFetch(() => undefined)
-    const err = await expectFetchError(fetchProfileRest('No-Such-Sprout', { fetch, now: NOW }))
+    const err = await expectFetchError(fetchProfileRest('No-Such-Dev', { fetch, now: NOW }))
     expect(err.code).toBe('not_found')
-    expect(err.message).toBe('No-Such-Sprout was not found. Check the spelling.')
+    expect(err.message).toBe('No-Such-Dev was not found. Check the spelling.')
     expect(calls).toHaveLength(1)
   })
 
@@ -352,7 +352,7 @@ describe('fetchProfileRest', () => {
     }
     const first = makeFetch(() => limited)
     const progress: FetchProgress[] = []
-    const err = await expectFetchError(fetchProfileRest(SPROUT, { fetch: first.fetch, now: NOW, onProgress: (p) => progress.push(p) }))
+    const err = await expectFetchError(fetchProfileRest(QUIET, { fetch: first.fetch, now: NOW, onProgress: (p) => progress.push(p) }))
     expect(err.code).toBe('rate_limited')
     expect(err.resetAt).toBe(RATE_RESET_ISO)
     expect(err.message).toMatch(/rate limit/i)
@@ -362,13 +362,13 @@ describe('fetchProfileRest', () => {
 
     // Running out on a repo page fails the profile too: a partial repo list would misdraw it.
     const later = makeFetch(
-      userRouter(SPROUT, {
-        user: sproutUser(),
+      userRouter(QUIET, {
+        user: quietUser(),
         repos: (page) => (page === 1 ? paged([...Array(150).keys()].map((i) => rawRepo(i)), '/user/1/repos')(1) : limited),
         events: empty,
       }),
     )
-    const e2 = await expectFetchError(fetchProfileRest(SPROUT, { fetch: later.fetch, now: NOW }))
+    const e2 = await expectFetchError(fetchProfileRest(QUIET, { fetch: later.fetch, now: NOW }))
     expect(e2.code).toBe('rate_limited')
     expect(eventCalls(later.calls)).toHaveLength(0)
   })
@@ -377,12 +377,12 @@ describe('fetchProfileRest', () => {
     const repos = Array.from({ length: 600 }, (_, i) => rawRepo(i))
     const events = hourlyPushes(300, Date.parse('2026-10-24T12:00:00Z'))
     const { fetch, calls } = makeFetch(
-      userRouter(SPROUT, { user: sproutUser(), repos: paged(repos, '/user/1/repos'), events: paged(events, '/user/1/events/public') }),
+      userRouter(QUIET, { user: quietUser(), repos: paged(repos, '/user/1/repos'), events: paged(events, '/user/1/events/public') }),
     )
     const progress: FetchProgress[] = []
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW, onProgress: (p) => progress.push(p) })
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW, onProgress: (p) => progress.push(p) })
     expect(profile.repos).toHaveLength(500)
-    expect(profile.repos[499].nameWithOwner).toBe('Quiet-Sprout/repo-499')
+    expect(profile.repos[499].nameWithOwner).toBe('Quiet-Dev/repo-499')
     expect(profile.truncated).toBe(true)
     expect(pagesOf(reposCalls(calls))).toEqual(['1', '2', '3', '4', '5'])
     expect(calls).toHaveLength(9)
@@ -393,8 +393,8 @@ describe('fetchProfileRest', () => {
   it('stops reading events after 3 pages even when GitHub links a fourth', async () => {
     const newest = Date.parse('2026-10-24T12:00:00Z')
     const { fetch, calls } = makeFetch(
-      userRouter(SPROUT, {
-        user: sproutUser(),
+      userRouter(QUIET, {
+        user: quietUser(),
         repos: empty,
         events: (page) =>
           page <= 3
@@ -405,7 +405,7 @@ describe('fetchProfileRest', () => {
             : { status: 422, body: { message: 'In order to keep the API fast for everyone, pagination is limited for this resource.' } },
       }),
     )
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW })
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW })
     expect(pagesOf(eventCalls(calls))).toEqual(['1', '2', '3'])
     // 300 hourly pushes reach back 299 hours from the newest: 2026-10-12T01:00Z, the 11th in Pacific time.
     expect(profile.recentFrom).toBe('2026-10-11')
@@ -416,10 +416,10 @@ describe('fetchProfileRest', () => {
     const newest = Date.parse('2026-10-24T12:00:00Z')
     const first = hourlyPushes(100, newest).map((e, i) => ({ ...e, id: `e${i}` }))
     const repeated = first[first.length - 1]
-    const older = event('PushEvent', 'Quiet-Sprout/repo-0', new Date(newest - 100 * 60 * 60 * 1000).toISOString(), 'e100')
+    const older = event('PushEvent', 'Quiet-Dev/repo-0', new Date(newest - 100 * 60 * 60 * 1000).toISOString(), 'e100')
     const { fetch } = makeFetch(
-      userRouter(SPROUT, {
-        user: sproutUser(),
+      userRouter(QUIET, {
+        user: quietUser(),
         repos: empty,
         events: (page) =>
           page === 1
@@ -427,38 +427,38 @@ describe('fetchProfileRest', () => {
             : { body: [repeated, older] },
       }),
     )
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW })
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW })
     expect(profile.recent.reduce((sum, r) => sum + r.pushes, 0)).toBe(101)
   })
 
   it('starts the recent window 30 days back when fewer than 3 pages of events exist', async () => {
     const events = [
-      event('PushEvent', 'Quiet-Sprout/repo-0', '2026-10-20T18:00:00Z'),
-      event('CreateEvent', 'Quiet-Sprout/repo-0', '2026-10-01T18:00:00Z'),
+      event('PushEvent', 'Quiet-Dev/repo-0', '2026-10-20T18:00:00Z'),
+      event('CreateEvent', 'Quiet-Dev/repo-0', '2026-10-01T18:00:00Z'),
     ]
-    const { fetch } = makeFetch(userRouter(SPROUT, { user: sproutUser(), repos: empty, events: () => ({ body: events }) }))
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: NOW })
+    const { fetch } = makeFetch(userRouter(QUIET, { user: quietUser(), repos: empty, events: () => ({ body: events }) }))
+    const profile = await fetchProfileRest(QUIET, { fetch, now: NOW })
     expect(profile.recentFrom).toBe(THIRTY_DAYS_AGO)
-    expect(profile.recent).toEqual([{ date: '2026-10-20', repo: 'Quiet-Sprout/repo-0', pushes: 1 }])
+    expect(profile.recent).toEqual([{ date: '2026-10-20', repo: 'Quiet-Dev/repo-0', pushes: 1 }])
   })
 
   it("keys pushes by GitHub's day in US Pacific time, never the machine's", async () => {
     // 2024-03-10T06:30Z is 22:30 on the 9th in Pacific standard time; 08:30Z is 00:30 on the 10th.
     const events = [
-      event('PushEvent', 'Quiet-Sprout/repo-1', '2024-03-10T06:30:00Z'),
-      event('PushEvent', 'Quiet-Sprout/repo-1', '2024-03-10T08:30:00Z'),
-      event('PushEvent', 'Quiet-Sprout/repo-1', '2024-03-10T09:59:00Z'),
-      event('PushEvent', 'Quiet-Sprout/repo-0', '2024-03-09T20:00:00Z'),
-      event('PullRequestEvent', 'Quiet-Sprout/repo-0', '2024-03-09T21:00:00Z'),
-      event('WatchEvent', 'Quiet-Sprout/repo-2', '2024-03-09T21:00:00Z'),
+      event('PushEvent', 'Quiet-Dev/repo-1', '2024-03-10T06:30:00Z'),
+      event('PushEvent', 'Quiet-Dev/repo-1', '2024-03-10T08:30:00Z'),
+      event('PushEvent', 'Quiet-Dev/repo-1', '2024-03-10T09:59:00Z'),
+      event('PushEvent', 'Quiet-Dev/repo-0', '2024-03-09T20:00:00Z'),
+      event('PullRequestEvent', 'Quiet-Dev/repo-0', '2024-03-09T21:00:00Z'),
+      event('WatchEvent', 'Quiet-Dev/repo-2', '2024-03-09T21:00:00Z'),
     ]
-    const { fetch } = makeFetch(userRouter(SPROUT, { user: sproutUser(), repos: empty, events: () => ({ body: events }) }))
-    const profile = await fetchProfileRest(SPROUT, { fetch, now: Date.parse('2024-03-20T12:00:00Z') })
+    const { fetch } = makeFetch(userRouter(QUIET, { user: quietUser(), repos: empty, events: () => ({ body: events }) }))
+    const profile = await fetchProfileRest(QUIET, { fetch, now: Date.parse('2024-03-20T12:00:00Z') })
     expect(profile.recentFrom).toBe('2024-02-19')
     expect(profile.recent).toEqual([
-      { date: '2024-03-09', repo: 'Quiet-Sprout/repo-0', pushes: 1 },
-      { date: '2024-03-09', repo: 'Quiet-Sprout/repo-1', pushes: 1 },
-      { date: '2024-03-10', repo: 'Quiet-Sprout/repo-1', pushes: 2 },
+      { date: '2024-03-09', repo: 'Quiet-Dev/repo-0', pushes: 1 },
+      { date: '2024-03-09', repo: 'Quiet-Dev/repo-1', pushes: 1 },
+      { date: '2024-03-10', repo: 'Quiet-Dev/repo-1', pushes: 2 },
     ])
   })
 

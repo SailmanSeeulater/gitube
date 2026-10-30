@@ -25,7 +25,7 @@ export type LifeHover = { kind: 'repo'; key: string } | { kind: 'day'; day: numb
 export type LifeFocus = { kind: 'repo'; key: string; seq: number } | { kind: 'day'; day: number; seq: number } | null
 
 /** A stretch of a lane, by its own time t (0 on its first day, 1 after its last). */
-export interface LifeStemPart {
+export interface LifeLanePart {
   kind: 'active' | 'dormant'
   t0: number
   t1: number

@@ -1,8 +1,8 @@
 /**
- * Garden upkeep from the compare data every branch already has (aheadBy / behindBy against the
+ * Branch cleanup from the compare data every branch already has (aheadBy / behindBy against the
  * default branch):
- * - weeds: branches with nothing the default branch lacks, so deleting them loses no commits;
- * - thorns: branches far apart from the default branch on both sides, where a merge or rebase is
+ * - leftovers: branches with nothing the default branch lacks, so deleting them loses no commits;
+ * - diverged: branches far apart from the default branch on both sides, where a merge or rebase is
  *   likely to hurt.
  *
  * Pure. Squash- and rebase-merged branches keep counting commits ahead (their commits were copied,
@@ -10,54 +10,54 @@
  */
 import type { Branch, RepoData } from '../types'
 
-export type WeedKind =
+export type LeftoverKind =
   /** the default branch has moved on past it */
   | 'merged'
   /** it points at the default branch's own tip */
   | 'same'
 
-export interface Weed {
+export interface Leftover {
   name: string
-  kind: WeedKind
+  kind: LeftoverKind
   behindBy: number
   tipDate: string
   /** the name reads like a branch kept on purpose (a release or version line): not ticked for deletion */
   keep: boolean
 }
 
-export type ThornLevel = 0 | 1 | 2 | 3
+export type SpikeLevel = 0 | 1 | 2 | 3
 
-export interface Thorny {
+export interface Diverged {
   name: string
   aheadBy: number
   behindBy: number
   level: 1 | 2 | 3
 }
 
-export interface WeedReport {
+export interface CleanupReport {
   /** oldest tip first: the longest-forgotten go first */
-  weeds: Weed[]
+  leftovers: Leftover[]
   /** most tangled first */
-  thorny: Thorny[]
-  /** branch name -> thorn level, thorny branches only */
-  thorns: Map<string, 1 | 2 | 3>
+  diverged: Diverged[]
+  /** branch name -> spike level, diverged branches only */
+  spikes: Map<string, 1 | 2 | 3>
 }
 
-/** aheadBy x behindBy at which a branch grows 1, 2 or 3 thorns. */
-export const THORN_STEPS = [200, 2000, 10000] as const
+/** aheadBy x behindBy at which a branch gets 1, 2 or 3 spikes. */
+export const SPIKE_STEPS = [200, 2000, 10000] as const
 /** Fewer commits behind than this never counts as drifting, however much is ahead. */
-export const THORN_MIN_BEHIND = 20
+export const DIVERGE_MIN_BEHIND = 20
 
 /**
  * How tangled a branch is with the default branch: both sides moved since they split, so both
- * have to be reconciled. A branch that only fell behind (nothing ahead) is a weed, not thorny.
+ * have to be reconciled. A branch that only fell behind (nothing ahead) is a leftover, not diverged.
  */
-export function thornLevel(aheadBy: number, behindBy: number): ThornLevel {
-  if (aheadBy < 1 || behindBy < THORN_MIN_BEHIND) return 0
+export function spikeLevel(aheadBy: number, behindBy: number): SpikeLevel {
+  if (aheadBy < 1 || behindBy < DIVERGE_MIN_BEHIND) return 0
   const tangle = aheadBy * behindBy
-  if (tangle >= THORN_STEPS[2]) return 3
-  if (tangle >= THORN_STEPS[1]) return 2
-  if (tangle >= THORN_STEPS[0]) return 1
+  if (tangle >= SPIKE_STEPS[2]) return 3
+  if (tangle >= SPIKE_STEPS[1]) return 2
+  if (tangle >= SPIKE_STEPS[0]) return 1
   return 0
 }
 
@@ -74,25 +74,25 @@ function timeOf(branch: Branch): number {
   return Number.isFinite(t) ? t : Infinity
 }
 
-export function findWeeds(data: RepoData): WeedReport {
-  const weeds: Weed[] = []
-  const thorny: Thorny[] = []
-  const thorns = new Map<string, 1 | 2 | 3>()
+export function findCleanup(data: RepoData): CleanupReport {
+  const leftovers: Leftover[] = []
+  const diverged: Diverged[] = []
+  const spikes = new Map<string, 1 | 2 | 3>()
   const others = data.branches.filter((b) => !b.isDefault && b.name !== data.defaultBranch)
 
   for (const b of [...others].sort((a, c) => timeOf(a) - timeOf(c) || (a.name < c.name ? -1 : a.name > c.name ? 1 : 0))) {
     if (b.aheadBy === 0) {
-      weeds.push({ name: b.name, kind: b.behindBy > 0 ? 'merged' : 'same', behindBy: b.behindBy, tipDate: b.tipDate, keep: looksKept(b.name) })
+      leftovers.push({ name: b.name, kind: b.behindBy > 0 ? 'merged' : 'same', behindBy: b.behindBy, tipDate: b.tipDate, keep: looksKept(b.name) })
     }
   }
   for (const b of others) {
-    const level = thornLevel(b.aheadBy, b.behindBy)
+    const level = spikeLevel(b.aheadBy, b.behindBy)
     if (level === 0) continue
-    thorny.push({ name: b.name, aheadBy: b.aheadBy, behindBy: b.behindBy, level })
-    thorns.set(b.name, level)
+    diverged.push({ name: b.name, aheadBy: b.aheadBy, behindBy: b.behindBy, level })
+    spikes.set(b.name, level)
   }
-  thorny.sort((a, c) => c.aheadBy * c.behindBy - a.aheadBy * a.behindBy || (a.name < c.name ? -1 : a.name > c.name ? 1 : 0))
-  return { weeds, thorny, thorns }
+  diverged.sort((a, c) => c.aheadBy * c.behindBy - a.aheadBy * a.behindBy || (a.name < c.name ? -1 : a.name > c.name ? 1 : 0))
+  return { leftovers, diverged, spikes }
 }
 
 /** Plain enough for any shell unquoted; anything else gets quoted. */
@@ -115,9 +115,9 @@ export function deleteCommand(names: ReadonlyArray<string>, remote = 'origin'): 
 }
 
 /**
- * The weeds ticked for the delete command at first: all of them but the ones that look kept on
+ * The leftovers ticked for the delete command at first: all of them but the ones that look kept on
  * purpose (keep) and the ones with an open pull request, since deleting its branch closes it.
  */
-export function defaultWeedPicks(weeds: ReadonlyArray<Pick<Weed, 'name' | 'keep'>>, hasOpenPr: (name: string) => boolean = () => false): Set<string> {
-  return new Set(weeds.filter((w) => !w.keep && !hasOpenPr(w.name)).map((w) => w.name))
+export function defaultLeftoverPicks(leftovers: ReadonlyArray<Pick<Leftover, 'name' | 'keep'>>, hasOpenPr: (name: string) => boolean = () => false): Set<string> {
+  return new Set(leftovers.filter((w) => !w.keep && !hasOpenPr(w.name)).map((w) => w.name))
 }

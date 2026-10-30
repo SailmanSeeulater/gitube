@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { GraphNode } from '../types'
 import type { Theme } from '../theme/themes'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import {
   LABEL_FONT,
   bodyRadius,
@@ -12,10 +12,10 @@ import {
   searchLabelTexts,
   type LabelMeta,
   type Measure,
-} from './gardenUtils'
+} from './graphUtils'
 import { LabelPlacer, type LabelSpec } from './labelPlacement'
 
-/** The parts of Garden's per-graph index the labels need. */
+/** The parts of RepoGraph's per-graph index the labels need. */
 export interface LabelGraphIndex {
   graphData: { nodes: ReadonlyArray<GraphNode> }
   neighbours: ReadonlyMap<string, ReadonlySet<string>>
@@ -34,7 +34,7 @@ export interface UseLabelPlacerArgs {
   hoverRef: RefObject<string | null>
   /** node whose label the pointer is over; set by onPointerMove */
   labelHoverRef: RefObject<string | null>
-  /** called when labelHoverRef changes, so Garden can redraw with the new dimming */
+  /** called when labelHoverRef changes, so RepoGraph can redraw with the new dimming */
   onLabelHoverChange: () => void
   /**
    * active theme (label text, plates, halos, the dim alpha) and its branch palette (plate dots).
@@ -65,7 +65,7 @@ export interface UseLabelPlacerArgs {
   /** draw a halo in the theme's textHalo (the canvas colour) behind label text (metro mode: lines may still pass close) */
   halo?: boolean
   /**
-   * Nodes not drawn in this frame (the time-lapse before they have grown): their labels drop and they
+   * Nodes not drawn in this frame (the time-lapse before they have been drawn): their labels drop and they
    * stop blocking others. Called every frame, so it may read state that changes without a render.
    */
   isHidden?: (nodeId: string) => boolean
@@ -395,7 +395,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
   // ---- busy mirror: React state only on transitions ----
   const [labelsBusy, setLabelsBusy] = useState(true)
   const busyRef = useRef(true)
-  const setHiddenLabels = useGardenStore((s) => s.setHiddenLabels)
+  const setHiddenLabels = useAppStore((s) => s.setHiddenLabels)
   useEffect(() => () => setHiddenLabels(0), [setHiddenLabels])
 
   const buffersRef = useRef<FrameBuffers>(allocBuffers(0))
@@ -638,7 +638,7 @@ export function useLabelPlacer(args: UseLabelPlacerArgs): LabelPlacerApi {
         setLabelsBusy(placer.busy)
         if (!placer.busy) {
           const hidden = placer.hiddenCount()
-          if (useGardenStore.getState().hiddenLabels !== hidden) setHiddenLabels(hidden)
+          if (useAppStore.getState().hiddenLabels !== hidden) setHiddenLabels(hidden)
         }
       }
     },

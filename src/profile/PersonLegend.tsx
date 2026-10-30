@@ -87,7 +87,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       )
     case 'lock':
       return (
-        <span className="text-garden-muted">
+        <span className="text-ui-muted">
           <LockIcon size={18} />
         </span>
       )
@@ -569,7 +569,7 @@ interface ViewLegend {
 }
 
 const PRIVATE_ITEM: LegendItem = { kind: 'lock', label: 'private repo', hint: 'its name stays hidden until shown with the toggle at the top of the panel' }
-const SEEDLING_HINT = 'a repo GitHub counted no commits to: see what the data leaves out, below'
+const UNCOUNTED_HINT = 'a repo GitHub counted no commits to: see what the data leaves out, below'
 /** The landed pull request entry, worded for each view's mark. */
 export const LANDED_LABEL = 'landed PR'
 const LANDED_HINT = 'a pull request of theirs merged into a repo they do not own, marked on the day it was merged'
@@ -598,7 +598,7 @@ function linesLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boole
     { kind: 'station', label: 'station', hint: "a milestone of the repo, as a station on its line: hover it, or see the milestones tab" },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'seedling', hint: `a dotted line: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'uncounted', hint: `a dotted line: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-station', label: LANDED_LABEL, hint: `a filled station: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -625,7 +625,7 @@ function constellationLegend(timeline: LifeTimeline, graphql: boolean, hasPrivat
     { kind: 'link', label: 'active together', hint: 'a faint line links repos active in the same months: each star to at most the two it shares the most months with, and in a busy month only its busiest repos' },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint', label: 'seedling', hint: `a faint star: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint', label: 'uncounted', hint: `a faint star: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-tick', label: LANDED_LABEL, hint: `a diamond at the star's upper left, from the day of the first: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -659,7 +659,7 @@ function phosphorLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: bo
     { kind: 'dim-stack', label: 'archived', hint: 'an archived repo is drawn dim' },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-stack', label: 'seedling', hint: `a faint stack: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-stack', label: 'uncounted', hint: `a faint stack: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-block', label: LANDED_LABEL, hint: `a bright diamond over the block at its day's height: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -688,7 +688,7 @@ function htopLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolea
     { kind: 'dry-meter', label: 'archived', hint: 'an archived repo\'s meter is drawn dry and ends at its last activity' },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   ]
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'half-meter', label: 'seedling', hint: `a meter lit at half: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'half-meter', label: 'uncounted', hint: `a meter lit at half: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-cell', label: LANDED_LABEL, hint: `a full-height cell in the monitor's accent: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -720,7 +720,7 @@ function gitLogLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: bool
     { kind: 'end', label: 'archived', hint: 'an archived branch ends in a "*" on its last commit' },
     { kind: 'tag', label: 'milestone', hint: 'a milestone is a tag on the trunk: hover it, or see the milestones tab' },
   )
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'seedling', hint: `a branch with only two commits, at its start and its last push: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'dotted', label: 'uncounted', hint: `a branch with only two commits, at its start and its last push: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-commit', label: LANDED_LABEL, hint: `a merge dot in the tag colour on the branch: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -746,7 +746,7 @@ function minimapLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boo
     { kind: 'comment', label: 'archived', hint: 'an archived repo is drawn as a comment' },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   ]
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'hollow-token', label: 'seedling', hint: `a hollow token: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'hollow-token', label: 'uncounted', hint: `a hollow token: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-token', label: LANDED_LABEL, hint: `a square in the editor's accent on the line: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -779,7 +779,7 @@ function helixLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boole
     { kind: 'dim-coil', label: 'archived', hint: 'an archived repo is drawn dim, and ends at its last activity' },
     { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
   )
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-coil', label: 'seedling', hint: `a faint thread: ${SEEDLING_HINT}` })
+  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'faint-coil', label: 'uncounted', hint: `a faint thread: ${UNCOUNTED_HINT}` })
   if (anyLanded(timeline)) items.push({ kind: 'landed-coil', label: LANDED_LABEL, hint: `a bright diamond on the thread: ${LANDED_HINT}` })
   if (hasPrivate) items.push(PRIVATE_ITEM)
   return {
@@ -813,32 +813,32 @@ export default function PersonLegend({ profile, timeline, colourOf, theme, hasPr
 
   return (
     <div>
-      <p className="mb-1.5 text-[11px] leading-snug text-garden-muted">{intro}</p>
+      <p className="mb-1.5 text-[11px] leading-snug text-ui-muted">{intro}</p>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {items.map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
             <Glyph kind={item.kind} theme={theme} />
-            <span className="text-[12px] text-garden-text-dim">{item.label}</span>
+            <span className="text-[12px] text-ui-text-dim">{item.label}</span>
           </li>
         ))}
       </ul>
-      {languages.length > 0 && swatchOf === null && <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>}
+      {languages.length > 0 && swatchOf === null && <p className="mt-2 text-[11px] leading-snug text-ui-muted">{colours}</p>}
       {languages.length > 0 && swatchOf !== null && (
         <>
-          <p className="mt-2 text-[11px] leading-snug text-garden-muted">{colours}</p>
+          <p className="mt-2 text-[11px] leading-snug text-ui-muted">{colours}</p>
           <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
             {shown.map((language) => (
-              <li key={language ?? ''} className="flex items-center gap-1.5 text-[11px] text-garden-text-dim">
+              <li key={language ?? ''} className="flex items-center gap-1.5 text-[11px] text-ui-text-dim">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: swatchOf(language) }} />
                 {language ?? 'no language'}
               </li>
             ))}
-            {languages.length > shown.length && <li className="text-[11px] text-garden-muted">+{languages.length - shown.length} more</li>}
+            {languages.length > shown.length && <li className="text-[11px] text-ui-muted">+{languages.length - shown.length} more</li>}
           </ul>
         </>
       )}
-      <p className="mt-2 text-[11px] font-medium text-garden-text-dim">what GitHub&apos;s data leaves out</p>
-      <ul className="mt-1 flex flex-col gap-1 text-[11px] leading-snug text-garden-muted">
+      <p className="mt-2 text-[11px] font-medium text-ui-text-dim">what GitHub&apos;s data leaves out</p>
+      <ul className="mt-1 flex flex-col gap-1 text-[11px] leading-snug text-ui-muted">
         {dataLimits(profile, view).map((limit) => (
           <li key={limit}>{limit}</li>
         ))}

@@ -1,8 +1,8 @@
 /**
  * The phosphor view (a green-phosphor CRT, each repo a stack of blocks): its layout is each lane's
  * roots and heights, pure and deterministic (the same repos in any order give the same layout); its
- * hit test finds every drawn stack at its label anchor and skips hidden and unsown ones; its painter
- * draws a hidden or unsown stack not at all, grows stacks with the time-lapse, draws no repo name,
+ * hit test finds every drawn stack at its label anchor and skips hidden and unreached ones; its painter
+ * draws a hidden or unreached stack not at all, raises stacks with the time-lapse, draws no repo name,
  * keeps to the phosphor palette whatever the theme, lays scanlines and a vignette over the screen,
  * and copes with a person with no repos.
  */
@@ -260,7 +260,7 @@ describe('the geometry', () => {
     expect(s.g.head[quiet]).toBe(BLOCK_PX)
   })
 
-  it('grows a stack with the time-lapse: no body on its first day, all of it from its last', () => {
+  it('raises a stack with the time-lapse: no body on its first day, all of it from its last', () => {
     const s = scene(RICH, NOW)
     const i = s.layout.byKey.get('me/busy')!
     const stack = s.layout.stacks[i]
@@ -284,9 +284,9 @@ describe('the hit test', () => {
     let hits = 0
     s.layout.stacks.forEach((stack, i) => {
       if (hidden.has(stack.key)) return
-      const sown = phosphorAnchor(s.layout, s.g, i, at, out)
-      expect(sown).toBe(!(at !== null && stack.startDay > at))
-      if (!sown) return
+      const reached = phosphorAnchor(s.layout, s.g, i, at, out)
+      expect(reached).toBe(!(at !== null && stack.startDay > at))
+      if (!reached) return
       const notDrawn = new Set(hidden)
       if (at !== null) for (const other of s.layout.stacks) if (other.startDay > at) notDrawn.add(other.key)
       const hit = hitPhosphor(s.layout, s.g, s.camera, s.view, out[0], out[1], notDrawn, at)
@@ -299,7 +299,7 @@ describe('the hit test', () => {
     return hits
   }
 
-  it('hits every stack of RICH, kepano and gaearon at its anchor, fully grown, halfway and with some hidden', () => {
+  it('hits every stack of RICH, kepano and gaearon at its anchor, fully drawn, halfway and with some hidden', () => {
     for (const s of [scene(RICH, NOW), scene(kepano, KEPANO_NOW), scene(gaearon, GAEARON_NOW)]) {
       const n = s.layout.stacks.length
       // most are hit as themselves; the rest under a shorter stack drawn over them at the same root
@@ -310,7 +310,7 @@ describe('the hit test', () => {
     }
   })
 
-  it('skips a hidden or unsown stack, and falls back to the day or milestone under the pointer', () => {
+  it('skips a hidden or unreached stack, and falls back to the day or milestone under the pointer', () => {
     const s = scene(RICH, NOW)
     const i = s.layout.byKey.get('me/busy')!
     const stack = s.layout.stacks[i]
@@ -378,25 +378,25 @@ describe('the painter', () => {
     expect(blockRects(paintLog(s, { hidden: new Set(['me/busy']) }).log, s.g.x[i])).toBe(0)
   })
 
-  it('draws nothing after the time-lapse day, and grows each stack with it', () => {
+  it('draws nothing after the time-lapse day, and raises each stack with it', () => {
     for (const s of [scene(RICH, NOW), scene(kepano, KEPANO_NOW)]) {
       const all = new Set(s.layout.stacks.map((st) => st.key))
       for (const p of [0, 0.3, 0.6, 1]) {
         const at = dayAt(s.timeline.clock, p)
-        const unsown = new Set(s.layout.stacks.filter((st) => st.startDay > at).map((st) => st.key))
-        // the unsown stacks draw nothing: the frame is the same with them hidden
-        expect(paintLog(s, { at }).log, `at ${p}`).toEqual(paintLog(s, { at, hidden: unsown }).log)
+        const unreached = new Set(s.layout.stacks.filter((st) => st.startDay > at).map((st) => st.key))
+        // the unreached stacks draw nothing: the frame is the same with them hidden
+        expect(paintLog(s, { at }).log, `at ${p}`).toEqual(paintLog(s, { at, hidden: unreached }).log)
         if (p === 0) expect(paintLog(s, { at }).log).toEqual(paintLog(s, { at, hidden: all }).log)
       }
       const i = s.layout.byKey.get(s.layout.stacks[0].key)!
       const stack = s.layout.stacks[i]
       const mid = Math.floor((stack.startDay + stack.endDay) / 2)
       const only = new Set([...all].filter((k) => k !== stack.key))
-      const grownAt = (at: number | null) => blockRects(paintLog(s, { at, hidden: only }).log, s.g.x[i])
-      expect(grownAt(stack.startDay)).toBe(0)
-      expect(grownAt(mid)).toBeGreaterThan(0)
-      expect(grownAt(mid)).toBeLessThan(grownAt(null))
-      expect(grownAt(null)).toBe(s.g.blocks[i])
+      const drawnAt = (at: number | null) => blockRects(paintLog(s, { at, hidden: only }).log, s.g.x[i])
+      expect(drawnAt(stack.startDay)).toBe(0)
+      expect(drawnAt(mid)).toBeGreaterThan(0)
+      expect(drawnAt(mid)).toBeLessThan(drawnAt(null))
+      expect(drawnAt(null)).toBe(s.g.blocks[i])
     }
   })
 
@@ -481,8 +481,8 @@ describe('landed pull requests on the phosphor screen', () => {
   const landedProfile = (): ProfileData => ({ ...RICH, landed: [{ day: '2021-03-05', repo: 'other/lib' }, { day: '2021-02-10', repo: 'Other/Lib' }] })
 
   /** Whether the bright diamond of landed day l is drawn over its block: its top corner's moveTo in the bright colour. */
-  function diamondAt(rec: RecordingCtx, s: Scene, i: number, l: { t: number; day: number }, grown: number): boolean {
-    const cy = pLandedCentreY(s.g, i, grown, l.t)
+  function diamondAt(rec: RecordingCtx, s: Scene, i: number, l: { t: number; day: number }, drawnBlocks: number): boolean {
+    const cy = pLandedCentreY(s.g, i, drawnBlocks, l.t)
     return rec.calls('moveTo').some((c) => c.args[0] === s.g.x[i] && c.args[1] === cy - PHOSPHOR_LANDED_PX && c.style.fillStyle === P_PALETTE.bright)
   }
 
@@ -507,11 +507,11 @@ describe('landed pull requests on the phosphor screen', () => {
     // before the stack rises: nothing; between its two days: the first only
     expect(paintLog(s, { at: stack.startDay - 1 }).calls('moveTo').filter((c) => c.args[0] === s.g.x[i] && c.style.fillStyle === P_PALETTE.bright)).toHaveLength(0)
     const between = dayNumber('2021-02-20')
-    const grown = pBlocksAt(stack, s.g.blocks[i], between)
+    const drawnBlocks = pBlocksAt(stack, s.g.blocks[i], between)
     // the stack has only begun to rise: the one mark reached sits over its head block
-    expect(grown).toBe(0)
+    expect(drawnBlocks).toBe(0)
     const rec = paintLog(s, { at: between })
-    expect(diamondAt(rec, s, i, stack.landed[0], grown)).toBe(true)
+    expect(diamondAt(rec, s, i, stack.landed[0], drawnBlocks)).toBe(true)
     const brightMoves = (r: RecordingCtx) => r.calls('moveTo').filter((c) => c.args[0] === s.g.x[i] && c.style.fillStyle === P_PALETTE.bright)
     expect(brightMoves(rec)).toHaveLength(1)
     expect(brightMoves(full)).toHaveLength(2)

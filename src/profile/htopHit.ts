@@ -5,7 +5,7 @@
  *
  * Only the rows within reach of the pointer are looked at, at least HTOP_MIN_HIT_PX either side
  * however tightly they pack; the nearest row's middle wins, the upper on a tie. Rows in notDrawn (the
- * hidden ones, and those the time-lapse has not sown) are skipped, as they are not drawn.
+ * hidden ones, and those the time-lapse has not reached) are skipped, as they are not drawn.
  */
 import type { LifeCamera, LifeHover, LifeViewport } from './lifeTypes'
 import { axisHover, onCanvas } from './lifeView'

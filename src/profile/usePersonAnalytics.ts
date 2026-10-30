@@ -1,6 +1,6 @@
 /**
- * Sends person mode's grow events as the profile on show changes (the rules are in analytics.ts).
- * Returns noteGrow (stable), which the refresh button calls with the login on show before it
+ * Sends person mode's load events as the profile on show changes (the rules are in analytics.ts).
+ * Returns noteLoad (stable), which the refresh button calls with the login on show before it
  * refetches; a new login or request from the router arms itself.
  */
 import { useCallback, useEffect, useState } from 'react'
@@ -13,5 +13,5 @@ export function usePersonAnalytics(input: PersonAnalyticsState): (login: string)
   useEffect(() => {
     for (const [event, data] of analytics.observe({ login, request, profile, fetchedAt, cachedAt, isFetching, error })) track(event, data)
   }, [analytics, login, request, profile, fetchedAt, cachedAt, isFetching, error])
-  return useCallback((who: string) => analytics.noteGrow(who), [analytics])
+  return useCallback((who: string) => analytics.noteLoad(who), [analytics])
 }

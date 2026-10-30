@@ -4,7 +4,7 @@ import { readSound, writeSound } from '../audio/context'
 import { MusicBox } from '../audio/musicBox'
 import { buildScore, notesBetween, pickNotes } from '../graph/score'
 import { clockAt, type Timeline } from '../graph/timeline'
-import { gardenFileName } from '../export/gardenFile'
+import { exportFileName } from '../export/repoFile'
 import { downloadBlob } from '../export/image'
 import { pickVideoType, recordCanvas, type CanvasRecording } from '../export/video'
 import type { Graph, RepoData } from '../types'
@@ -18,7 +18,7 @@ export interface TimelapseBarProps {
   data: RepoData
   /** of the graph on show */
   timeline: Timeline | null
-  /** 0..1, shared with Garden, which reads it every frame */
+  /** 0..1, shared with RepoGraph, which reads it every frame */
   progress: RefObject<number>
   /** the graph canvas to record */
   getCanvas: () => HTMLCanvasElement | null
@@ -28,7 +28,7 @@ export interface TimelapseBarProps {
 
 /** Playback lengths offered, in seconds. */
 const LENGTHS = [10, 20, 40, 60] as const
-/** A recording holds the grown garden this long before it ends. */
+/** A recording holds the finished map this long before it ends. */
 const HOLD_MS = 1500
 /** Notes struck in one frame at most (pickNotes thins a burst of commits to this). */
 const NOTES_PER_FRAME = 4
@@ -46,7 +46,7 @@ function clock(ms: number): string {
 
 /**
  * The time-lapse controls, mounted while the time-lapse is on (it starts playing from the first
- * commit): play/pause, a scrubber over the garden's history, the length of a full play, the music
+ * commit): play/pause, a scrubber over the map's history, the length of a full play, the music
  * box (each commit a note as it appears), and recording the canvas, with its sound, to a video
  * file. Unmounting throws away an unfinished recording and closes the audio.
  */
@@ -115,13 +115,13 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
     setShown(progress.current)
   }
 
-  // the garden starts from its first commit
+  // the map starts from its first commit
   useLayoutEffect(() => {
     progress.current = 0
     heardRef.current = -1
   }, [progress])
 
-  // ---- playback, paced by the clock (not by frames, so dropped frames never slow it down); Garden
+  // ---- playback, paced by the clock (not by frames, so dropped frames never slow it down); RepoGraph
   // repaints every frame while this is mounted ----
   useEffect(() => {
     if (!playing) return
@@ -149,7 +149,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           setPlaying(false)
           return
         }
-        // a recording lingers on the grown garden, then saves
+        // a recording lingers on the finished map, then saves
         if (endedAt < 0) endedAt = now
         if (now - endedAt >= HOLD_MS) {
           void finishRecording()
@@ -174,7 +174,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
     setRecording(null)
     setPlaying(false)
     try {
-      downloadBlob(await rec.finish(), gardenFileName(data, rec.type.ext, new Date(), 'timelapse'))
+      downloadBlob(await rec.finish(), exportFileName(data, rec.type.ext, new Date(), 'timelapse'))
       // 'webm' counts the time-lapse video export, whatever the browser recorded (Safari's is mp4)
       track('export', { format: 'webm' })
     } catch (err) {
@@ -219,7 +219,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
     <div
       role="group"
       aria-label="Time-lapse"
-      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-garden-border bg-garden-panel/95 px-2.5 py-2 text-[12px] shadow-soft backdrop-blur ${
+      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-ui-border bg-ui-panel/95 px-2.5 py-2 text-[12px] shadow-soft backdrop-blur ${
         besidePanel ? 'max-w-[max(260px,calc(100vw-344px))]' : 'max-w-[calc(100vw-2rem)]'
       }`}
     >
@@ -229,7 +229,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           onClick={togglePlay}
           disabled={busy}
           aria-label={playing ? 'Pause' : 'Play'}
-          className="shrink-0 rounded-lg p-1.5 text-garden-accent hover:bg-garden-hover disabled:opacity-40"
+          className="shrink-0 rounded-lg p-1.5 text-ui-accent hover:bg-ui-hover disabled:opacity-40"
         >
           {playing ? <PauseIcon size={15} /> : <PlayIcon size={15} />}
         </button>
@@ -246,9 +246,9 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           }}
           aria-label="Time-lapse position"
           aria-valuetext={now ? shortDate(now.time) : undefined}
-          className="min-w-0 flex-1 accent-garden-accent disabled:opacity-60"
+          className="min-w-0 flex-1 accent-ui-accent disabled:opacity-60"
         />
-        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-garden-text-dim" title="the date of the newest commit on show">
+        <span className="w-[92px] shrink-0 text-right font-mono text-[11px] tabular-nums text-ui-text-dim" title="the date of the newest commit on show">
           {now ? shortDate(now.time) : ''}
         </span>
         <select
@@ -257,7 +257,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           onChange={(event) => setLength(Number(event.target.value) as (typeof LENGTHS)[number])}
           aria-label="Length of a full play"
           title="how long a full play (and a recording) takes"
-          className="shrink-0 rounded-md bg-garden-field px-1 py-0.5 text-[11px] text-garden-text outline-none disabled:opacity-60"
+          className="shrink-0 rounded-md bg-ui-field px-1 py-0.5 text-[11px] text-ui-text outline-none disabled:opacity-60"
         >
           {LENGTHS.map((s) => (
             <option key={s} value={s}>
@@ -271,7 +271,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           aria-pressed={sound}
           aria-label={sound ? 'Music box on' : 'Music box off'}
           title="music box: every commit plays a note as it appears. each branch has its own pitch, merges are chords, and recordings carry the sound"
-          className={`shrink-0 rounded-lg p-1 hover:bg-garden-hover ${sound ? 'text-garden-accent' : 'text-garden-muted hover:text-garden-text'}`}
+          className={`shrink-0 rounded-lg p-1 hover:bg-ui-hover ${sound ? 'text-ui-accent' : 'text-ui-muted hover:text-ui-text'}`}
         >
           {sound ? <SoundIcon size={15} /> : <MuteIcon size={15} />}
         </button>
@@ -281,7 +281,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
             onClick={() => void finishRecording()}
             aria-label="Stop recording and save"
             title="stop now and save what was recorded"
-            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 font-mono text-[11px] tabular-nums text-garden-danger hover:bg-garden-hover"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 font-mono text-[11px] tabular-nums text-ui-danger hover:bg-ui-hover"
           >
             <StopIcon size={12} />
             {clock(elapsed)} / {clock(total)}
@@ -293,7 +293,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
             disabled={!canRecord}
             aria-label="Record a video"
             title={canRecord ? 'play from the start and save it as a video' : "this browser can't record video"}
-            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-garden-text-dim hover:bg-garden-hover hover:text-garden-danger disabled:opacity-40"
+            className="flex shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 text-[11px] text-ui-text-dim hover:bg-ui-hover hover:text-ui-danger disabled:opacity-40"
           >
             <RecordIcon size={12} />
             rec
@@ -303,13 +303,13 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
           type="button"
           onClick={onClose}
           aria-label="Close the time-lapse"
-          className="shrink-0 rounded-lg p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+          className="shrink-0 rounded-lg p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
         >
           <CloseIcon />
         </button>
       </div>
       {(busy || error) && (
-        <p className={`px-1 text-[11px] ${error ? 'text-garden-danger' : 'text-garden-muted'}`} role="status">
+        <p className={`px-1 text-[11px] ${error ? 'text-ui-danger' : 'text-ui-muted'}`} role="status">
           {error ?? 'recording the canvas: keep this tab in front until it saves'}
         </p>
       )}

@@ -3,8 +3,8 @@
  * and deterministic (the same profile in any order, or renamed, gives the same rows), one row per
  * lane in lane order on the shared time axis, tokens and whitespace tiling each row, tones by how
  * many repos use a language; its geometry fits any number of rows in the plot (300 to 500 still
- * apart and hittable); its hit test finds every repo at its label anchor (fully grown and halfway
- * through the time-lapse), in the gutter and in the minimap strip, skips hidden and unsown rows and
+ * apart and hittable); its hit test finds every repo at its label anchor (fully drawn and halfway
+ * through the time-lapse), in the gutter and in the minimap strip, skips hidden and unreached rows and
  * otherwise answers the axis; its painter draws no repo name, nothing of a hidden row and nothing
  * past the time-lapse's day, in the console's colours whatever the theme; and a profile without
  * repos works throughout.
@@ -294,7 +294,7 @@ describe('hitMinimap', () => {
     return checked
   }
 
-  it('hits every repo at its label anchor, fully grown and halfway through the time-lapse', () => {
+  it('hits every repo at its label anchor, fully drawn and halfway through the time-lapse', () => {
     for (const [p, now] of [[small(), NOW], [kepano, KEPANO_NOW], [gaearon, GAEARON_NOW]] as const) {
       const b = build(p, now)
       expect(hitsAtAnchors(b, null)).toBe(b.layout.rows.length)
@@ -317,7 +317,7 @@ describe('hitMinimap', () => {
     }
   })
 
-  it('skips hidden and unsown rows, and answers the axis away from any row', () => {
+  it('skips hidden and unreached rows, and answers the axis away from any row', () => {
     const b = build(small(), NOW)
     const g = minimapGeom(b.layout, b.camera, VIEW)
     const out = new Float32Array(3)
@@ -384,7 +384,7 @@ describe('paintMinimap', () => {
     const ys = new Set(drawn.map((t) => Math.round(t.y * 100)))
     b.layout.rows.forEach((_, i) => expect(ys.has(Math.round(rowY(g, i) * 100))).toBe(true))
     const fills = new Set(rec.calls('fill').map((c) => c.style.fillStyle))
-    for (const row of b.layout.rows) if (!row.seedling) expect(fills.has(rowColour(row))).toBe(true)
+    for (const row of b.layout.rows) if (!row.uncounted) expect(fills.has(rowColour(row))).toBe(true)
     const numbers = rec.calls('fillText').filter((c) => c.style.font !== LIFE_YEAR_FONT && /^\d+$/.test(String(c.args[0]))).map((c) => Number(c.args[0]))
     expect(numbers.sort((a, z) => a - z)).toEqual(b.layout.rows.map((_, i) => i + 1))
   })
@@ -405,7 +405,7 @@ describe('paintMinimap', () => {
     expect(stripBars(without.rec)).toHaveLength(0)
   })
 
-  it('draws nothing past the time-lapse day, and no row sown after it', () => {
+  it('draws nothing past the time-lapse day, and no row reached after it', () => {
     for (const [p, now] of [[small(), NOW], [kepano, KEPANO_NOW], [gaearon, GAEARON_NOW]] as const) {
       const b = build(p, now)
       for (const progress of [0, 0.3, 0.6]) {
@@ -414,11 +414,11 @@ describe('paintMinimap', () => {
         const g = input.geoms
         const edge = b.camera.tx + (at - b.layout.startDay) * b.camera.k
         for (const t of tokens(rec)) expect(t.x0).toBeLessThanOrEqual(edge + 1.01)
-        const unsown = b.layout.rows.flatMap((row, i) => (row.startDay > at ? [i] : []))
+        const unreached = b.layout.rows.flatMap((row, i) => (row.startDay > at ? [i] : []))
         const ys = tokens(rec).map((t) => t.y)
-        for (const i of unsown) expect(ys.some((y) => Math.abs(y - rowY(g, i)) < 0.01)).toBe(false)
+        for (const i of unreached) expect(ys.some((y) => Math.abs(y - rowY(g, i)) < 0.01)).toBe(false)
         const numbers = new Set(rec.calls('fillText').map((c) => String(c.args[0])))
-        for (const i of unsown) expect(numbers.has(String(i + 1))).toBe(false)
+        for (const i of unreached) expect(numbers.has(String(i + 1))).toBe(false)
         const stripEdge = stripX(g.strip, at - b.layout.startDay) + 1.01
         const bars = rec.calls('fillRect').filter((c) => (c.args[0] as number) >= g.strip.ix0 - 0.01 && (c.args[3] as number) === g.strip.barH)
         for (const bar of bars) expect(bar.args[0] as number).toBeLessThanOrEqual(stripEdge)
@@ -530,7 +530,7 @@ describe('landed pull requests on the minimap', () => {
     const i = b.layout.byKey.get('up/tool')!
     const row = b.layout.rows[i]
     expect(row.landed).toEqual([dayNumber('2021-06-01') - b.layout.startDay + 0.5, dayNumber('2022-02-01') - b.layout.startDay + 0.5])
-    expect(row.seedling).toBe(true)
+    expect(row.uncounted).toBe(true)
     const sx = (x: number) => b.camera.tx + x * b.camera.k
     const full = painted(b)
     expect(squaresOn(full.rec, full.input, i).map((x) => Math.round(x * 1e6) / 1e6)).toEqual(row.landed.map(sx).map((x) => Math.round(x * 1e6) / 1e6))

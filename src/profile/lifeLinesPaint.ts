@@ -17,7 +17,7 @@ import { paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide,
 import type { LifeInk, LifeViewport } from './lifeTypes'
 import type { LifeViewPaintInput } from './lifeView'
 import type { LifeLine, LifeLinesLayout, LineStation } from './lifeLinesLayout'
-import { MARKER_RING_PX, drawnTo, rooted, sown, stationMark, stationRadius, stationReached, stationRingRadius, weightLevel, type LinesGeom } from './lifeLinesGeometry'
+import { MARKER_RING_PX, drawnTo, rooted, isReached, stationMark, stationRadius, stationReached, stationRingRadius, weightLevel, type LinesGeom } from './lifeLinesGeometry'
 
 export type LinesPaintInput = LifeViewPaintInput<LifeLinesLayout, LinesGeom>
 
@@ -25,8 +25,8 @@ export type LinesPaintInput = LifeViewPaintInput<LifeLinesLayout, LinesGeom>
 export const ERA_BAND_ALPHA = 0.07
 /** A gridline at each new year, in the muted ink at this alpha. */
 export const GRID_ALPHA = 0.18
-/** A seedling's dotted line: dash and gap, in px. */
-export const SEEDLING_DASH: readonly number[] = [1.5, 3]
+/** An uncounted repo's dotted line: dash and gap, in px. */
+export const UNCOUNTED_DASH: readonly number[] = [1.5, 3]
 /** Lines this far off screen are skipped. */
 const CULL_PX = 24
 /** A hovered station is ringed this far beyond it. */
@@ -80,16 +80,16 @@ export function linesKeepOut(_layout: LifeLinesLayout, view: LifeViewport): Floa
   return Float32Array.of(0, horizonY(view) - 1, view.width, view.height)
 }
 
-/** A line's body from x0 to its drawn end: its parts, or a seedling's dots. */
+/** A line's body from x0 to its drawn end: its parts, or an uncounted repo's dots. */
 function drawBody(ctx: CanvasRenderingContext2D, line: LifeLine, y: number, g: LinesGeom, colour: string, to: number, W: number): void {
   const { k, tx } = g.camera
   const clip = (x: number) => Math.min(W + CULL_PX, Math.max(-CULL_PX, tx + x * k))
   ctx.strokeStyle = colour
-  if (line.seedling) {
+  if (line.uncounted) {
     ctx.beginPath()
     ctx.moveTo(clip(line.x0), y)
     ctx.lineTo(clip(to), y)
-    ctx.setLineDash([...SEEDLING_DASH])
+    ctx.setLineDash([...UNCOUNTED_DASH])
     ctx.lineCap = 'butt'
     ctx.lineWidth = Math.max(1, g.dormantPx * 1.4)
     ctx.stroke()
@@ -240,7 +240,7 @@ export function paintLifeLines(ctx: CanvasRenderingContext2D, input: LinesPaintI
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
   const hov = hover?.kind === 'repo' ? (layout.byKey.get(hover.key) ?? -1) : -1
   const lines = layout.lines
-  const shown = (line: LifeLine | undefined): line is LifeLine => line !== undefined && !hidden.has(line.key) && sown(line, at)
+  const shown = (line: LifeLine | undefined): line is LifeLine => line !== undefined && !hidden.has(line.key) && isReached(line, at)
   const alphaOf = (i: number) => (sel >= 0 && sel !== i ? ink.dimAlpha : 1)
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]

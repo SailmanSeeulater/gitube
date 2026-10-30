@@ -4,7 +4,7 @@ import { fetchRepoData } from '../api/github'
 import type { RepoRef } from '../api/parseRepoUrl'
 import { readFresh, remember, sharedRepoStore } from '../api/repoCache'
 import { GitHubFetchError, type FetchProgress, type RepoData } from '../types'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 
 export interface UseRepoDataResult {
   data: RepoData | undefined
@@ -48,9 +48,9 @@ export function toFetchError(err: unknown): GitHubFetchError | null {
 /**
  * Run the fetch even when the browser reports itself offline. TanStack's default 'online'
  * mode pauses the query silently (fetchStatus 'paused': isFetching false, error null), which
- * leaves App in the empty state with Grow enabled but inert. With 'always' the fetch runs,
+ * leaves App in the empty state with Go enabled but inert. With 'always' the fetch runs,
  * fails fast with a 'network' error, and the "check your connection" card shows; the next
- * Grow then really refetches. (A paused query would have auto-resumed on reconnect, but the
+ * Go then really refetches. (A paused query would have auto-resumed on reconnect, but the
  * silent in-between state is exactly when the user needs feedback.)
  */
 export const REPO_QUERY_NETWORK_MODE = 'always' as const
@@ -77,9 +77,9 @@ const INITIAL_PROGRESS: FetchProgress = {
  * refetch asks for GitHub. Every live fetch refreshes the cache. Disabled (idle) while ref is null.
  */
 export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
-  const token = useGardenStore((s) => s.token)
-  const setProgress = useGardenStore((s) => s.setProgress)
-  const noteRate = useGardenStore((s) => s.noteRate)
+  const token = useAppStore((s) => s.token)
+  const setProgress = useAppStore((s) => s.setProgress)
+  const noteRate = useAppStore((s) => s.noteRate)
   /** set by refetch: the next run skips the cache */
   const liveRef = useRef(false)
 

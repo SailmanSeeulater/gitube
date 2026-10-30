@@ -7,7 +7,7 @@
  * size in px, stacked from STACK_BASE_PX above the horizon, so a stack's block count follows the
  * plot's height and its share of it.
  */
-import { grownShare } from './lifeMeasures'
+import { revealedShare } from './lifeMeasures'
 import { horizonY } from './lifeGeometry'
 import type { LifeCamera, LifeViewport } from './lifeTypes'
 import type { PhosphorLayout, PhosphorStack } from './phosphorLayout'
@@ -28,7 +28,7 @@ export interface PhosphorGeom {
   x: Float64Array
   /** the foot of its lowest block */
   base: number
-  /** body blocks, fully grown */
+  /** body blocks, fully drawn */
   blocks: Int32Array
   /** the head block's side */
   head: Float64Array
@@ -52,12 +52,12 @@ export function phosphorGeom(layout: PhosphorLayout, camera: LifeCamera, view: L
   return g
 }
 
-/** Body blocks grown by the time-lapse's day: all of them when fully grown, none on the day it is sown. */
+/** Body blocks drawn by the time-lapse's day: all of them when fully drawn, none on the day it is reached. */
 export function blocksAt(stack: Pick<PhosphorStack, 'startDay' | 'endDay'>, blocks: number, at: number | null): number {
-  return Math.min(blocks, Math.floor(blocks * grownShare(stack, at) + 1e-9))
+  return Math.min(blocks, Math.floor(blocks * revealedShare(stack, at) + 1e-9))
 }
 
-/** The top of the head block (screen y) once `grown` body blocks stand under it. */
-export function headTop(g: PhosphorGeom, i: number, grown: number): number {
-  return g.base - grown * PITCH_PX - g.head[i]
+/** The top of the head block (screen y) once `drawnBlocks` body blocks stand under it. */
+export function headTop(g: PhosphorGeom, i: number, drawnBlocks: number): number {
+  return g.base - drawnBlocks * PITCH_PX - g.head[i]
 }

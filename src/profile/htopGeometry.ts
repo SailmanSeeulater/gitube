@@ -87,7 +87,7 @@ export function htopDrawnTo(row: Pick<HtopRow, 'x1'>, startDay: number, at: numb
   return at === null ? row.x1 : Math.min(row.x1, at - startDay)
 }
 
-/** Whether the time-lapse has sown the row (any of it is drawn). */
-export function htopSown(row: Pick<HtopRow, 'startDay'>, at: number | null): boolean {
+/** Whether the time-lapse has reached the row (any of it is drawn). */
+export function htopReached(row: Pick<HtopRow, 'startDay'>, at: number | null): boolean {
   return at === null || row.startDay <= at
 }

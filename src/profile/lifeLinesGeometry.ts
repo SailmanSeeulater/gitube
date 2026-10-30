@@ -101,8 +101,8 @@ export function drawnTo(line: Pick<LifeLine, 'end'>, startDay: number, at: numbe
   return at === null ? line.end : Math.min(line.end, at - startDay)
 }
 
-/** Whether the time-lapse has sown the line (any of it is drawn). */
-export function sown(line: Pick<LifeLine, 'startDay'>, at: number | null): boolean {
+/** Whether the time-lapse has reached the line (any of it is drawn). */
+export function isReached(line: Pick<LifeLine, 'startDay'>, at: number | null): boolean {
   return at === null || line.startDay <= at
 }
 

@@ -12,8 +12,8 @@
 import type { PullIndex, RepoData } from '../types'
 import type { ContributorIndex } from './contributors'
 import { countPulls } from './pulls'
-import type { WeedReport } from './weeds'
-import { isStale } from '../components/gardenUtils'
+import type { CleanupReport } from './cleanup'
+import { isStale } from '../components/graphUtils'
 
 /** A branch with work on it whose tip is older than this counts as stale (the stale filter's 90d step). */
 export const HEALTH_STALE_DAYS = 90
@@ -36,9 +36,9 @@ export interface BranchLife {
    * branch's fork point is its own tip, so it says nothing about how long the work took.
    */
   medianDays: number | null
-  /** branches the default branch has moved past with nothing left to merge (weeds of kind 'merged') */
+  /** branches the default branch has moved past with nothing left to merge (leftovers of kind 'merged') */
   merged: number
-  /** branches with work on them left for HEALTH_STALE_DAYS, or thorny (far apart from the default branch on both sides) */
+  /** branches with work on them left for HEALTH_STALE_DAYS, or diverged (far apart from the default branch on both sides) */
   stale: number
 }
 
@@ -89,15 +89,15 @@ function busFactorOf(contributors: ContributorIndex): BusFactor | null {
   return { people: counts.length, topShare: counts[0] / total, topTwoShare: (counts[0] + counts[1]) / total }
 }
 
-function branchLifeOf(data: RepoData, weeds: WeedReport, now: number): BranchLife | null {
+function branchLifeOf(data: RepoData, cleanup: CleanupReport, now: number): BranchLife | null {
   const others = data.branches.filter((b) => !b.isDefault && b.name !== data.defaultBranch)
   if (others.length === 0) return null
-  const weedNames = new Set(weeds.weeds.map((w) => w.name))
+  const leftoverNames = new Set(cleanup.leftovers.map((w) => w.name))
   const lives: number[] = []
   let stale = 0
   for (const b of others) {
-    if (weedNames.has(b.name)) continue
-    if (weeds.thorns.has(b.name) || isStale(b.tipDate, HEALTH_STALE_DAYS, now)) stale += 1
+    if (leftoverNames.has(b.name)) continue
+    if (cleanup.spikes.has(b.name) || isStale(b.tipDate, HEALTH_STALE_DAYS, now)) stale += 1
     if (b.aheadBy <= 0 || b.mergeBaseSha === null) continue
     const forked = timeOf(data.commits[b.mergeBaseSha]?.date)
     const tip = timeOf(b.tipDate)
@@ -107,7 +107,7 @@ function branchLifeOf(data: RepoData, weeds: WeedReport, now: number): BranchLif
   return {
     count: others.length,
     medianDays: median(lives),
-    merged: weeds.weeds.filter((w) => w.kind === 'merged').length,
+    merged: cleanup.leftovers.filter((w) => w.kind === 'merged').length,
     stale,
   }
 }
@@ -139,11 +139,11 @@ function pullHygieneOf(pulls: PullIndex | null): PullHygiene | null {
 export function repoHealth(
   data: RepoData,
   contributors: ContributorIndex,
-  weeds: WeedReport,
+  cleanup: CleanupReport,
   pulls: PullIndex | null,
   now: number = Date.now(),
 ): RepoHealth {
-  return { busFactor: busFactorOf(contributors), branches: branchLifeOf(data, weeds, now), pulls: pullHygieneOf(pulls) }
+  return { busFactor: busFactorOf(contributors), branches: branchLifeOf(data, cleanup, now), pulls: pullHygieneOf(pulls) }
 }
 
 const pct = (share: number): string => `${Math.round(share * 100)}%`

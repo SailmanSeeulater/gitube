@@ -31,8 +31,8 @@ export const FAR_ALPHA = 0.45
 const DORMANT_ALPHA = 0.5
 /** An archived repo, at this share... */
 const DRY = 0.7
-/** ...a seedling at this... */
-const SEEDLING = 0.55
+/** ...an uncounted repo at this... */
+const UNCOUNTED = 0.55
 /** ...and every thread but the selected one while a selection is held. */
 const UNSELECTED = HELIX_DIM_ALPHA
 /** A repo they only contributed to is dashed: this on, this off. */
@@ -151,7 +151,7 @@ export function paintHelix(ctx: CanvasRenderingContext2D, input: HelixPaintInput
     const right = camera.tx + drawnTo(thread, layout.startDay, at) * camera.k + g.skew
     return right >= -HALO_PX && left <= W + HALO_PX
   }
-  const alphaOf = (i: number) => (sel >= 0 && sel !== i ? UNSELECTED : 1) * (threads[i].dry ? DRY : 1) * (threads[i].seedling ? SEEDLING : 1)
+  const alphaOf = (i: number) => (sel >= 0 && sel !== i ? UNSELECTED : 1) * (threads[i].dry ? DRY : 1) * (threads[i].uncounted ? UNCOUNTED : 1)
 
   // the spans of every drawn thread, batched by style
   const batches = new Map<string, Batch>()

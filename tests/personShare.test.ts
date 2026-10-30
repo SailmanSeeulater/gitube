@@ -2,11 +2,11 @@
  * Person mode's share link and the Phase 5 controls (PROFILE_SPEC.md Phase 5): a copied
  * ?user=…&view=lines link reads back as the same person and view, PersonApp leaves it as it is,
  * and opening it starts clean (nothing hidden, selected or revealed, so the names a copier had
- * revealed stay hidden); the panel's copy-link and poster buttons, the strip's "watch it grow", the
+ * revealed stay hidden); the panel's copy-link and poster buttons, the strip's "replay", the
  * top bar's save menu (the poster as its image, never JSON), and PersonApp's wiring of them: the
  * time-lapse through openLifeTimelapse (the privacy toggle locked while it records), the poster
  * through saveLifePoster with the screen's namer, the reload card for a part that could not be
- * loaded, share-copy from the repo garden's CopyLinkButton, and no JSON save, no fetch() and no
+ * loaded, share-copy from repo mode's CopyLinkButton, and no JSON save, no fetch() and no
  * audio.
  */
 import { subjectOf } from '../src/subject'
@@ -31,15 +31,15 @@ import { usePersonStore } from '../src/profile/usePersonStore'
 import { readSubject, type PersonView } from '../src/share/shareUrl'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
-import { FAKE_TOKEN, KEPANO_NOW, grow, kepanoProfile, setGarden, setPerson, withPrivate } from './helpers/personScene'
+import { FAKE_TOKEN, KEPANO_NOW, load, kepanoProfile, setApp, setPerson, withPrivate } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
 import { LINES_VIEW } from '../src/profile/lifeViews'
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-const ORIGIN = 'https://garden.example'
+const ORIGIN = 'https://gitube.example'
 
-/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
+/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, an uncounted fork and an archived one, made private. */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 
 let kepano: ProfileData
@@ -53,7 +53,7 @@ beforeAll(async () => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos', hover: null, selected: null, hidden: new Set(), search: '', revealFor: null })
-  setGarden({ panelOpen: true, rate: null, token: '', themeId: theme.id })
+  setApp({ panelOpen: true, rate: null, token: '', themeId: theme.id })
 })
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -75,9 +75,9 @@ function propsFor(href: string) {
   return { login: read.login, request: read.request, view: read.view, focusInput: read.fromInput, onRepo: noop, onUser: noop }
 }
 
-/** PersonApp's markup for a link, the profile already in the query cache as a grown one would be. */
+/** PersonApp's markup for a link, the profile already in the query cache as a loaded one would be. */
 function openLink(href: string, profile: ProfileData, token = ''): string {
-  setGarden({ token })
+  setApp({ token })
   const props = propsFor(href)
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(props.login, token), { profile, cachedAt: null })
@@ -139,7 +139,7 @@ describe('a copied link', () => {
     expect(html).toContain('aria-label="Collapse panel"')
     expect(html).toContain('aria-label="Copy a link to this view"')
     expect(html).toContain('aria-label="Save a poster"')
-    expect(html).toContain('watch it grow')
+    expect(html).toContain('replay')
     // the whole life on show: the time-lapse waits for its button
     expect(html).not.toContain('aria-label="Time-lapse"')
     // and no JSON save in person mode: the top bar's save menu offers the poster only
@@ -170,12 +170,12 @@ describe('a copied link', () => {
 
 describe('the controls', () => {
   it('puts the poster and copy-link buttons in the panel header, the poster only when it can be saved', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, colourOf: g.colourOf, name: g.name, privateCount: 0, revealed: false, onReveal: noop, theme }
     const withPoster = renderToStaticMarkup(h(PersonPanel, { ...base, onPoster: noop }))
     expect(withPoster).toContain('aria-label="Save a poster"')
     expect(withPoster).toContain('aria-label="Copy a link to this view"')
-    // login, poster, link, collapse: in that order, as the repo garden's panel has its buttons
+    // login, poster, link, collapse: in that order, as repo mode's panel has its buttons
     const order = ['href="https://github.com/kepano"', 'aria-label="Save a poster"', 'aria-label="Copy a link to this view"', 'aria-label="Collapse panel"'].map((s) =>
       withPoster.indexOf(s),
     )
@@ -194,12 +194,12 @@ describe('the controls', () => {
   })
 
   it('offers the time-lapse from the status strip only when given one', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, cachedAt: null, hasToken: true, onRefresh: noop, onAddToken: noop }
     const offered = renderToStaticMarkup(h(PersonStatus, { ...base, onTimelapse: noop }))
-    expect(offered).toContain('watch it grow')
+    expect(offered).toContain('replay')
     expect(offered).toContain('record it as a video')
-    expect(renderToStaticMarkup(h(PersonStatus, base))).not.toContain('watch it grow')
+    expect(renderToStaticMarkup(h(PersonStatus, base))).not.toContain('replay')
   })
 
   it("offers the top bar's image save apart from its data save, the data following the image when not given (repo mode)", () => {
@@ -207,24 +207,24 @@ describe('the controls', () => {
       renderToStaticMarkup(h(ExportMenu, { id: 'menu', ...flags, onExportImage: noop, onExportData: noop, onOpenFile: noop, onClose: noop, buttonRef: { current: null } }))
     /** each item's label, and whether it is offered */
     const items = (html: string) =>
-      [...html.matchAll(/<button([^>]*)>(?:(?!<\/button>).)*?<span class="block text-garden-text">([^<]*)<\/span>/g)].map((m) => [m[2], !/\sdisabled=""/.test(m[1])])
+      [...html.matchAll(/<button([^>]*)>(?:(?!<\/button>).)*?<span class="block text-ui-text">([^<]*)<\/span>/g)].map((m) => [m[2], !/\sdisabled=""/.test(m[1])])
     const all = (image: boolean, data: boolean) => [
       ['Save image (PNG)', image],
       ['Save data (JSON)', data],
       ['Open a saved file…', true],
     ]
-    // the repo garden, as it always was
+    // repo mode, as it always was
     expect(items(menu({ canExport: true }))).toEqual(all(true, true))
     expect(items(menu({ canExport: false }))).toEqual(all(false, false))
     // person mode: the poster, never JSON
     expect(items(menu({ canExport: true, canExportData: false }))).toEqual(all(true, false))
     expect(items(menu({ canExport: false, canExportData: false }))).toEqual(all(false, false))
-    // the top bar passes it on as it is, and the repo garden leaves it out
+    // the top bar passes it on as it is, and repo mode leaves it out
     expect(topBarSource).toContain('canExportData?: boolean')
     expect(topBarSource).toContain('canExportData={canExportData}')
   })
 
-  it('copies the address bar and sends share-copy with no data, through the repo garden button', () => {
+  it("copies the address bar and sends share-copy with no data, through repo mode's button", () => {
     expect(personPanelSource).toMatch(/^import \{ CopyLinkButton \} from '\.\.\/components\/Panel'$/m)
     const button = panelSource.slice(panelSource.indexOf('export function CopyLinkButton()'))
     expect(button.length).toBeLessThan(panelSource.length)
@@ -241,7 +241,7 @@ describe("PersonApp's Phase 5 wiring", () => {
   it('opens and closes the time-lapse through lifeTimelapse, which sends timelapse-play', () => {
     expect(code).toContain('openLifeTimelapse(lapseProgress,')
     expect(code).toContain('closeLifeTimelapse(lapseProgress,')
-    // the canvas grows with the controls' progress, captioned with the login only, and repaints
+    // the canvas fills in with the controls' progress, captioned with the login only, and repaints
     // only while the controls say it is live (playing, recording or scrubbing)
     expect(code).toContain('{ progress: lapseProgress, title: profile.login, live: lapseLive }')
     expect(code).toContain('onLiveChange={setLapseLive}')
@@ -286,7 +286,7 @@ describe("PersonApp's Phase 5 wiring", () => {
   it('sends no event of its own, and takes no exporter, recorder, fetch, JSON save or audio', () => {
     expect(code).not.toMatch(/\btrack\(/)
     expect(code).not.toMatch(/\bfetch\(/)
-    expect(code).not.toContain('serializeGarden')
+    expect(code).not.toContain('serializeRepoFile')
     expect(code).not.toMatch(/from '\.\/export\//)
     expect(code).not.toMatch(/from '\.\/audio\//)
     expect(code).not.toMatch(/videoChunk|exportersChunk/)
@@ -323,7 +323,7 @@ describe('a failed poster save', () => {
   })
 
   it("reads saveLifePoster's own rejections: its chunk, or its encoder", async () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const input = { profile: g.profile, timeline: g.timeline, layout: g.layout, view: LINES_VIEW, theme, colourOf: g.colourOf, name: g.name, hidden: new Set<string>() }
     const makeCanvas = (width: number, height: number) => {
       const rec = recordingCtx(width, height)
@@ -339,7 +339,7 @@ describe('a failed poster save', () => {
     const kit: PosterKit = {
       canvasToPng: () => Promise.reject(new Error('could not encode the image')),
       downloadBlob: noop,
-      gardenFileName: () => 'kepano-life-poster.png',
+      exportFileName: () => 'kepano-life-poster.png',
     }
     expect(posterFailure(await rejection(saveLifePoster(input, { ...deps, loadKit: async () => kit })))).toEqual({
       code: 'export_failed',

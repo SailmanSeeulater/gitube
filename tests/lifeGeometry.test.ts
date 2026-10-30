@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { getTheme } from '../src/theme/themes'
 import { GROUND_MARKS_PX, STRIP_CLEARANCE, VIEW_GROUND, VIEW_SIDE, VIEW_TOP, horizonY } from '../src/profile/lifeGeometry'
 import type { LifeViewport } from '../src/profile/lifeTypes'
-import { KEPANO_NOW, grow, kepanoProfile, paint } from './helpers/personScene'
+import { KEPANO_NOW, load, kepanoProfile, paint } from './helpers/personScene'
 import type { CtxEntry } from './helpers/recordingCtx'
 
 /** How far down a call draws: the lowest y it reaches (a curve within its control points, text a font size under its y). */
@@ -49,7 +49,7 @@ describe("person mode's frame", () => {
       // the strip takes the canvas's foot: the horizon and the ground's marks end above it
       expect(horizon + GROUND_MARKS_PX).toBeLessThanOrEqual(height - STRIP_CLEARANCE)
 
-      const g = grow(profile, KEPANO_NOW, dark, null, view)
+      const g = load(profile, KEPANO_NOW, dark, null, view)
       const milestone = g.layout.milestones[0]
       expect(milestone).toBeDefined()
       const key = g.layout.lines[0].key

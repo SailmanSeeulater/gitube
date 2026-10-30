@@ -35,7 +35,7 @@ describe('music box score', () => {
     expect(tips.map((n) => n.pitches[0]).sort()).toEqual([BASS + 12, pitchOf(1, false) + 12].sort())
   })
 
-  it('in skeleton view, still plays every commit a stem hides, in its branch pitch', () => {
+  it('in skeleton view, still plays every commit a link hides, in its branch pitch', () => {
     const data = merged()
     const skeleton = buildGraph(data, 'skeleton')
     const score = buildScore(skeleton, buildTimeline(skeleton, buildFullGraph(data)), ['main', 'feature'], 'main')

@@ -1,6 +1,6 @@
 /**
  * Person mode's time-lapse (PROFILE_SPEC.md section 6, "Time-lapse and export"): the view on
- * show (any of them) grown from the timeline's start (the account's creation, or
+ * show (any of them) drawn from the timeline's start (the account's creation, or
  * earlier backdated work) to today on the life clock (timeline.ts), with play, scrub and a silent
  * video recording of the canvas.
  *
@@ -21,7 +21,7 @@ import type { LifeInk, LifeViewport } from './lifeTypes'
 export const LAPSE_LENGTHS = [10, 20, 40, 60] as const
 export type LapseLength = (typeof LAPSE_LENGTHS)[number]
 export const LAPSE_DEFAULT_LENGTH: LapseLength = 20
-/** A recording lingers this long on the grown view before it saves. */
+/** A recording lingers this long on the finished view before it saves. */
 export const LAPSE_HOLD_MS = 1500
 /** Frames a second the recorder captures. */
 export const LAPSE_FPS = 30
@@ -31,7 +31,7 @@ export const LAPSE_FPS = 30
  */
 export const LAPSE_MIN_TAKE_MS = 400
 
-/** The caption's type: the repo garden's LABEL_FONT, copied so person mode takes no new name from the first download. */
+/** The caption's type: repo mode's LABEL_FONT, copied so person mode takes no new name from the first download. */
 const HUD_FONT = 'Inter, ui-sans-serif, system-ui, sans-serif'
 
 /** A play under way: where it started from, when, how long a full play takes, and whether it records. */
@@ -60,7 +60,7 @@ function clamp01(p: number): number {
 /**
  * One frame of a play at performance time now, paced by the wall clock, so dropped frames never
  * slow it down: progress runs from `from` to 1 over lengthS seconds for a full play. At 1 a play
- * stops; a recording goes on for LAPSE_HOLD_MS on the grown view, then saves.
+ * stops; a recording goes on for LAPSE_HOLD_MS on the finished view, then saves.
  */
 export function lapseTick(play: LapsePlay, now: number): LapseTick {
   const progress = Math.min(1, clamp01(play.from) + Math.max(0, now - play.startedAt) / (play.lengthS * 1000))
@@ -75,8 +75,8 @@ export interface LapseCaption {
   /** the GitHub day the clock shows ('YYYY-MM-DD') */
   day: string
   year: string
-  /** repos drawn: sown by the clock's day (startDay <= at) and not hidden, the painter's own rule in every view */
-  sown: number
+  /** repos drawn: reached by the clock's day (startDay <= at) and not hidden, the painter's own rule in every view */
+  reached: number
 }
 
 /** The GitHub day the clock shows at a progress: timeline.start at 0, timeline.today at 1. */
@@ -87,7 +87,7 @@ export function lapseDay(timeline: Pick<LifeTimeline, 'clock' | 'startDay' | 'to
 
 /**
  * The caption at a progress, counting the repos drawn as every view decides them: a view's items
- * (its lines or stars, say) are sown on their first day, so the count is the same whichever is on show.
+ * (its lines or stars, say) are reached on their first day, so the count is the same whichever is on show.
  */
 export function lapseCaption(
   timeline: LifeTimeline,
@@ -98,9 +98,9 @@ export function lapseCaption(
   const p = clamp01(progress)
   const at = dayAt(timeline.clock, p)
   const day = lapseDay(timeline, p)
-  let sown = 0
-  for (const item of items) if (!(item.startDay > at) && !hidden.has(item.key)) sown++
-  return { day, year: day.slice(0, 4), sown }
+  let reached = 0
+  for (const item of items) if (!(item.startDay > at) && !hidden.has(item.key)) reached++
+  return { day, year: day.slice(0, 4), reached }
 }
 
 /** 'Apr 2019': a day key read in UTC, so it is GitHub's day whatever the viewer's time zone. */
@@ -110,7 +110,7 @@ export function lapseDate(day: string, locale?: string): string {
 }
 
 /**
- * The caption, drawn on the canvas so recordings carry it, as the repo garden's time-lapse does:
+ * The caption, drawn on the canvas so recordings carry it, as repo mode's time-lapse does:
  * the year the clock has reached big at the top right with the repos so far under it, the person
  * at the bottom right, and the progress along the bottom edge. In the view's CSS px, under the
  * device transform the frame came in with; each text stroked in the halo colour first.
@@ -135,9 +135,9 @@ export function paintLapseHud(ctx: CanvasRenderingContext2D, view: LifeViewport,
   text(caption.year, W - 18, 38)
   ctx.font = `12px ${HUD_FONT}`
   ctx.fillStyle = ink.muted
-  text(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`, W - 18, 58)
+  text(`${caption.reached} repo${caption.reached === 1 ? '' : 's'}`, W - 18, 58)
   ctx.font = `11px ${HUD_FONT}`
-  text(`${title} · repo-garden`, W - 14, H - 14)
+  text(`${title} · gitube`, W - 14, H - 14)
   ctx.globalAlpha = 0.85
   ctx.fillStyle = ink.accent
   ctx.fillRect(0, H - 3, W * p, 3)
@@ -160,7 +160,7 @@ export function closeLifeTimelapse(progress: { current: number }, close: () => v
 /** The exporters (export/exporters) a recording needs: the download and the file name. */
 export interface LapseKit {
   downloadBlob(blob: Blob, fileName: string): void
-  gardenFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
+  exportFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
 }
 
 /**
@@ -169,7 +169,7 @@ export interface LapseKit {
  * Nothing is counted when the download fails; the error is passed on.
  */
 export function downloadLifeRecording(video: Blob, type: VideoType, login: string, kit: LapseKit, now: Date = new Date()): void {
-  kit.downloadBlob(video, kit.gardenFileName({ owner: login, repo: 'life' }, type.ext, now, 'timelapse'))
+  kit.downloadBlob(video, kit.exportFileName({ owner: login, repo: 'life' }, type.ext, now, 'timelapse'))
   track('export', { format: 'webm' })
 }
 
@@ -290,6 +290,6 @@ export class LapseRecorder {
  * carries; anything else in its own words.
  */
 export function lapseSaveError(err: unknown): { chunkFailed: boolean; message: string } {
-  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of repo-garden that saves videos" }
+  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of gitube that saves videos" }
   return { chunkFailed: false, message: err instanceof Error ? err.message : String(err) }
 }

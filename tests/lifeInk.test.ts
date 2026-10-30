@@ -115,9 +115,9 @@ describe('life ink: languages', () => {
 
   it('falls back to the language of the most repos without eras, and to null without languages', () => {
     // a token profile GitHub counted no commits to: no language eras
-    const seedlings = timelineOf([repo('a', 'Rust'), repo('b', 'Go'), repo('c', 'Go'), repo('d', null)])
-    expect(seedlings.languageEras).toEqual([])
-    expect(dominantLanguage(seedlings)).toBe('Go')
+    const uncounted = timelineOf([repo('a', 'Rust'), repo('b', 'Go'), repo('c', 'Go'), repo('d', null)])
+    expect(uncounted.languageEras).toEqual([])
+    expect(dominantLanguage(uncounted)).toBe('Go')
     const bare = timelineOf([repo('a', null)])
     expect(dominantLanguage(bare)).toBeNull()
     expect(dominantLanguage(timelineOf([]))).toBeNull()

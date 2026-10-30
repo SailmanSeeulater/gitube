@@ -1,8 +1,8 @@
 /**
  * Person mode end to end, for tests: profiles replayed from the recordings through the real
- * fetchers, a life grown from one the way PersonApp grows it (timeline, colours, namer, fitted
+ * fetchers, a life built from one the way PersonApp builds it (timeline, colours, namer, fitted
  * camera, and life lines, the default view, laid out) and painted on a recording context by the
- * view's own painter (makeViewPaint) with its labels, any other view of it the same way (growView,
+ * view's own painter (makeViewPaint) with its labels, any other view of it the same way (loadView,
  * paintView: the view's layout of the same timeline), and the stores set so react-dom/server
  * renders what a test asked for.
  */
@@ -23,7 +23,7 @@ import { isRevealed, privateRepoKeys, repoKey, repoNamer } from '../../src/profi
 import { buildLifeTimeline, type LifeTimeline } from '../../src/profile/timeline'
 import type { LifeLabelSet } from '../../src/profile/useLifeLabels'
 import { usePersonStore, type PersonState } from '../../src/profile/usePersonStore'
-import { useGardenStore, type GardenState } from '../../src/store/useGardenStore'
+import { useAppStore, type AppState } from '../../src/store/useAppStore'
 import type { Theme } from '../../src/theme/themes'
 import type { ProfileData } from '../../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './profileReplay'
@@ -65,7 +65,7 @@ export function withPrivate(profile: ProfileData, names: readonly string[], stal
 /** The plot PersonApp's canvas gives a view on a laptop screen, in the canvas's frame. */
 export const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
 
-export interface Grown {
+export interface Loaded {
   profile: ProfileData
   timeline: LifeTimeline
   /** life lines' layout, the default view's */
@@ -81,8 +81,8 @@ export interface Grown {
   geoms: LinesGeom
 }
 
-/** A life as PersonApp grows it from profile, laid out as life lines, with names revealed only for revealFor's login. */
-export function grow(profile: ProfileData, now: number, theme: Theme, revealFor: string | null = null, view: LifeViewport = VIEW): Grown {
+/** A life as PersonApp loads it from profile, laid out as life lines, with names revealed only for revealFor's login. */
+export function load(profile: ProfileData, now: number, theme: Theme, revealFor: string | null = null, view: LifeViewport = VIEW): Loaded {
   const timeline = buildLifeTimeline(profile, now)
   const layout = layoutLifeLines(timeline, profile.source)
   const palette = languagePalette(timeline, theme)
@@ -125,7 +125,7 @@ export function quietCtx(width: number, height: number): CanvasRenderingContext2
 
 /** Life lines' painter for g, as the canvas makes it, with the store's state held as given and every measured text kept. */
 export function painterFor(
-  g: Grown,
+  g: Loaded,
   state: Partial<LifePaintState> = {},
   over: Partial<ViewPaintOptions<LifeLinesLayout>> = {},
 ): { painter: LifePainter; measured: string[] } {
@@ -154,7 +154,7 @@ export function painterFor(
  * they have settled (the frames before go to a quiet context), with the hovered and selected repos on plates.
  * progress is the time-lapse's (0..1), off when left out.
  */
-export function paint(g: Grown, over: Partial<LifePaintState> & { progress?: number } = {}): Painted {
+export function paint(g: Loaded, over: Partial<LifePaintState> & { progress?: number } = {}): Painted {
   const { progress, ...state } = over
   const timelapse = progress === undefined ? null : { progress: { current: progress } }
   const { painter, measured } = painterFor(g, state, { timelapse })
@@ -168,36 +168,36 @@ export function paint(g: Grown, over: Partial<LifePaintState> & { progress?: num
   return { rec, measured, labels: painter.labels, painter }
 }
 
-/** A view of a grown life, as PersonApp lays it out: the view and its layout of the same timeline. */
-export interface GrownView {
+/** A view of a loaded life, as PersonApp lays it out: the view and its layout of the same timeline. */
+export interface LoadedView {
   def: LifeViewDef
   layout: LifeViewModel
 }
 
 /** The view named, laid out from g's timeline as PersonApp lays it out (LIFE_VIEWS[view].layout). */
-export function growView(g: Grown, view: PersonView): GrownView {
+export function loadView(g: Loaded, view: PersonView): LoadedView {
   const def = LIFE_VIEWS[view]
   return { def, layout: def.layout(g.timeline, g.profile.source) }
 }
 
 /** A view's painter for g, as LifeView makes it, with the store's state held as given and every measured text kept. */
 export function viewPainterFor(
-  g: Grown,
+  g: Loaded,
   view: PersonView,
   state: Partial<LifePaintState> = {},
   over: Partial<ViewPaintOptions<LifeViewModel>> = {},
-): { painter: LifePainter; measured: string[]; grown: GrownView } {
-  const grown = growView(g, view)
+): { painter: LifePainter; measured: string[]; loaded: LoadedView } {
+  const loaded = loadView(g, view)
   const measured: string[] = []
   const measure = (text: string) => {
     measured.push(text)
     return text.length * 6.5
   }
   const now: LifePaintState = { hidden: new Set(), hover: null, selected: null, ...state }
-  const painter = makeViewPaint(grown.def.scene, {
-    layout: grown.layout,
+  const painter = makeViewPaint(loaded.def.scene, {
+    layout: loaded.layout,
     timeline: g.timeline,
-    ink: viewInk(g.ink, grown.def),
+    ink: viewInk(g.ink, loaded.def),
     colourOf: g.colourOf,
     name: g.name,
     login: g.profile.login,
@@ -205,7 +205,7 @@ export function viewPainterFor(
     state: () => now,
     ...over,
   })
-  return { painter, measured, grown }
+  return { painter, measured, loaded }
 }
 
 /**
@@ -213,10 +213,10 @@ export function viewPainterFor(
  * view, then its labels once they have settled, with the hovered and selected repos on plates.
  * progress is the time-lapse's (0..1), off when left out.
  */
-export function paintView(g: Grown, view: PersonView, over: Partial<LifePaintState> & { progress?: number } = {}): Painted & { grown: GrownView } {
+export function paintView(g: Loaded, view: PersonView, over: Partial<LifePaintState> & { progress?: number } = {}): Painted & { loaded: LoadedView } {
   const { progress, ...state } = over
   const timelapse = progress === undefined ? null : { progress: { current: progress } }
-  const { painter, measured, grown } = viewPainterFor(g, view, state, { timelapse })
+  const { painter, measured, loaded } = viewPainterFor(g, view, state, { timelapse })
   const quiet = quietCtx(g.view.width * 2, g.view.height * 2)
   for (let i = 0; i < 400; i++) {
     painter.paint(quiet, g.view, g.camera, 16)
@@ -224,7 +224,7 @@ export function paintView(g: Grown, view: PersonView, over: Partial<LifePaintSta
   }
   const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
   painter.paint(rec.ctx, g.view, g.camera, 16)
-  return { rec, measured, labels: painter.labels, painter, grown }
+  return { rec, measured, labels: painter.labels, painter, loaded }
 }
 
 /**
@@ -236,9 +236,9 @@ export function setPerson(partial: Partial<PersonState>): void {
   Object.assign(usePersonStore.getInitialState(), usePersonStore.getState())
 }
 
-export function setGarden(partial: Partial<GardenState>): void {
-  useGardenStore.setState(partial)
-  Object.assign(useGardenStore.getInitialState(), partial)
+export function setApp(partial: Partial<AppState>): void {
+  useAppStore.setState(partial)
+  Object.assign(useAppStore.getInitialState(), partial)
 }
 
 /** The markup's text, tags and attributes taken out, entities read back. */

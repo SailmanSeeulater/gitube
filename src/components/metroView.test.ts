@@ -5,7 +5,7 @@ import { fixtures } from '../../tests/fixtures/repos'
 import { loadReplay } from '../../tests/fixtures/replay'
 import { THEMES } from '../theme/themes'
 import type { RepoData, ViewMode } from '../types'
-import { FIT_MAX_ZOOM, FIT_PAD, buildLabelSpecs, rankLabels } from './gardenUtils'
+import { FIT_MAX_ZOOM, FIT_PAD, buildLabelSpecs, rankLabels } from './graphUtils'
 import { LabelPlacer } from './labelPlacement'
 import {
   METRO_BADGE_MAX_PX,
@@ -248,7 +248,7 @@ describe('metroFitTransform', () => {
   })
 })
 
-describe('the default metro camera (Garden: FIT_PAD, METRO_MIN_ZOOM)', () => {
+describe('the default metro camera (RepoGraph: FIT_PAD, METRO_MIN_ZOOM)', () => {
   // 1366x768 window with the side panel open
   const canvas = { width: 1042, height: 768 }
   const expectReadable = (bbox: { x: [number, number]; y: [number, number] }) => {
@@ -295,7 +295,7 @@ function clippedLength(ax: number, ay: number, bx: number, by: number, x0: numbe
 }
 
 /**
- * Garden's metro label pipeline without the canvas: the default camera at a 1366x768 window with
+ * RepoGraph's metro label pipeline without the canvas: the default camera at a 1366x768 window with
  * the panel open, nodes projected as useLabelPlacer does, 400 still frames of the real placer.
  */
 function settleMetroLabels(data: RepoData, mode: ViewMode) {
@@ -355,7 +355,7 @@ function settleMetroLabels(data: RepoData, mode: ViewMode) {
     shown++
     if (pinned.has(i)) continue
     const j = specs[i].node
-    // the text's ink, not the padded box, grown by half the line width
+    // the text's ink, not the padded box, widened by half the line width
     const x0 = placer.x0[i] + 2 - halfPx
     const y0 = placer.y0[i] + 3 - halfPx
     const x1 = placer.x0[i] + placer.w[i] - 2 + halfPx
@@ -528,7 +528,7 @@ describe('metro run markers', () => {
       ]) {
         for (const k of [0.2, METRO_MIN_ZOOM, 1, FIT_MAX_ZOOM, 4, 8]) {
           const px = 1 / k
-          const width = Math.max(METRO_LINE_WIDTH, METRO_MIN_LINE_PX * px) // a full route, as Garden's paintMetro draws it
+          const width = Math.max(METRO_LINE_WIDTH, METRO_MIN_LINE_PX * px) // a full route, as RepoGraph's paintMetro draws it
           strokes.length = 0
           strokeRunBars(ctx, b, px, width, theme)
           const label = `${theme.id} k=${k}`

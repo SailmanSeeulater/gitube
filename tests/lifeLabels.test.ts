@@ -6,7 +6,7 @@
  * they hit, and a profile without repos.
  */
 import { describe, expect, it } from 'vitest'
-import { LABEL_FONT } from '../src/components/gardenUtils'
+import { LABEL_FONT } from '../src/components/graphUtils'
 import { getTheme } from '../src/theme/themes'
 import { buildLifeTimeline } from '../src/profile/timeline'
 import { layoutLifeLines } from '../src/profile/lifeLinesLayout'
@@ -98,7 +98,7 @@ const keys = privateRepoKeys(PROFILE)
 const ink = lifeInk(getTheme('paper'))
 const SECRET = layout.byKey.get('me/secret-plans')!
 
-/** A frame of the labels: each line's start as its anchor, none for a hidden line or one not sown by at. */
+/** A frame of the labels: each line's start as its anchor, none for a hidden line or one not reached by at. */
 interface LinesFrame {
   geoms: LinesGeom
   view: LifeViewport
@@ -218,7 +218,7 @@ describe('LifeLabelSet', () => {
     expect(rec.calls('fill').some((c) => c.style.fillStyle === ink.labelPlateFill)).toBe(true)
   })
 
-  it('drops the label of a hidden line, and of one the time-lapse has not sown', () => {
+  it('drops the label of a hidden line, and of one the time-lapse has not reached', () => {
     const names = labelNames(layout.lines, timeline, repoNamer(keys, true), 'Me')
     const alpha = layout.byKey.get('me/alpha')!
     const labels = new LifeLabelSet(itemsOf(layout), names)

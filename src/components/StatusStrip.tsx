@@ -2,8 +2,8 @@ import type { Graph, RepoData } from '../types'
 import type { HealthItem } from '../graph/health'
 import { preload } from '../lazy/chunk'
 import { timelapseChunk } from '../lazy/parts'
-import { useGardenStore } from '../store/useGardenStore'
-import { formatClock, formatDateTime, relativeTime, stageLabel } from './gardenUtils'
+import { useAppStore } from '../store/useAppStore'
+import { formatClock, formatDateTime, relativeTime, stageLabel } from './graphUtils'
 import { PlayIcon } from './icons'
 
 export interface StatusStripProps {
@@ -26,7 +26,7 @@ export interface StatusStripProps {
 const preloadTimelapse = () => preload(timelapseChunk)
 
 const shell =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 text-[12px] shadow-soft backdrop-blur'
 
 export default function StatusStrip({
   data,
@@ -38,10 +38,10 @@ export default function StatusStrip({
   onTimelapse,
   health = null,
 }: StatusStripProps) {
-  const progress = useGardenStore((s) => s.progress)
-  const hiddenLabels = useGardenStore((s) => s.hiddenLabels)
+  const progress = useAppStore((s) => s.progress)
+  const hiddenLabels = useAppStore((s) => s.hiddenLabels)
   // the core budget as the latest response put it (the graph's, or the pull requests' after it)
-  const rate = useGardenStore((s) => s.rate)
+  const rate = useAppStore((s) => s.rate)
 
   if (isFetching) {
     const stage = progress ? stageLabel(progress.stage) : 'starting'
@@ -51,21 +51,21 @@ export default function StatusStrip({
     return (
       <div className={`${shell} w-[320px] max-w-[calc(100vw-2rem)] px-3 py-2`} role="status" aria-live="polite">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-garden-text">{stage}</span>
-          <span className="shrink-0 font-mono tabular-nums text-garden-muted">
+          <span className="truncate text-ui-text">{stage}</span>
+          <span className="shrink-0 font-mono tabular-nums text-ui-muted">
             {hasTotal ? `${progress.done}/${progress.total}` : ''}
           </span>
         </div>
-        <div className="mt-1.5 h-0.5 overflow-hidden rounded bg-garden-hover">
+        <div className="mt-1.5 h-0.5 overflow-hidden rounded bg-ui-hover">
           {hasTotal ? (
-            <div className="h-full bg-garden-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
+            <div className="h-full bg-ui-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
           ) : (
-            <div className="h-full w-1/3 animate-pulse bg-garden-accent/70" />
+            <div className="h-full w-1/3 animate-pulse bg-ui-accent/70" />
           )}
         </div>
-        {progress?.message && <div className="mt-1 truncate text-garden-muted">{progress.message}</div>}
+        {progress?.message && <div className="mt-1 truncate text-ui-muted">{progress.message}</div>}
         {progress && (
-          <div className="mt-1 flex flex-wrap gap-x-3 text-garden-muted">
+          <div className="mt-1 flex flex-wrap gap-x-3 text-ui-muted">
             <span>
               {progress.requestsUsed} request{progress.requestsUsed === 1 ? '' : 's'}
             </span>
@@ -94,39 +94,39 @@ export default function StatusStrip({
           onClick={onTimelapse}
           onPointerEnter={preloadTimelapse}
           onFocus={preloadTimelapse}
-          title="Replay the garden growing from its first loaded commit, and record it as a video"
-          className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
+          title="Replay the map being built from its first loaded commit, and record it as a video"
+          className="-ml-1.5 flex items-center gap-1 rounded-md bg-ui-accent/15 px-1.5 py-px text-[11px] font-medium text-ui-accent hover:bg-ui-accent/25"
         >
           <PlayIcon size={11} />
-          watch it grow
+          replay
         </button>
       )}
-      <span className="text-garden-text-dim">
+      <span className="text-ui-text-dim">
         {data.branches.length} branch{data.branches.length === 1 ? '' : 'es'}
       </span>
-      <span className="text-garden-border">·</span>
-      <span className="text-garden-text-dim">
+      <span className="text-ui-border">·</span>
+      <span className="text-ui-text-dim">
         {commitCount} commit{commitCount === 1 ? '' : 's'}
       </span>
       {graph && (
         <>
-          <span className="text-garden-border">·</span>
-          <span className="text-garden-muted">
+          <span className="text-ui-border">·</span>
+          <span className="text-ui-muted">
             {graph.nodes.length} node{graph.nodes.length === 1 ? '' : 's'} shown
           </span>
         </>
       )}
       {graph && hiddenLabels > 0 && (
         <>
-          <span className="text-garden-border">·</span>
-          <span className="text-garden-muted" title="Branch names that do not fit at this zoom. Hover a tip, zoom in or search to read them.">
+          <span className="text-ui-border">·</span>
+          <span className="text-ui-muted" title="Branch names that do not fit at this zoom. Hover a tip, zoom in or search to read them.">
             {hiddenLabels} name{hiddenLabels === 1 ? '' : 's'} hidden · hover, zoom or search
           </span>
         </>
       )}
       {data.truncated && (
         <span
-          className="rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1.5 py-px text-[11px] text-garden-warn"
+          className="rounded-md border border-ui-warn/40 bg-ui-warn/10 px-1.5 py-px text-[11px] text-ui-warn"
           title={`History was cut short by fetch caps at ${data.truncatedAt.length} commit${data.truncatedAt.length === 1 ? '' : 's'}; dashed roots mark where it stops.`}
         >
           history truncated
@@ -134,35 +134,35 @@ export default function StatusStrip({
       )}
       {fileSavedAt !== null && (
         <span
-          className="rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
-          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Grow to load it live from GitHub.`}
+          className="rounded-md border border-ui-border px-1.5 py-px text-[11px] text-ui-text-dim"
+          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Go to load it live from GitHub.`}
         >
           from file{fileSavedAt && relativeTime(fileSavedAt) ? ` · saved ${relativeTime(fileSavedAt)}` : ''}
         </span>
       )}
       {cachedAt !== null && fileSavedAt === null && (
         <span
-          className="flex items-center gap-1.5 rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
+          className="flex items-center gap-1.5 rounded-md border border-ui-border px-1.5 py-px text-[11px] text-ui-text-dim"
           title={`Shown from this browser's cache (fetched ${formatDateTime(cachedAt)}), so the graph used no GitHub requests; pull requests are checked live (1–3 requests, or GraphQL with a token).`}
         >
           cached {relativeTime(cachedAt)}
           {onRefresh && (
-            <button type="button" onClick={onRefresh} className="text-garden-accent hover:underline">
+            <button type="button" onClick={onRefresh} className="text-ui-accent hover:underline">
               refresh
             </button>
           )}
         </span>
       )}
       {remaining !== null && fileSavedAt === null && cachedAt === null && (
-        <span className="text-garden-muted" title="GitHub API requests remaining this hour">
+        <span className="text-ui-muted" title="GitHub API requests remaining this hour">
           {remaining} requests left
         </span>
       )}
       {health && health.length > 0 && (
-        <div className="flex w-full flex-wrap items-center gap-x-2 text-[11px] text-garden-muted">
+        <div className="flex w-full flex-wrap items-center gap-x-2 text-[11px] text-ui-muted">
           {health.map((item, i) => (
             <span key={item.text} className="flex items-center gap-x-2">
-              {i > 0 && <span className="text-garden-border">·</span>}
+              {i > 0 && <span className="text-ui-border">·</span>}
               <span title={item.title}>{item.text}</span>
             </span>
           ))}

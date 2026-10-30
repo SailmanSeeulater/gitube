@@ -139,7 +139,7 @@ describe('RectGrid', () => {
     expect(tags).toEqual([1, 2])
   })
 
-  it('reset clears everything and the buffers grow past their initial capacity', () => {
+  it('reset clears everything and the buffers load past their initial capacity', () => {
     const g = new RectGrid(48)
     g.reset(500, 500)
     const initial = g.capacity
@@ -1020,7 +1020,7 @@ describe('LabelPlacer forced and pinned labels', () => {
     expect(p.shown[0]).toBe(0)
     const nx = scene.sx[0]
     const ny = scene.sy[0]
-    // node hover as Garden's pointer area gives it: the tip's ring plus 0.75 px
+    // node hover as RepoGraph's pointer area gives it: the tip's ring plus 0.75 px
     const nodeHoverR = scene.sr[0] + 0.75
     let labelHover = -1
     let reached = false

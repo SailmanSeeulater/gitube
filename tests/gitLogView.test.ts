@@ -1,7 +1,7 @@
 /**
  * The git log view: its layout (lanes packed in lane order, the same for the profile in any order,
  * hashes from no name, commits per tier), its geometry and hit test (every branch hit at its label
- * anchor, hidden and unsown ones skipped), its painter on a recording context (only the console
+ * anchor, hidden and unreached ones skipped), its painter on a recording context (only the console
  * palette, no repo name, nothing past the time-lapse's day, hidden branches draw nothing), hundreds
  * of repos, and zero.
  */
@@ -102,14 +102,14 @@ const REPOS: ProfileRepo[] = [
   repo('Me/old-thing', { createdAt: iso('2019-06-01'), language: 'JavaScript', stars: 15, isArchived: true, activity: monthly('2019-06', '2019-12') }),
   repo('Me/forked-lib', { createdAt: iso('2021-01-10'), language: 'Go', isFork: true, activity: monthly('2021-01', '2021-03', 1) }),
   repo('someone/big-project', { createdAt: iso('2015-01-01'), firstActiveAt: iso('2022-05-01'), isOwn: false, language: null, activity: monthly('2022-05', '2023-02', 5) }),
-  repo('Me/empty-seedling', { createdAt: iso('2023-08-01'), lastActiveAt: iso('2024-02-01'), stars: 5 }),
+  repo('Me/empty-uncounted', { createdAt: iso('2023-08-01'), lastActiveAt: iso('2024-02-01'), stars: 5 }),
   repo('Me/daily-grind', {
     createdAt: iso('2023-01-01'),
     language: 'Python',
     activity: Array.from({ length: 120 }, (_, i) => ({ date: new Date(Date.UTC(2023, 0, 1 + i)).toISOString().slice(0, 10), commits: 1 })),
   }),
 ]
-const NAMES = ['alpha', 'secret', 'plans', 'old-thing', 'forked-lib', 'big-project', 'empty-seedling', 'daily-grind', 'someone']
+const NAMES = ['alpha', 'secret', 'plans', 'old-thing', 'forked-lib', 'big-project', 'empty-uncounted', 'daily-grind', 'someone']
 
 const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
 
@@ -211,8 +211,8 @@ describe('git log layout', () => {
     // a daily repo has a commit per day; one GitHub counted nothing to, one at its root and its last push
     const daily = layout.branches[layout.byKey.get('me/daily-grind')!]
     expect(daily.commits.length).toBe(120)
-    const seedling = layout.branches[layout.byKey.get('me/empty-seedling')!]
-    expect([...seedling.commits]).toEqual([seedling.x, seedling.x1 - 0.5])
+    const uncounted = layout.branches[layout.byKey.get('me/empty-uncounted')!]
+    expect([...uncounted.commits]).toEqual([uncounted.x, uncounted.x1 - 0.5])
     // no two branches on a lane overlap
     for (const a of layout.branches)
       for (const b of layout.branches) if (a !== b && a.track === b.track) expect(a.x1 <= b.x0 || b.x1 <= a.x0).toBe(true)
@@ -265,7 +265,7 @@ describe('git log hit test', () => {
     expect(hitGitLog(s.layout, s.g, s.camera, VIEW, -5, 300, none, null)).toBeNull()
   })
 
-  it('skips hidden and unsown branches', () => {
+  it('skips hidden and unreached branches', () => {
     const s = scene()
     const b = s.layout.branches[0]
     const [x, y] = anchorOf(s, 0)
@@ -320,7 +320,7 @@ describe('git log painter', () => {
     expect(hidden.calls('lineTo').some((c) => c.args[1] === y)).toBe(false)
   })
 
-  it('draws nothing past the time-lapse day, and no branch not yet sown', () => {
+  it('draws nothing past the time-lapse day, and no branch not yet reached', () => {
     const s = scene()
     for (const key of ['2019-09-15', '2021-02-01', '2023-03-01']) {
       const at = dayNumber(key) + 0.5
@@ -334,10 +334,10 @@ describe('git log painter', () => {
           if (y < plotBottom - 0.5 && name !== 'moveTo') expect(x, `${name} at ${key}`).toBeLessThanOrEqual(limit + s.g.dotR + 2)
         }
       }
-      // the unsown branches add nothing: the same as hiding them
-      const unsown = new Set(s.layout.branches.filter((b) => b.startDay > at).map((b) => b.key))
-      expect(unsown.size).toBeGreaterThan(0)
-      expect(painted(s, { at, hidden: unsown }).log).toEqual(rec.log)
+      // the unreached branches add nothing: the same as hiding them
+      const unreached = new Set(s.layout.branches.filter((b) => b.startDay > at).map((b) => b.key))
+      expect(unreached.size).toBeGreaterThan(0)
+      expect(painted(s, { at, hidden: unreached }).log).toEqual(rec.log)
     }
   })
 

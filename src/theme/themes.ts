@@ -1,5 +1,5 @@
 /**
- * Colour themes: the one source of every colour repo-garden paints, in the DOM and on the canvas.
+ * Colour themes: the one source of every colour gitube paints, in the DOM and on the canvas.
  *
  * Ten themes, two dark and eight light. Obsidian, the default, is the original look token for
  * token. The token values come from the judge-corrected theme design (themes.json: palettes
@@ -25,7 +25,7 @@ export type ThemeId = (typeof THEME_IDS)[number]
 export const DEFAULT_THEME_ID: ThemeId = 'obsidian'
 
 /** localStorage key of the chosen theme id. */
-export const THEME_STORAGE_KEY = 'repo-garden:theme'
+export { THEME_STORAGE_KEY } from '../storageKeys.ts'
 
 /** Label plates (useLabelPlacer): canvas at this alpha behind the text... */
 export const LABEL_PLATE_FILL_ALPHA = 0.92
@@ -75,7 +75,7 @@ export interface ThemeTokens {
   textDim: string
   /** tertiary text (hints, timestamps) and commit SHAs on the canvas */
   muted: string
-  /** links, selection, focus rings, the Grow chip, and the default branch's colour */
+  /** links, selection, focus rings, the Go chip, and the default branch's colour */
   accent: string
   /** text on a solid accent fill */
   accentText: string
@@ -175,7 +175,7 @@ export interface ThemeDerived {
   runMark: string
   /** selected panel row: accent at 0.10 over the panel, row text in accent */
   selectedRow: string
-  /** accent chip (Grow): accent at 0.15 over the panel (0.25 on hover), text in accent */
+  /** accent chip (Go): accent at 0.15 over the panel (0.25 on hover), text in accent */
   accentChip: string
   accentChipHover: string
   /** warn chip: warn at 0.10 (background) and 0.40 (border), text in warn */
@@ -449,7 +449,7 @@ const THEME_TOKENS = [
     id: 'rose',
     name: 'Rose',
     mode: 'light',
-    blurb: 'Blush-pink petals, a raspberry trunk and a garden of berry and floral colours.',
+    blurb: 'Blush pink, a raspberry trunk and a palette of berry and floral colours.',
     canvas: '#fdf0f1',
     panel: '#fffafa',
     panelBorder: '#edd4d6',
@@ -667,25 +667,25 @@ export function linkColourDim(theme: Pick<ThemeTokens, 'linkDimAlpha'>, branchCo
 
 /**
  * The CSS custom properties a theme sets on the root element. src/index.css maps Tailwind's
- * --color-garden-* tokens (bg-garden-panel, text-garden-accent/70, ...) and --shadow-soft onto
+ * --color-ui-* tokens (bg-ui-panel, text-ui-accent/70, ...) and --shadow-soft onto
  * these, so every DOM colour follows the active theme.
  */
 export function themeCssVariables(theme: ThemeTokens): Record<string, string> {
   return {
-    '--garden-canvas': theme.canvas,
-    '--garden-panel': theme.panel,
-    '--garden-border': theme.panelBorder,
-    '--garden-hover': theme.hover,
-    '--garden-field': theme.field,
-    '--garden-text': theme.text,
-    '--garden-text-dim': theme.textDim,
-    '--garden-muted': theme.muted,
-    '--garden-accent': theme.accent,
-    '--garden-accent-text': theme.accentText,
-    '--garden-raised': theme.badgeBg,
-    '--garden-warn': theme.warn,
-    '--garden-danger': theme.danger,
-    '--garden-success': theme.success,
-    '--garden-shadow': theme.shadow,
+    '--ui-canvas': theme.canvas,
+    '--ui-panel': theme.panel,
+    '--ui-border': theme.panelBorder,
+    '--ui-hover': theme.hover,
+    '--ui-field': theme.field,
+    '--ui-text': theme.text,
+    '--ui-text-dim': theme.textDim,
+    '--ui-muted': theme.muted,
+    '--ui-accent': theme.accent,
+    '--ui-accent-text': theme.accentText,
+    '--ui-raised': theme.badgeBg,
+    '--ui-warn': theme.warn,
+    '--ui-danger': theme.danger,
+    '--ui-success': theme.success,
+    '--ui-shadow': theme.shadow,
   }
 }

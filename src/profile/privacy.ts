@@ -2,7 +2,7 @@
  * Private repo names in person mode (PROFILE_SPEC.md section 2, "Privacy rule"). While a profile
  * holds a private repo, its name is hidden by default: every view shows "private repo" with a lock
  * in its place, on canvas and in the DOM alike. A toggle reveals the names on screen only, for the
- * login it was turned on for, and nothing persists it, so a reload or a new grow hides them again.
+ * login it was turned on for, and nothing persists it, so a reload or a new load hides them again.
  * Links and analytics never carry a repo name at all.
  *
  * PersonApp builds one namer per profile and toggle state and hands it to every view, so no name

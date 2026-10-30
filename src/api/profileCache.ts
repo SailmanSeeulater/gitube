@@ -1,11 +1,11 @@
 /**
- * Remembers recently grown profiles in this browser (IndexedDB), on the repo cache's policy
- * (cachePolicy.ts): a profile grown again within a day shows at once and spends no GitHub requests.
+ * Remembers recently loaded profiles in this browser (IndexedDB), on the repo cache's policy
+ * (cachePolicy.ts): a profile loaded again within a day shows at once and spends no GitHub requests.
  *
  * Entries are keyed by login and tier, so a tokenless run reads only what REST fetched and a token
  * run only what GraphQL fetched: adding a token never keeps serving a REST profile, and a profile
  * fetched with a token is never served without one. The profiles live in a database of their own,
- * never in the repo cache's 'repo-garden' (see cachePolicy.ts).
+ * never in the repo cache's 'gitube' (see cachePolicy.ts).
  */
 import type { ProfileData } from '../types'
 import { indexedDbStore, readFreshEntry, rememberEntry, type CacheEntry, type CachePolicy, type EntryStore } from './cachePolicy'
@@ -54,5 +54,5 @@ export async function rememberProfile(store: ProfileStore, profile: ProfileData,
  * Every operation swallows storage errors: the app then simply fetches.
  */
 export function browserProfileStore(): ProfileStore | null {
-  return indexedDbStore<ProfileData>('repo-garden-profiles', 'profiles')
+  return indexedDbStore<ProfileData>('gitube-profiles', 'profiles')
 }

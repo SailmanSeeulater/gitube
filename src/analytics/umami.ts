@@ -3,7 +3,7 @@
  *
  * The privacy rules (README, "Analytics"):
  * - Umami never receives the GitHub token, the query string, or the URL path. Share links carry repo
- *   names, contributor logins and battle repos, and with a token those can be private. The tracker
+ *   names, contributor logins and vs repos, and with a token those can be private. The tracker
  *   is told to drop the query string (data-exclude-search), and beforeSend cuts every page URL down
  *   to the origin and every referrer down to its origin, so neither a query string nor a path is sent.
  * - Event data may carry a repo name or login only when it was fetched without a token (so it is
@@ -16,26 +16,26 @@
  * MAX_QUEUED_EVENTS of them) and are sent once it has loaded; if it fails to load they are dropped.
  * Unless initAnalytics adds it, track() is a no-op.
  */
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 
 export const UMAMI_HOST = 'https://stats.latesailor.dev'
 /** Where pageviews count; the tracker ignores every other hostname (localhost included). */
-export const UMAMI_DOMAINS = 'repogarden.latesailor.dev'
+export const UMAMI_DOMAINS = 'gitube.latesailor.dev'
 export const MAX_VALUE_LENGTH = 50
 /** How many events wait for the tracker while it loads; the first ones are kept, the rest dropped. */
 export const MAX_QUEUED_EVENTS = 20
 /** The global the tracker's data-before-send attribute names. */
-export const BEFORE_SEND_GLOBAL = 'repoGardenBeforeSend'
+export const BEFORE_SEND_GLOBAL = 'gitubeBeforeSend'
 
 /** The complete list of custom events; nothing else is sent. */
 export type AnalyticsEvent =
-  | 'grow'
+  | 'load'
   | 'layout-switch'
   | 'theme-switch'
   | 'view-mode'
   | 'timelapse-play'
   | 'export'
-  | 'battle-start'
+  | 'vs-start'
   | 'pr-overlay'
   | 'share-copy'
   | 'token-added'
@@ -85,7 +85,7 @@ interface Context {
 function currentContext(): Context {
   let token = ''
   try {
-    token = useGardenStore.getState().token
+    token = useAppStore.getState().token
   } catch {
     // no store: treat it as tokenless, but the value checks below still run
   }

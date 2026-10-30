@@ -2,9 +2,9 @@
  * The life lines' hit test: a line on its track within its slop, the nearest of crowded tracks (the
  * earlier in paint order on a tie) however many tracks a start marker's reach spans, a station
  * snapping before its line but a start marker's repo winning inside its dot, a station reporting its
- * own day, hidden and unsown lines skipped, a line's cut tail and the time-lapse's clock cutting it
+ * own day, hidden and unreached lines skipped, a line's cut tail and the time-lapse's clock cutting it
  * short, the day otherwise, and null off the life or the canvas. Then the recordings: every line
- * drawn is hit at its label anchor, fully grown and halfway through the time-lapse, a first or top
+ * drawn is hit at its label anchor, fully drawn and halfway through the time-lapse, a first or top
  * repo's marker selects its repo while its ring shows the milestone, and a prolific profile is hit
  * near every start marker as a search of every line would find it.
  */
@@ -15,7 +15,7 @@ import { fitLifeCamera, zoomLifeCamera } from '../src/profile/lifeCamera'
 import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP, horizonY } from '../src/profile/lifeGeometry'
 import { hitLifeLines, STATION_HIT_PX } from '../src/profile/lifeLinesHit'
 import { layoutLifeLines, type LifeLine, type LifeLinesLayout, type LineStation } from '../src/profile/lifeLinesLayout'
-import { MARKER_RING_PX, drawnTo, linesGeom, rooted, sown, stationMark, stationReached, stationRingRadius, type LinesGeom } from '../src/profile/lifeLinesGeometry'
+import { MARKER_RING_PX, drawnTo, linesGeom, rooted, isReached, stationMark, stationReached, stationRingRadius, type LinesGeom } from '../src/profile/lifeLinesGeometry'
 import { linesAnchor } from '../src/profile/lifeLinesPaint'
 import { axisHover } from '../src/profile/lifeView'
 import { buildLifeTimeline, dayAt, dayNumber } from '../src/profile/timeline'
@@ -48,7 +48,7 @@ function makeLine(over: Partial<LifeLine> = {}): LifeLine {
     dry: false,
     branch: false,
     visiting: false,
-    seedling: false,
+    uncounted: false,
     weight: 1,
     stars: 0,
     parts: [{ kind: 'active', x0, x1, weight: 1 }],
@@ -273,7 +273,7 @@ describe('hitLifeLines', () => {
     expect(hit(layout, camera.tx + marker.x * camera.k, horizonY(VIEW), { camera, g })).toEqual({ kind: 'day', day: dayNumber(issue.day), milestone: issue.index })
   })
 
-  it('cuts a line short at the clock, and skips one not sown yet', () => {
+  it('cuts a line short at the clock, and skips one not reached yet', () => {
     const layout = makeLayout([makeLine({ x0: 100, x1: 300 })])
     const g = linesGeom(layout, CAMERA, VIEW)
     const y = g.trackY[0]
@@ -325,7 +325,7 @@ describe('hitLifeLines on the recordings', () => {
     const out = new Float32Array(3)
     let checked = 0
     layout.lines.forEach((line, i) => {
-      if (hidden.has(line.key) || !sown(line, at) || !linesAnchor(layout, g, i, at, out)) return
+      if (hidden.has(line.key) || !isReached(line, at) || !linesAnchor(layout, g, i, at, out)) return
       const [x, y] = out
       if (x < 0 || x > FRAME.width) return
       const got = hitLifeLines(layout, g, camera, FRAME, x, y, hidden, at)
@@ -339,7 +339,7 @@ describe('hitLifeLines on the recordings', () => {
     return checked
   }
 
-  it('hits every line at its anchor, fully grown, zoomed in, halfway through the time-lapse, and with some hidden', () => {
+  it('hits every line at its anchor, fully drawn, zoomed in, halfway through the time-lapse, and with some hidden', () => {
     for (const [profile, now] of profiles) {
       const timeline = buildLifeTimeline(profile, now)
       const layout = layoutLifeLines(timeline, profile.source)
@@ -348,9 +348,9 @@ describe('hitLifeLines on the recordings', () => {
       const zoomed = zoomLifeCamera(fit, 8, FRAME.width / 2, layout.days, FRAME)
       expect(expectHitAtAnchors(layout, zoomed, null)).toBeGreaterThan(0)
       const half = dayAt(timeline.clock, 0.5)
-      const sownCount = layout.lines.filter((l) => l.startDay <= half).length
-      expect(sownCount).toBeGreaterThan(0)
-      expect(expectHitAtAnchors(layout, fit, half)).toBe(sownCount)
+      const reachedCount = layout.lines.filter((l) => l.startDay <= half).length
+      expect(reachedCount).toBeGreaterThan(0)
+      expect(expectHitAtAnchors(layout, fit, half)).toBe(reachedCount)
       const hidden = new Set(layout.lines.filter((_, i) => i % 3 === 0).map((l) => l.key))
       expect(expectHitAtAnchors(layout, fit, null, hidden)).toBe(layout.lines.length - hidden.size)
       // a hidden line is never hit anywhere along its track

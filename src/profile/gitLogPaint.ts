@@ -18,7 +18,7 @@ import { paintAxisBackdrop, paintCanvasFill, paintDayGuide, type LifeAxisPaint }
 import type { LifeInk, LifeViewport } from './lifeTypes'
 import type { LifeViewPaintInput } from './lifeView'
 import type { GitBranch, GitLogLayout } from './gitLogLayout'
-import { branchForked, branchSown, branchTo, commitReached, type GitLogGeom } from './gitLogGeometry'
+import { branchForked, branchReached, branchTo, commitReached, type GitLogGeom } from './gitLogGeometry'
 
 export type GitLogPaintInput = LifeViewPaintInput<GitLogLayout, GitLogGeom>
 
@@ -290,7 +290,7 @@ export function paintGitLog(ctx: CanvasRenderingContext2D, input: GitLogPaintInp
   const branches = layout.branches
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
   const hov = hover?.kind === 'repo' ? (layout.byKey.get(hover.key) ?? -1) : -1
-  const shown = (b: GitBranch | undefined): b is GitBranch => b !== undefined && !hidden.has(b.key) && branchSown(b, at)
+  const shown = (b: GitBranch | undefined): b is GitBranch => b !== undefined && !hidden.has(b.key) && branchReached(b, at)
   for (let i = 0; i < branches.length; i++) {
     const b = branches[i]
     if (!shown(b) || !onScreen(b, g, branchTo(b, layout.startDay, at), W)) continue

@@ -1,6 +1,6 @@
 import { BARE_HOST_RE, GITHUB_HOSTS, SCHEME_RE, parseRepoUrl, safeDecode, tryUrl, type RepoRef } from './parseRepoUrl'
 
-/** What the main input names: a repo for the repo garden, or a GitHub user for person mode. */
+/** What the main input names: a repo for repo mode, or a GitHub user for person mode. */
 export type Subject = { kind: 'repo'; repo: RepoRef } | { kind: 'user'; login: string }
 
 /**

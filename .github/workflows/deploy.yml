@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-repo-garden
+  group: deploy-gitube
   cancel-in-progress: false
 
 jobs:
@@ -21,8 +21,10 @@ jobs:
     env:
       VPS_HOST: 146.235.217.254
       VPS_USER: ubuntu
-      WEB_ROOT: /var/www/repo-garden
-      SITE_URL: https://repogarden.latesailor.dev
+      WEB_ROOT: /var/www/gitube
+      SITE_URL: https://gitube.latesailor.dev
+      # The old domain, which only redirects to SITE_URL now (deploy/nginx/repogarden-redirect.conf).
+      OLD_SITE_URL: https://repogarden.latesailor.dev
       # Public host key of the VPS (not a secret); pinned so the deploy refuses an impostor server.
       VPS_HOST_KEY: 146.235.217.254 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjq3q6ZUmOdu85PlO0JdljadM+66ga2RSWuQng8129Z
 
@@ -95,11 +97,16 @@ jobs:
       # it fails here rather than leaving the tracker silently blocked.
       - name: Smoke test
         run: |
-          curl -fsS "$SITE_URL/" | grep -q "<title>repo-garden</title>"
+          curl -fsS "$SITE_URL/" | grep -q "<title>gitube</title>"
           asset=$(grep -o '/assets/index-[A-Za-z0-9_-]*\.js' dist/index.html | head -1)
           curl -fsSI "$SITE_URL$asset" | grep -qi "cache-control: public, max-age=31536000, immutable"
           curl -fsSI "$SITE_URL/" | grep -i "content-security-policy" | grep -q "https://api.github.com"
           curl -fsSI "$SITE_URL/" | grep -i "content-security-policy" | grep -q "https://stats.latesailor.dev" || {
-            echo "::error::The live Content-Security-Policy does not allow https://stats.latesailor.dev. Install deploy/nginx/repo-garden-headers.conf on the VPS (DEPLOY.md, step 6), then rerun this job."
+            echo "::error::The live Content-Security-Policy does not allow https://stats.latesailor.dev. Install deploy/nginx/gitube-headers.conf on the VPS (DEPLOY.md, step 6), then rerun this job."
             exit 1
           }
+          # The old domain should send old share links on, query string and all. Only a warning:
+          # the redirect is installed by hand (DEPLOY.md, "The old address").
+          curl -fsSI "$OLD_SITE_URL/?repo=octocat/Hello-World" | grep -qi "^location: $SITE_URL/?repo=octocat/Hello-World" \
+            || echo "::warning::$OLD_SITE_URL does not redirect to $SITE_URL yet (DEPLOY.md, \"The old address\")."
+

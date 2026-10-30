@@ -72,8 +72,8 @@ export function branchTo(branch: Pick<GitBranch, 'x1'>, startDay: number, at: nu
   return at === null ? branch.x1 : Math.min(branch.x1, at - startDay)
 }
 
-/** Whether the time-lapse has sown the branch (any of it is drawn). */
-export function branchSown(branch: Pick<GitBranch, 'startDay'>, at: number | null): boolean {
+/** Whether the time-lapse has reached the branch (any of it is drawn). */
+export function branchReached(branch: Pick<GitBranch, 'startDay'>, at: number | null): boolean {
   return at === null || branch.startDay <= at
 }
 

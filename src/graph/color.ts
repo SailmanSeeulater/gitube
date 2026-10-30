@@ -123,7 +123,7 @@ export function colorAt(index: number, scheme: PaletteScheme = DEFAULT_THEME): s
   const { pool, labs, minD, seen, heap, picks, pickLabs } = cycleState(scheme)
   if (pool.length === 0) return base // a scheme with no admissible candidate: plain cycling
   const wanted = index - palette.length
-  // Grow the picks in order up to `wanted`. Lazy greedy: distances only shrink as picks are
+  // Add picks in order up to `wanted`. Lazy greedy: distances only shrink as picks are
   // added, so a stale minD is an upper bound. When the heap's top is up to date it is the true
   // farthest candidate (lowest index on ties), exactly what a full rescan would pick; when it is
   // stale, refresh it against the picks it has not seen and let it sink.

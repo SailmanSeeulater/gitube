@@ -34,7 +34,7 @@ export interface LifeAxisPaint {
   ink: LifeInk
   colourOf: (language: string | null) => string
   hover: LifeHover
-  /** the time-lapse's day: milestones it has not reached are not drawn. null: fully grown. */
+  /** the time-lapse's day: milestones it has not reached are not drawn. null: fully drawn. */
   at: number | null
 }
 

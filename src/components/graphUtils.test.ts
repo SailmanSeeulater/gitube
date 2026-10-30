@@ -36,7 +36,7 @@ import {
   shortSha,
   staleBranchNames,
   type LabelMeta,
-} from './gardenUtils'
+} from './graphUtils'
 
 const DAY = 86_400_000
 

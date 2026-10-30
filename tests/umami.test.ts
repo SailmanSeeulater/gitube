@@ -13,7 +13,7 @@ import {
   type AnalyticsEvent,
   type EventData,
 } from '../src/analytics/umami'
-import { useGardenStore, type LayoutMode } from '../src/store/useGardenStore'
+import { useAppStore, type LayoutMode } from '../src/store/useAppStore'
 import { THEME_IDS } from '../src/theme/themes'
 import type { PersonView } from '../src/share/shareUrl'
 import type { GitHubFetchError, ViewMode } from '../src/types'
@@ -47,7 +47,7 @@ const FETCH_ERROR_CODES = Object.keys({
 
 /** Every payload the app sends, one list per event; a missing event is a type error. */
 const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
-  grow: [
+  load: [
     { mode: 'repo', branches: '2-5', cached: false, token: false, repo: 'expressjs/express' },
     ...['1', '2-5', '6-20', '21-50', '51-100', '101+'].map((branches) => ({ mode: 'repo', branches, cached: true, token: true })),
     // person mode: the login only for a live fetch without a token; rest after a GraphQL fallback
@@ -61,8 +61,8 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   'theme-switch': THEME_IDS.map((theme) => ({ theme })),
   'view-mode': VIEWS.map((view) => ({ view })),
   'timelapse-play': [],
-  export: ['png', 'webm', 'json', 'garden-file'].map((format) => ({ format })),
-  'battle-start': [],
+  export: ['png', 'webm', 'json', 'repo-file'].map((format) => ({ format })),
+  'vs-start': [],
   'pr-overlay': [{ state: 'on' }, { state: 'off' }],
   'share-copy': [],
   'token-added': [],
@@ -92,7 +92,7 @@ function hostileData(token: string): Record<string, unknown> {
     embedded: `code-${token.slice(10, 30)}-x`,
     tail: token.slice(-10),
     search: SEARCH,
-    searchInUrl: `https://repogarden.latesailor.dev/${SEARCH}#top`,
+    searchInUrl: `https://gitube.latesailor.dev/${SEARCH}#top`,
     repoParam: 'repo=acme/secret',
     repoParamQuery: '?repo=acme/secret',
     byParam: '&by=alice',
@@ -122,20 +122,20 @@ function expectNoLeak(json: string, token: string): void {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 describe('track', () => {
   it('does nothing without a window, without the tracker, or with a broken one', () => {
     expect(typeof window).toBe('undefined')
     expect(() => track('share-copy')).not.toThrow()
-    expect(() => track('grow', { mode: 'repo' })).not.toThrow()
+    expect(() => track('load', { mode: 'repo' })).not.toThrow()
     vi.stubGlobal('window', {})
-    expect(() => track('grow', { mode: 'repo' })).not.toThrow()
+    expect(() => track('load', { mode: 'repo' })).not.toThrow()
     vi.stubGlobal('window', { umami: {} })
-    expect(() => track('grow', { mode: 'repo' })).not.toThrow()
+    expect(() => track('load', { mode: 'repo' })).not.toThrow()
     vi.stubGlobal('window', { umami: { track: 'not a function' } })
-    expect(() => track('grow', { mode: 'repo' })).not.toThrow()
+    expect(() => track('load', { mode: 'repo' })).not.toThrow()
   })
 
   it('never throws when the tracker does', () => {
@@ -175,9 +175,9 @@ describe('track', () => {
 
   it('keeps booleans, finite numbers and strings, clipping strings to 50 characters', () => {
     const umamiTrack = stubTracker()
-    track('grow', { cached: false, token: true, zero: 0, count: -3.5, mode: 'repo', fifty: 'y'.repeat(50), long: 'x'.repeat(80) })
+    track('load', { cached: false, token: true, zero: 0, count: -3.5, mode: 'repo', fifty: 'y'.repeat(50), long: 'x'.repeat(80) })
     expect(MAX_VALUE_LENGTH).toBe(50)
-    expect(umamiTrack).toHaveBeenCalledWith('grow', {
+    expect(umamiTrack).toHaveBeenCalledWith('load', {
       cached: false,
       token: true,
       zero: 0,
@@ -204,27 +204,27 @@ describe('track', () => {
       big: BigInt(1),
       symbol: Symbol('s'),
     }
-    track('grow', data as unknown as EventData)
-    expect(umamiTrack).toHaveBeenCalledWith('grow', { mode: 'repo' })
+    track('load', data as unknown as EventData)
+    expect(umamiTrack).toHaveBeenCalledWith('load', { mode: 'repo' })
   })
 
   it('names a repo or login only while no token is set', () => {
     const umamiTrack = stubTracker()
     const long = 'some-organisation-name/a-really-long-repository-name-that-goes-on'
-    track('grow', { mode: 'repo', repo: long, login: 'octocat' })
-    expect(umamiTrack).toHaveBeenLastCalledWith('grow', { mode: 'repo', repo: long.slice(0, 50), login: 'octocat' })
+    track('load', { mode: 'repo', repo: long, login: 'octocat' })
+    expect(umamiTrack).toHaveBeenLastCalledWith('load', { mode: 'repo', repo: long.slice(0, 50), login: 'octocat' })
 
-    useGardenStore.setState({ token: CLASSIC })
-    track('grow', { mode: 'repo', repo: 'acme/secret', login: 'alice', token: true })
-    expect(umamiTrack).toHaveBeenLastCalledWith('grow', { mode: 'repo', token: true })
-    track('grow', { repo: 'acme/secret', login: 'alice' })
-    expect(umamiTrack).toHaveBeenLastCalledWith('grow')
+    useAppStore.setState({ token: CLASSIC })
+    track('load', { mode: 'repo', repo: 'acme/secret', login: 'alice', token: true })
+    expect(umamiTrack).toHaveBeenLastCalledWith('load', { mode: 'repo', token: true })
+    track('load', { repo: 'acme/secret', login: 'alice' })
+    expect(umamiTrack).toHaveBeenLastCalledWith('load')
   })
 
   it('keeps every payload the app sends, a public repo named in the address bar included', () => {
     const search = '?repo=expressjs/express&branch=main&by=alice'
     for (const token of ['', CLASSIC]) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker(search)
       for (const event of ALL_EVENTS) {
         for (const data of APP_EVENTS[event]) {
@@ -249,7 +249,7 @@ describe('track', () => {
 describe('privacy', () => {
   it('never sends the token, any piece of it, or the query string', () => {
     for (const token of [CLASSIC, FINE_GRAINED, HEX40, OPAQUE]) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker(SEARCH)
       for (const event of ALL_EVENTS) track(event, { ...hostileData(token), count: 3, mode: 'repo' } as EventData)
       expect(umamiTrack).toHaveBeenCalledTimes(ALL_EVENTS.length)
@@ -269,26 +269,26 @@ describe('privacy', () => {
 
   it('drops the query string and its parameters when no token is set, but names a public repo', () => {
     const umamiTrack = stubTracker(SEARCH)
-    track('grow', {
+    track('load', {
       search: SEARCH,
-      searchInUrl: `https://repogarden.latesailor.dev/${SEARCH}`,
+      searchInUrl: `https://gitube.latesailor.dev/${SEARCH}`,
       repoParam: 'repo=acme/secret',
       byParam: '&by=alice',
       branchAndBy: 'branch=x&by=alice',
-      repo: 'acme/garden',
+      repo: 'acme/tracks',
       login: 'octocat',
     })
-    expect(umamiTrack).toHaveBeenCalledWith('grow', { repo: 'acme/garden', login: 'octocat' })
+    expect(umamiTrack).toHaveBeenCalledWith('load', { repo: 'acme/tracks', login: 'octocat' })
   })
 
   it('reads the token as it is when the event is sent', () => {
     const umamiTrack = stubTracker()
-    track('grow', { repo: 'acme/garden' })
-    useGardenStore.setState({ token: OPAQUE })
-    track('grow', { repo: 'acme/garden' })
-    useGardenStore.setState({ token: '' })
-    track('grow', { repo: 'acme/garden' })
-    expect(umamiTrack.mock.calls).toEqual([['grow', { repo: 'acme/garden' }], ['grow'], ['grow', { repo: 'acme/garden' }]])
+    track('load', { repo: 'acme/tracks' })
+    useAppStore.setState({ token: OPAQUE })
+    track('load', { repo: 'acme/tracks' })
+    useAppStore.setState({ token: '' })
+    track('load', { repo: 'acme/tracks' })
+    expect(umamiTrack.mock.calls).toEqual([['load', { repo: 'acme/tracks' }], ['load'], ['load', { repo: 'acme/tracks' }]])
   })
 })
 
@@ -296,31 +296,31 @@ describe('beforeSend', () => {
   it('strips the query string and fragment from the page and referrer URLs', () => {
     const payload = {
       website: 'site',
-      hostname: 'repogarden.latesailor.dev',
-      title: 'repo-garden',
-      url: `https://repogarden.latesailor.dev/${SEARCH}#top`,
+      hostname: 'gitube.latesailor.dev',
+      title: 'gitube',
+      url: `https://gitube.latesailor.dev/${SEARCH}#top`,
       referrer: `/${SEARCH}`,
     }
     expect(beforeSend('event', payload)).toEqual({
       website: 'site',
-      hostname: 'repogarden.latesailor.dev',
-      title: 'repo-garden',
-      url: 'https://repogarden.latesailor.dev/',
+      hostname: 'gitube.latesailor.dev',
+      title: 'gitube',
+      url: 'https://gitube.latesailor.dev/',
       referrer: '/',
     })
-    expect(beforeSend('event', { url: 'https://repogarden.latesailor.dev/#/x?repo=acme/secret', referrer: 'https://example.com/a?b=c' })).toEqual({
-      url: 'https://repogarden.latesailor.dev/',
+    expect(beforeSend('event', { url: 'https://gitube.latesailor.dev/#/x?repo=acme/secret', referrer: 'https://example.com/a?b=c' })).toEqual({
+      url: 'https://gitube.latesailor.dev/',
       referrer: 'https://example.com',
     })
     // the input is left as it was
-    expect(payload.url).toBe(`https://repogarden.latesailor.dev/${SEARCH}#top`)
+    expect(payload.url).toBe(`https://gitube.latesailor.dev/${SEARCH}#top`)
   })
 
   it('sends the page as its origin, whatever path it was on', () => {
     const url = (value: string) => beforeSend('pageview', { url: value }).url
-    expect(url('https://repogarden.latesailor.dev/acme/secret?repo=x#y')).toBe('https://repogarden.latesailor.dev/')
-    expect(url('https://repogarden.latesailor.dev/acme/secret-repo')).toBe('https://repogarden.latesailor.dev/')
-    expect(url('https://repogarden.latesailor.dev/')).toBe('https://repogarden.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/acme/secret?repo=x#y')).toBe('https://gitube.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/acme/secret-repo')).toBe('https://gitube.latesailor.dev/')
+    expect(url('https://gitube.latesailor.dev/')).toBe('https://gitube.latesailor.dev/')
     expect(url('http://localhost:4173/acme/secret')).toBe('http://localhost:4173/')
     // not a URL, or one with no origin of its own: no path either way
     for (const value of ['', '/', '/acme/secret?repo=x', 'acme/secret', 'not a url', 'data:text/html,acme/secret']) {
@@ -334,7 +334,7 @@ describe('beforeSend', () => {
     expect(referrer('/acme/secret?x')).toBe('/')
     expect(referrer('/')).toBe('/')
     expect(referrer('https://github.com/acme/secret?x=1')).toBe('https://github.com')
-    expect(referrer('https://www.google.com/search?q=repo-garden')).toBe('https://www.google.com')
+    expect(referrer('https://www.google.com/search?q=gitube')).toBe('https://www.google.com')
     expect(referrer('')).toBe('')
     for (const value of ['garbage', 'acme/secret', '?repo=acme/secret', 'data:text/html,acme/secret']) {
       expect(referrer(value)).toBe('')
@@ -342,29 +342,29 @@ describe('beforeSend', () => {
   })
 
   it('leaves a URL or referrer that is not a string alone', () => {
-    expect(beforeSend('event', { name: 'grow' })).toEqual({ name: 'grow' })
+    expect(beforeSend('event', { name: 'load' })).toEqual({ name: 'load' })
     expect(beforeSend('event', { url: null, referrer: undefined })).toEqual({ url: null, referrer: undefined })
   })
 
   it('sanitizes event data as track does, and leaves payloads without it alone', () => {
     vi.stubGlobal('window', { location: { search: SEARCH } })
-    useGardenStore.setState({ token: CLASSIC })
+    useAppStore.setState({ token: CLASSIC })
     const out = beforeSend('event', {
-      url: `https://repogarden.latesailor.dev/${SEARCH}`,
-      referrer: `https://repogarden.latesailor.dev/?repo=acme/other`,
-      name: 'grow',
+      url: `https://gitube.latesailor.dev/${SEARCH}`,
+      referrer: `https://gitube.latesailor.dev/?repo=acme/other`,
+      name: 'load',
       data: { ...hostileData(CLASSIC), branches: '2-5', count: 3, nan: NaN, long: 'x'.repeat(80), nested: { a: 1 } },
     })
     expect(out).toEqual({
-      url: 'https://repogarden.latesailor.dev/',
-      referrer: 'https://repogarden.latesailor.dev',
-      name: 'grow',
+      url: 'https://gitube.latesailor.dev/',
+      referrer: 'https://gitube.latesailor.dev',
+      name: 'load',
       data: { branches: '2-5', count: 3, long: 'x'.repeat(50) },
     })
     expectNoLeak(JSON.stringify(out), CLASSIC)
 
     // a pageview, a performance report: no data to clean
-    expect(beforeSend('pageview', { url: '/', title: 'repo-garden' })).toEqual({ url: '/', title: 'repo-garden' })
+    expect(beforeSend('pageview', { url: '/', title: 'gitube' })).toEqual({ url: '/', title: 'gitube' })
     expect(beforeSend('performance', { url: '/', lcp: 1200 })).toEqual({ url: '/', lcp: 1200 })
     expect(beforeSend('event', { name: 'share-copy', data: null })).toEqual({ name: 'share-copy', data: null })
   })
@@ -477,14 +477,14 @@ describe('initAnalytics', () => {
       'data-exclude-search': 'true',
       'data-exclude-hash': 'true',
       'data-do-not-track': 'true',
-      'data-domains': 'repogarden.latesailor.dev',
+      'data-domains': 'gitube.latesailor.dev',
       'data-before-send': BEFORE_SEND_GLOBAL,
     })
     expect(script.listeners).toEqual([
       { type: 'load', listener: expect.any(Function), options: { once: true } },
       { type: 'error', listener: expect.any(Function), options: { once: true } },
     ])
-    expect(UMAMI_DOMAINS).toBe('repogarden.latesailor.dev')
+    expect(UMAMI_DOMAINS).toBe('gitube.latesailor.dev')
     expect(win[BEFORE_SEND_GLOBAL]).toBe(beforeSend)
   })
 
@@ -530,7 +530,7 @@ describe('events tracked before the tracker has loaded', () => {
   async function freshModule() {
     vi.resetModules()
     const umami = await import('../src/analytics/umami')
-    const { useGardenStore: store } = await import('../src/store/useGardenStore')
+    const { useAppStore: store } = await import('../src/store/useAppStore')
     return { ...umami, store }
   }
 
@@ -546,14 +546,14 @@ describe('events tracked before the tracker has loaded', () => {
     const { initAnalytics, track } = await freshModule()
     const page = stubPage('loading')
     expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(true)
-    track('grow', { mode: 'repo', repo: 'expressjs/express', cached: false })
+    track('load', { mode: 'repo', repo: 'expressjs/express', cached: false })
     track('share-copy')
     page.load()
     track('export', { format: 'png' })
     expect(page.scripts).toHaveLength(1)
 
     const umamiTrack = runTracker(page)
-    expect(umamiTrack.mock.calls).toEqual([['grow', { mode: 'repo', repo: 'expressjs/express', cached: false }], ['share-copy'], ['export', { format: 'png' }]])
+    expect(umamiTrack.mock.calls).toEqual([['load', { mode: 'repo', repo: 'expressjs/express', cached: false }], ['share-copy'], ['export', { format: 'png' }]])
     // and once it is here, events go straight to it
     track('timelapse-play')
     expect(umamiTrack.mock.calls).toHaveLength(4)
@@ -578,7 +578,7 @@ describe('events tracked before the tracker has loaded', () => {
     track('export', { format: 'json' })
     fire(page.scripts[0].listeners, 'error')
     // nothing is kept after a failure either
-    track('battle-start')
+    track('vs-start')
     const umamiTrack = runTracker(page)
     expect(umamiTrack).not.toHaveBeenCalled()
     track('token-added')
@@ -590,11 +590,11 @@ describe('events tracked before the tracker has loaded', () => {
     const page = stubPage('complete')
     page.win.location = { search: SEARCH }
     expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(true)
-    track('grow', { mode: 'repo', repo: 'acme/secret', login: 'alice', code: OPAQUE.slice(2, 14), count: 3 })
+    track('load', { mode: 'repo', repo: 'acme/secret', login: 'alice', code: OPAQUE.slice(2, 14), count: 3 })
     track('fetch-error', { code: OPAQUE })
     store.setState({ token: OPAQUE })
     const umamiTrack = runTracker(page)
-    expect(umamiTrack.mock.calls).toEqual([['grow', { mode: 'repo', count: 3 }], ['fetch-error']])
+    expect(umamiTrack.mock.calls).toEqual([['load', { mode: 'repo', count: 3 }], ['fetch-error']])
     expectNoLeak(sentJson(umamiTrack), OPAQUE)
   })
 
@@ -603,10 +603,10 @@ describe('events tracked before the tracker has loaded', () => {
     const page = stubPage('complete')
     expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(true)
     store.setState({ token: OPAQUE })
-    track('grow', { mode: 'repo', repo: 'acme/secret', login: 'alice', count: 3 })
+    track('load', { mode: 'repo', repo: 'acme/secret', login: 'alice', count: 3 })
     store.setState({ token: '' })
     const umamiTrack = runTracker(page)
-    expect(umamiTrack.mock.calls).toEqual([['grow', { mode: 'repo', count: 3 }]])
+    expect(umamiTrack.mock.calls).toEqual([['load', { mode: 'repo', count: 3 }]])
     expect(sentJson(umamiTrack)).not.toContain('acme/secret')
     expect(sentJson(umamiTrack)).not.toContain('alice')
   })
@@ -624,7 +624,7 @@ describe('events tracked before the tracker has loaded', () => {
       stubPage('complete')
       if (env) expect(initAnalytics(env)).toBe(false)
       expect(() => track('share-copy')).not.toThrow()
-      track('grow', { mode: 'repo' })
+      track('load', { mode: 'repo' })
       // a tracker added later sends only what was tracked once it was on its way
       const page = stubPage('complete')
       expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(true)
@@ -639,10 +639,10 @@ describe('events tracked before the tracker has loaded', () => {
     expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(true)
     track('share-copy')
     expect(initAnalytics({ PROD: true, VITE_UMAMI_WEBSITE_ID: ID })).toBe(false)
-    track('battle-start')
+    track('vs-start')
     page.load()
     expect(page.scripts).toHaveLength(1)
-    expect(runTracker(page).mock.calls).toEqual([['share-copy'], ['battle-start']])
+    expect(runTracker(page).mock.calls).toEqual([['share-copy'], ['vs-start']])
   })
 
   it('never throws when the tracker breaks while they are sent', async () => {

@@ -1,6 +1,6 @@
 /**
  * Person mode's profile query (src/profile/useProfileData.ts): its key, its query function, and the
- * retry and network rules it shares with the repo garden's query, observed through TanStack's
+ * retry and network rules it shares with repo mode's query, observed through TanStack's
  * QueryObserver with the app's defaults, as tests/offline-network-mode.test.ts does for repos.
  * GitHub is replayed from the recordings (tests/helpers/profileReplay.ts).
  */
@@ -90,7 +90,7 @@ describe('profileQueryKey', () => {
 })
 
 describe('profileQueryFn', () => {
-  it('runs in the network mode the repo garden runs in', () => {
+  it('runs in the network mode repo mode runs in', () => {
     expect(PROFILE_QUERY_NETWORK_MODE).toBe(REPO_QUERY_NETWORK_MODE)
     expect(profileQueryOptions('octocat', deps().deps).networkMode).toBe(REPO_QUERY_NETWORK_MODE)
   })
@@ -111,14 +111,14 @@ describe('profileQueryFn', () => {
   })
 
   it('notes no budget when GitHub sends none', async () => {
-    const user = { login: 'quiet-sprout', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' }
+    const user = { login: 'quiet-dev', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' }
     const fetch: typeof globalThis.fetch = async (input) => {
       const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).pathname
-      const body = path === '/users/quiet-sprout' ? user : []
+      const body = path === '/users/quiet-dev' ? user : []
       return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
     }
     const { deps: d, progress, rates } = deps({ fetch })
-    const { profile } = await run('quiet-sprout', d)
+    const { profile } = await run('quiet-dev', d)
     expect(profile.repos).toEqual([])
     expect(progress.filter((p) => p !== null).length).toBeGreaterThan(0)
     expect(rates).toEqual([])

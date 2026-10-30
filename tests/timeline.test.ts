@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFullGraph, buildGraph } from '../src/graph'
-import { GROW_SPAN, buildTimeline, clockAt, growth, runShown, stemGrowth } from '../src/graph/timeline'
+import { REVEAL_SPAN, buildTimeline, clockAt, revealProgress, runShown, linkRevealed } from '../src/graph/timeline'
 import { partialPolyline, partialQuad, popScale } from '../src/components/timelapseDraw'
 import { makeRepo } from './fixtures/repos'
 
@@ -18,7 +18,7 @@ function forked() {
   })
 }
 
-const step = (i: number, n = 8) => (i / (n - 1)) * (1 - GROW_SPAN)
+const step = (i: number, n = 8) => (i / (n - 1)) * (1 - REVEAL_SPAN)
 
 describe('time-lapse timeline', () => {
   it('in full view, gives each commit one even step in date order', () => {
@@ -27,7 +27,7 @@ describe('time-lapse timeline', () => {
     expect(tl.times).toHaveLength(8)
     expect(tl.nodeAt.get('c1')).toBe(0)
     expect(tl.nodeAt.get('c5')).toBeCloseTo(step(4))
-    expect(tl.nodeAt.get('f3')).toBeCloseTo(1 - GROW_SPAN)
+    expect(tl.nodeAt.get('f3')).toBeCloseTo(1 - REVEAL_SPAN)
     expect(tl.runAt.size).toBe(0)
   })
 
@@ -43,42 +43,42 @@ describe('time-lapse timeline', () => {
     expect([...tl.runAt.get('c3>c1')!]).toEqual([step(1)])
   })
 
-  it('grows a run stem one hidden commit at a time, then finishes with its child', () => {
+  it("reveals a run's link one hidden commit at a time, then finishes with its child", () => {
     const data = forked()
     const tl = buildTimeline(buildGraph(data, 'skeleton'), buildFullGraph(data))
-    // before the fork exists, nothing of feature's stem shows
-    expect(stemGrowth(tl, 'f3', 'c3', step(1))).toBe(0)
-    // f1 fully grown: one of three shares
-    expect(stemGrowth(tl, 'f3', 'c3', step(5) + GROW_SPAN)).toBeCloseTo(1 / 3)
-    expect(runShown(tl, 'f3', 'c3', step(5) + GROW_SPAN)).toBe(1)
+    // before the fork exists, nothing of feature's link shows
+    expect(linkRevealed(tl, 'f3', 'c3', step(1))).toBe(0)
+    // f1 fully drawn: one of three shares
+    expect(linkRevealed(tl, 'f3', 'c3', step(5) + REVEAL_SPAN)).toBeCloseTo(1 / 3)
+    expect(runShown(tl, 'f3', 'c3', step(5) + REVEAL_SPAN)).toBe(1)
     // f2 too
-    expect(stemGrowth(tl, 'f3', 'c3', step(6) + GROW_SPAN)).toBeCloseTo(2 / 3)
+    expect(linkRevealed(tl, 'f3', 'c3', step(6) + REVEAL_SPAN)).toBeCloseTo(2 / 3)
     // the tip itself, at the very end
-    expect(stemGrowth(tl, 'f3', 'c3', 1)).toBe(1)
+    expect(linkRevealed(tl, 'f3', 'c3', 1)).toBe(1)
     // monotone along the way
     let prev = 0
     for (let p = 0; p <= 1; p += 0.001) {
-      const g = stemGrowth(tl, 'f3', 'c3', p)
+      const g = linkRevealed(tl, 'f3', 'c3', p)
       expect(g).toBeGreaterThanOrEqual(prev - 1e-12)
       prev = g
     }
   })
 
-  it('a plain link grows with its child, and only once its parent is there', () => {
+  it('a plain link appears with its child, and only once its parent is there', () => {
     const graph = buildGraph(forked(), 'full')
     const tl = buildTimeline(graph, graph)
-    expect(stemGrowth(tl, 'c2', 'c1', step(1))).toBe(0)
-    expect(stemGrowth(tl, 'c2', 'c1', step(1) + GROW_SPAN / 2)).toBeCloseTo(0.5)
-    expect(stemGrowth(tl, 'c2', 'c1', 1)).toBe(1)
+    expect(linkRevealed(tl, 'c2', 'c1', step(1))).toBe(0)
+    expect(linkRevealed(tl, 'c2', 'c1', step(1) + REVEAL_SPAN / 2)).toBeCloseTo(0.5)
+    expect(linkRevealed(tl, 'c2', 'c1', 1)).toBe(1)
   })
 
-  it('has everything fully grown at the end', () => {
+  it('has everything fully drawn at the end', () => {
     const data = forked()
     for (const mode of ['full', 'skeleton'] as const) {
       const shown = buildGraph(data, mode)
       const tl = buildTimeline(shown, buildFullGraph(data))
-      for (const at of tl.nodeAt.values()) expect(growth(at, 1)).toBe(1)
-      for (const link of shown.links) expect(stemGrowth(tl, link.source, link.target, 1)).toBe(1)
+      for (const at of tl.nodeAt.values()) expect(revealProgress(at, 1)).toBe(1)
+      for (const link of shown.links) expect(linkRevealed(tl, link.source, link.target, 1)).toBe(1)
     }
   })
 

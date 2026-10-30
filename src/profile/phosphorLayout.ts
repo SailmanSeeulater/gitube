@@ -9,9 +9,9 @@
  * Pure and deterministic: the same timeline gives the same layout.
  */
 import type { ProfileData } from '../types'
-import { isSeedling, landedOf, laneHeights, partsOf, starSignal } from './lifeMeasures'
+import { isUncounted, landedOf, laneHeights, partsOf, starSignal } from './lifeMeasures'
 import { repoKey } from './privacy'
-import type { LifeLanded, LifeStemPart } from './lifeTypes'
+import type { LifeLanded, LifeLanePart } from './lifeTypes'
 import type { LifeTimeline } from './timeline'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
 
@@ -25,7 +25,7 @@ export interface PhosphorStack extends LifeViewItem {
   /** archived: drawn dim */
   dry: boolean
   /** a token profile's lane GitHub counted no commits to: drawn faint */
-  seedling: boolean
+  uncounted: boolean
   /** a repo they only contributed to: a hollow head */
   visiting: boolean
   fork: boolean
@@ -33,7 +33,7 @@ export interface PhosphorStack extends LifeViewItem {
   /** the lane's last day number */
   endDay: number
   /** the lane's active and dormant stretches by stack time (0 at the ground, 1 at the head) */
-  parts: LifeStemPart[]
+  parts: LifeLanePart[]
   /** one marker per day a pull request of theirs was merged into it, by stack time, ascending */
   landed: LifeLanded[]
 }
@@ -61,7 +61,7 @@ export function layoutPhosphor(timeline: LifeTimeline, source: ProfileData['sour
       head: starSignal(lane.stars),
       stars: lane.stars,
       dry: lane.isArchived,
-      seedling: isSeedling(lane, source),
+      uncounted: isUncounted(lane, source),
       visiting: !lane.isOwn,
       fork: lane.isFork,
       language: lane.language,

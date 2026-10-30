@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Branch, RepoData } from '../src/types'
-import { deleteCommand, findWeeds, looksKept, shellQuote, thornLevel } from '../src/graph/weeds'
+import { deleteCommand, findCleanup, looksKept, shellQuote, spikeLevel } from '../src/graph/cleanup'
 
 function branch(name: string, aheadBy: number, behindBy: number, tipDate: string, isDefault = false): Branch {
   return { name, tipSha: 'aaaa', isDefault, mergeBaseSha: isDefault ? null : 'bbbb', aheadBy, behindBy, tipDate }
@@ -31,10 +31,10 @@ function expressLike(): RepoData {
   }
 }
 
-describe('weeds', () => {
+describe('cleanup', () => {
   it('lists branches with nothing ahead of the default branch, oldest first', () => {
-    const { weeds } = findWeeds(expressLike())
-    expect(weeds.map((w) => [w.name, w.kind])).toEqual([
+    const { leftovers } = findCleanup(expressLike())
+    expect(leftovers.map((w) => [w.name, w.kind])).toEqual([
       ['old-fix', 'merged'],
       ['5.0', 'merged'],
       ['5.x', 'merged'],
@@ -43,9 +43,9 @@ describe('weeds', () => {
   })
 
   it('leaves release and version lines unticked', () => {
-    const { weeds } = findWeeds(expressLike())
-    expect(Object.fromEntries(weeds.map((w) => [w.name, w.keep]))).toEqual({ 'old-fix': false, '5.0': true, '5.x': true, fresh: false })
-    // anything starting release/release-/release_ is kept: wrongly keeping a weed costs a click
+    const { leftovers } = findCleanup(expressLike())
+    expect(Object.fromEntries(leftovers.map((w) => [w.name, w.keep]))).toEqual({ 'old-fix': false, '5.0': true, '5.x': true, fresh: false })
+    // anything starting release/release-/release_ is kept: wrongly keeping a leftover costs a click
     for (const name of ['v2', '1.2.x', 'release', 'release/4.22.3', 'releases-2024', 'release-notes', 'develop', 'gh-pages', 'LTS/hydrogen', 'main']) {
       expect(looksKept(name)).toBe(true)
     }
@@ -57,31 +57,31 @@ describe('weeds', () => {
   it('never lists the default branch', () => {
     const data = expressLike()
     data.branches[0].isDefault = false // a default named only by data.defaultBranch
-    expect(findWeeds(data).weeds.map((w) => w.name)).not.toContain('master')
+    expect(findCleanup(data).leftovers.map((w) => w.name)).not.toContain('master')
   })
 })
 
-describe('thorns', () => {
-  it('grow with how far apart both sides are', () => {
-    expect(thornLevel(0, 500)).toBe(0) // only behind: a weed, not tangled
-    expect(thornLevel(30, 10)).toBe(0) // barely behind
-    expect(thornLevel(1, 142)).toBe(0)
-    expect(thornLevel(2, 145)).toBe(1)
-    expect(thornLevel(1, 380)).toBe(1)
-    expect(thornLevel(10, 250)).toBe(2)
-    expect(thornLevel(38, 325)).toBe(3)
+describe('spikes', () => {
+  it('rise with how far apart both sides are', () => {
+    expect(spikeLevel(0, 500)).toBe(0) // only behind: a leftover, not tangled
+    expect(spikeLevel(30, 10)).toBe(0) // barely behind
+    expect(spikeLevel(1, 142)).toBe(0)
+    expect(spikeLevel(2, 145)).toBe(1)
+    expect(spikeLevel(1, 380)).toBe(1)
+    expect(spikeLevel(10, 250)).toBe(2)
+    expect(spikeLevel(38, 325)).toBe(3)
   })
 
   it('are reported most tangled first, with a level per branch', () => {
-    const { thorny, thorns } = findWeeds(expressLike())
-    expect(thorny.map((t) => [t.name, t.level])).toEqual([
+    const { diverged, spikes } = findCleanup(expressLike())
+    expect(diverged.map((t) => [t.name, t.level])).toEqual([
       ['4.x', 3],
       ['release/4.22.3', 3],
       ['release-branch-diagram', 1],
       ['throw-redirect', 1],
     ])
-    expect(thorns.get('4.x')).toBe(3)
-    expect(thorns.has('ulises/release-dependencies')).toBe(false)
+    expect(spikes.get('4.x')).toBe(3)
+    expect(spikes.has('ulises/release-dependencies')).toBe(false)
   })
 })
 

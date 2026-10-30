@@ -1,6 +1,6 @@
 /**
  * What the pointer is over in the constellation: a star within its slop (the front-most where stars
- * crowd), never a hidden one or one the time-lapse has not sown, sized as grown by then; else the
+ * crowd), never a hidden one or one the time-lapse has not reached, sized as drawn by then; else the
  * axis's milestone or day; null off the life or the canvas. Then on the recordings, every visible
  * star is hit at its label anchor.
  */
@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { hitConstellation } from '../src/profile/constellationHit'
 import { constellationGeom, type ConstellationGeom } from '../src/profile/constellationGeometry'
 import { layoutConstellation, type ConstellationLayout, type LifeStar } from '../src/profile/constellationLayout'
-import { grownRadius, starAnchor, starGrownShare } from '../src/profile/constellationPaint'
+import { revealedRadius, starAnchor, starRevealedShare } from '../src/profile/constellationPaint'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import { horizonY } from '../src/profile/lifeGeometry'
 import { buildLifeTimeline } from '../src/profile/timeline'
@@ -35,13 +35,13 @@ function makeStar(over: Partial<LifeStar> = {}): LifeStar {
     dry: false,
     twin: false,
     visiting: false,
-    seedling: false,
+    uncounted: false,
     language: null,
     endDay: START + 399,
     landed: [],
     stars: 0,
-    growthDays: [START + 100, START + 400],
-    growthShares: [0, 1],
+    revealDays: [START + 100, START + 400],
+    revealShares: [0, 1],
     ...over,
   }
 }
@@ -79,7 +79,7 @@ describe('hitConstellation', () => {
   })
 
   it('hits a small star at least 5 px out', () => {
-    const layout = makeLayout([makeStar({ seedling: true, size: 0 })])
+    const layout = makeLayout([makeStar({ uncounted: true, size: 0 })])
     const g = geomOf(layout)
     expect(g.r[0]).toBe(1.6)
     expect(hit(layout, g.x[0] + 4.9, g.y[0])).toEqual({ kind: 'repo', key: 'me/a' })
@@ -99,16 +99,16 @@ describe('hitConstellation', () => {
     expect(hit(layout, g.x[1], g.y[1], new Set(['me/front']))).toEqual({ kind: 'repo', key: 'me/back' })
   })
 
-  it('skips a star not drawn: hidden, or not sown by the time-lapse, and sizes one by how far it has grown', () => {
+  it('skips a star not drawn: hidden, or not reached by the time-lapse, and sizes one by how far it has been drawn', () => {
     const layout = makeLayout([makeStar({ size: 1 })])
     const g = geomOf(layout)
     const [x, y] = [g.x[0], g.y[0]]
     expect(hit(layout, x, y, new Set(['me/a']))).toMatchObject({ kind: 'day' })
     expect(hit(layout, x, y, NONE, START + 99)).toMatchObject({ kind: 'day' })
     expect(hit(layout, x, y, NONE, START + 100)).toEqual({ kind: 'repo', key: 'me/a' })
-    // just sown it is a third of its size: its full edge is not it yet
+    // just reached it is a third of its size: its full edge is not it yet
     const star = layout.stars[0]
-    expect(grownRadius(g.r[0], starGrownShare(star, START + 100))).toBeCloseTo(8 * 0.35, 12)
+    expect(revealedRadius(g.r[0], starRevealedShare(star, START + 100))).toBeCloseTo(8 * 0.35, 12)
     expect(hit(layout, x + 8 + 2, y, NONE, START + 100)).toMatchObject({ kind: 'day' })
     expect(hit(layout, x + 8 + 2, y, NONE, null)).toEqual({ kind: 'repo', key: 'me/a' })
   })
@@ -158,13 +158,13 @@ describe('hitConstellation on the recordings', () => {
       }
       // another star wins only from in front, and only where it reaches
       expect(j, star.key).toBeGreaterThan(i)
-      const reach = Math.max(5, grownRadius(g.r[j], starGrownShare(layout.stars[j], at)) + 3)
+      const reach = Math.max(5, revealedRadius(g.r[j], starRevealedShare(layout.stars[j], at)) + 3)
       expect(Math.hypot(x - g.x[j], y - g.y[j])).toBeLessThanOrEqual(reach)
     })
     return self
   }
 
-  it('hits every visible star of kepano and gaearon at its anchor, fully grown and halfway through', () => {
+  it('hits every visible star of kepano and gaearon at its anchor, fully drawn and halfway through', () => {
     for (const [profile, now] of [
       [kepano, KEPANO_NOW],
       [gaearon, GAEARON_NOW],

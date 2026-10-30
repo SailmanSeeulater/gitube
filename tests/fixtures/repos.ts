@@ -113,7 +113,7 @@ function countNotIn(set: ReadonlySet<string>, other: ReadonlySet<string>): numbe
 
 export function makeRepo(spec: RepoSpec): RepoData {
   const owner = spec.owner ?? 'octo'
-  const repo = spec.repo ?? 'garden'
+  const repo = spec.repo ?? 'tracks'
   const commits: Record<string, Commit> = {}
   const indexOf = new Map<string, number>()
 

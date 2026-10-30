@@ -11,12 +11,12 @@ import Legend from '../src/components/Legend'
 import StatusStrip from '../src/components/StatusStrip'
 import NodeInspector from '../src/components/NodeInspector'
 import PrBlock from '../src/components/PrBlock'
-import WeedsTab from '../src/components/WeedsTab'
+import CleanupTab from '../src/components/CleanupTab'
 import { buildContributors, buildGraph } from '../src/graph'
-import { findWeeds } from '../src/graph/weeds'
+import { findCleanup } from '../src/graph/cleanup'
 import { describePullsError, resetWakeDelay, type PullsView } from '../src/hooks/usePulls'
 import { getTheme } from '../src/theme/themes'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { GitHubFetchError, type PullIndex, type PullSummary, type RepoData } from '../src/types'
 import { makeRepo, singleFork } from './fixtures/repos'
 
@@ -49,7 +49,7 @@ function index(prs: PullSummary[], unchecked: string[] = []): PullIndex {
 const PR: PullSummary = {
   number: 42,
   title: 'feature work',
-  url: 'https://github.com/octo/garden/pull/42',
+  url: 'https://github.com/octo/tracks/pull/42',
   head: 'feature',
   headSha: 'f2',
   base: 'main',
@@ -73,8 +73,8 @@ function panel(pulls: PullsView | null, hasPrMarks = false, prMarksKnown = false
       data,
       palette: { main: 'var(--a)', feature: 'var(--b)' },
       contributors: buildContributors(data),
-      weeds: findWeeds(data),
-      onBattle: () => true,
+      cleanup: findCleanup(data),
+      onVs: () => true,
       pulls,
       hasPrMarks,
       prMarksKnown,
@@ -92,9 +92,9 @@ function chromeButtons(html: string): number {
  * Server rendering reads a store's initial state (useSyncExternalStore's server snapshot), so the
  * state a test sets goes into both. (Each test file has its own copy of the store.)
  */
-function setStore(partial: Partial<ReturnType<typeof useGardenStore.getState>>): void {
-  useGardenStore.setState(partial)
-  Object.assign(useGardenStore.getInitialState(), partial)
+function setStore(partial: Partial<ReturnType<typeof useAppStore.getState>>): void {
+  useAppStore.setState(partial)
+  Object.assign(useAppStore.getInitialState(), partial)
 }
 
 beforeEach(() => {
@@ -226,7 +226,7 @@ describe('legend', () => {
   })
 
   it('draws what the canvas draws: the gapped ring in the tip’s own colour until some review or checks are known', () => {
-    const theme = getTheme(useGardenStore.getState().themeId)
+    const theme = getTheme(useAppStore.getState().themeId)
     for (const layout of ['organic', 'metro'] as const) {
       setStore({ layoutMode: layout })
       const unknown = renderToStaticMarkup(h(Legend, { hasPrs: true, prKnown: false }))
@@ -270,8 +270,8 @@ describe('status strip and inspector', () => {
   })
 })
 
-describe('weeds', () => {
-  it('leaves a weed with an open pull request unticked, saying deleting it closes the pull request', () => {
+describe('cleanup', () => {
+  it('leaves a leftover with an open pull request unticked, saying deleting it closes the pull request', () => {
     const repo = makeRepo({
       commits: [['c1'], ['c2', 'c1'], ['c3', 'c2']],
       branches: [
@@ -280,18 +280,18 @@ describe('weeds', () => {
         { name: 'older', tip: 'c1' },
       ],
     })
-    const report = findWeeds(repo)
-    expect(report.weeds.map((w) => w.name).sort()).toEqual(['old', 'older'])
-    const props = { report, owner: 'octo', repo: 'garden', defaultBranch: 'main', palette: {}, now: Date.parse('2024-02-01T00:00:00Z') }
-    const without = renderToStaticMarkup(h(WeedsTab, props))
+    const report = findCleanup(repo)
+    expect(report.leftovers.map((w) => w.name).sort()).toEqual(['old', 'older'])
+    const props = { report, owner: 'octo', repo: 'tracks', defaultBranch: 'main', palette: {}, now: Date.parse('2024-02-01T00:00:00Z') }
+    const without = renderToStaticMarkup(h(CleanupTab, props))
     expect((without.match(/checked=""/g) ?? []).length).toBe(2)
-    const html = renderToStaticMarkup(h(WeedsTab, { ...props, prs: new Map([['old', [{ ...PR, head: 'old' }]]]) }))
+    const html = renderToStaticMarkup(h(CleanupTab, { ...props, prs: new Map([['old', [{ ...PR, head: 'old' }]]]) }))
     expect((html.match(/checked=""/g) ?? []).length).toBe(1)
     expect(html).toContain('title="deleting this branch closes PR #42"')
     expect(html).toContain('#42 open')
     expect(html).not.toContain('origin old')
-    // a weed GitHub did not answer for may have one: not ticked, and it says why
-    const unchecked = renderToStaticMarkup(h(WeedsTab, { ...props, prs: new Map(), unchecked: ['old'] }))
+    // a leftover GitHub did not answer for may have one: not ticked, and it says why
+    const unchecked = renderToStaticMarkup(h(CleanupTab, { ...props, prs: new Map(), unchecked: ['old'] }))
     expect((unchecked.match(/checked=""/g) ?? []).length).toBe(1)
     expect(unchecked).toContain('PR status not checked')
     expect(unchecked).not.toContain('origin old')

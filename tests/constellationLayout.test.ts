@@ -3,7 +3,7 @@
  * deterministic (the same timeline, or the same repos, activity and milestones in any order, give
  * the same layout; a renamed repo, private or not, keeps its band, slot, y and links), the bands in
  * their documented order tiling the plot, stars where their part in the repo starts, sized by weight
- * and glowing by stars, growth along the time-lapse, and the links between repos active at the same
+ * and glowing by stars, revealed along the time-lapse, and the links between repos active at the same
  * time with their caps. Then the recordings (kepano with a token, gaearon without), a user with no
  * repos and an account a day old.
  */
@@ -122,7 +122,7 @@ function shuffledProfile(p: ProfileData, seed: number): ProfileData {
 
 /**
  * A token profile with a bit of everything: busy and quiet repos in three languages and none, an
- * archived one, a fork GitHub counted nothing in (a seedling), a repo they only contributed to, a
+ * archived one, a fork GitHub counted nothing in (uncounted), a repo they only contributed to, a
  * private one, and repos active at the same time.
  */
 const RICH = profile({
@@ -199,7 +199,7 @@ function expectValid(layout: ConstellationLayout, timeline: LifeTimeline, source
     expect(star.key).toBe(repoKey(lane.repo))
     expect(star.x).toBe(lane.rootDay - timeline.startDay + 0.5)
     expect([star.startDay, star.endDay, star.language, star.stars]).toEqual([lane.startDay, lane.endDay, lane.language, lane.stars])
-    expect([star.dry, star.twin, star.visiting, star.seedling]).toEqual([lane.isArchived, lane.isFork, !lane.isOwn, source === 'graphql' && !lane.detailed])
+    expect([star.dry, star.twin, star.visiting, star.uncounted]).toEqual([lane.isArchived, lane.isFork, !lane.isOwn, source === 'graphql' && !lane.detailed])
     expect(star.glow).toBe(starSignal(lane.stars))
     expect(layout.byKey.get(star.key)).toBe(i)
   })
@@ -250,11 +250,11 @@ function expectValid(layout: ConstellationLayout, timeline: LifeTimeline, source
     expect(star.y).toBeLessThan(band.y1)
   }
 
-  // size follows weight: 0 for a seedling, 1 for the heaviest, never out of order
-  const weighed = layout.stars.filter((s) => !s.seedling).map((s) => ({ size: s.size, weight: weightOf(lanes[s.lane], source) }))
+  // size follows weight: 0 for an uncounted repo, 1 for the heaviest, never out of order
+  const weighed = layout.stars.filter((s) => !s.uncounted).map((s) => ({ size: s.size, weight: weightOf(lanes[s.lane], source) }))
   for (const star of layout.stars) {
     expect(star.size >= 0 && star.size <= 1).toBe(true)
-    if (star.seedling) expect(star.size).toBe(0)
+    if (star.uncounted) expect(star.size).toBe(0)
   }
   if (weighed.some((s) => s.weight > 0)) expect(Math.max(...weighed.map((s) => s.size))).toBe(1)
   weighed.sort((a, b) => a.weight - b.weight)
@@ -263,9 +263,9 @@ function expectValid(layout: ConstellationLayout, timeline: LifeTimeline, source
     else expect(weighed[i].size).toBeGreaterThan(weighed[i - 1].size)
   }
 
-  // growth: from nothing at the first day to whole by the last, never shrinking
+  // the reveal: from nothing at the first day to whole by the last, never shrinking
   for (const star of layout.stars) {
-    const { growthDays: d, growthShares: s } = star
+    const { revealDays: d, revealShares: s } = star
     expect(d.length).toBe(s.length)
     expect(d.length).toBeGreaterThanOrEqual(2)
     expect(d[0]).toBe(star.startDay)
@@ -293,7 +293,7 @@ function expectValid(layout: ConstellationLayout, timeline: LifeTimeline, source
     const shared = sharedDays(lanes[a.lane], lanes[b.lane])
     expect(shared.length).toBeGreaterThan(0)
     expect(link.fromDay).toBe(shared[0])
-    if (source === 'graphql') expect([a.seedling, b.seedling]).toEqual([false, false])
+    if (source === 'graphql') expect([a.uncounted, b.uncounted]).toEqual([false, false])
   })
   expect(pairs.size).toBe(layout.links.length)
 
@@ -428,13 +428,13 @@ describe('constellation layout: bands and slots', () => {
 })
 
 describe('constellation layout: stars', () => {
-  it('sizes stars by counted commits with a token, the heaviest 1, a seedling 0', () => {
+  it('sizes stars by counted commits with a token, the heaviest 1, an uncounted repo 0', () => {
     const busy = starOf(rich, 'me/busy')
     expect(busy.size).toBe(1)
     expect(busy.size).toBeGreaterThan(starOf(rich, 'me/steady').size)
     expect(starOf(rich, 'me/steady').size).toBeGreaterThan(starOf(rich, 'me/quiet').size)
     expect(starOf(rich, 'me/quiet').size).toBeGreaterThan(0)
-    expect(starOf(rich, 'me/copy')).toMatchObject({ seedling: true, size: 0, twin: true, glow: starSignal(3) })
+    expect(starOf(rich, 'me/copy')).toMatchObject({ uncounted: true, size: 0, twin: true, glow: starSignal(3) })
     const lanes = richTimeline.lanes
     expect(starOf(rich, 'me/steady').size).toBeCloseTo(Math.sqrt(lanes[starOf(rich, 'me/steady').lane].commits / lanes[busy.lane].commits), 12)
   })
@@ -455,7 +455,7 @@ describe('constellation layout: stars', () => {
     expect(long.size).toBe(1)
     expect(long.size).toBeGreaterThan(short.size)
     expect(short.size).toBeGreaterThan(blink.size)
-    for (const star of layout.stars) expect(star.seedling).toBe(false)
+    for (const star of layout.stars) expect(star.uncounted).toBe(false)
   })
 
   it('glows by stars on the shared star scale, and flags archived, forked and contributed repos', () => {
@@ -472,20 +472,20 @@ describe('constellation layout: stars', () => {
     expect([rich.startDay, rich.days]).toEqual([phosphor.startDay, phosphor.days])
   })
 
-  it('grows a star by its share of commits over each active span with a token, and by days without', () => {
+  it('reveals a star by its share of commits over each active span with a token, and by days without', () => {
     // two runs of activity: 30 commits in March, then 10 in September
     const p = profile({ repos: [repo('two', { createdAt: iso('2020-03-01'), activity: commitsOn({ '2020-03-01': 10, '2020-03-11': 20, '2020-09-01': 10 }) })] })
     const timeline = buildLifeTimeline(p, NOW)
     const star = layoutConstellation(timeline, 'graphql').stars[0]
     const spans = timeline.lanes[0].spans.filter((s) => s.kind === 'active')
     expect(spans).toHaveLength(2)
-    expect(star.growthDays).toEqual([spans[0].fromDay, spans[0].toDay + 1, spans[1].fromDay, spans[1].toDay + 1])
-    expect(star.growthShares).toEqual([0, 0.75, 0.75, 1])
+    expect(star.revealDays).toEqual([spans[0].fromDay, spans[0].toDay + 1, spans[1].fromDay, spans[1].toDay + 1])
+    expect(star.revealShares).toEqual([0, 0.75, 0.75, 1])
 
     const rest = profile({ source: 'rest', repos: [repo('one', { createdAt: iso('2020-03-01'), lastActiveAt: iso('2020-03-20') })] })
     const one = layoutConstellation(buildLifeTimeline(rest, NOW), 'rest').stars[0]
-    expect(one.growthDays).toEqual([dayNumber('2020-03-01'), dayNumber('2020-03-21')])
-    expect(one.growthShares).toEqual([0, 1])
+    expect(one.revealDays).toEqual([dayNumber('2020-03-01'), dayNumber('2020-03-21')])
+    expect(one.revealShares).toEqual([0, 1])
   })
 })
 
@@ -517,11 +517,11 @@ describe('constellation layout: links', () => {
     expect(layoutConstellation(buildLifeTimeline(p, NOW), 'rest').links).toEqual([])
   })
 
-  it('links nothing to a seedling of a token profile', () => {
+  it('links nothing to an uncounted repo of a token profile', () => {
     const p = profile({
       repos: [
         repo('a', { createdAt: iso('2020-01-01'), activity: monthly('2020-01', '2020-12') }),
-        repo('seedling', { createdAt: iso('2020-02-01'), lastActiveAt: iso('2020-11-01') }),
+        repo('uncounted', { createdAt: iso('2020-02-01'), lastActiveAt: iso('2020-11-01') }),
         repo('b', { createdAt: iso('2020-03-01'), activity: monthly('2020-03', '2020-10') }),
       ],
     })
@@ -592,8 +592,8 @@ describe('constellation layout: edge cases', () => {
     const layout = layoutConstellation(timeline, 'graphql')
     expectValid(layout, timeline, 'graphql')
     expect(layout.days).toBe(1)
-    expect(layout.stars[0]).toMatchObject({ x: 0.5, seedling: true, size: 0, glow: starSignal(1) })
-    expect(layout.stars[0].growthDays).toEqual([dayNumber(TODAY), dayNumber(TODAY) + 1])
+    expect(layout.stars[0]).toMatchObject({ x: 0.5, uncounted: true, size: 0, glow: starSignal(1) })
+    expect(layout.stars[0].revealDays).toEqual([dayNumber(TODAY), dayNumber(TODAY) + 1])
   })
 })
 
@@ -611,7 +611,7 @@ describe('constellation layout: the recordings', () => {
     expectValid(layout, timeline, 'graphql')
     expect(layout.stars.length).toBeGreaterThan(40)
     expect(layout.links.length).toBeGreaterThan(20)
-    expect(layout.stars.some((s) => s.seedling)).toBe(true)
+    expect(layout.stars.some((s) => s.uncounted)).toBe(true)
     for (const seed of [3, 11]) expect(layoutConstellation(buildLifeTimeline(shuffledProfile(kepano, seed), KEPANO_NOW), 'graphql'), `seed ${seed}`).toEqual(layout)
   })
 

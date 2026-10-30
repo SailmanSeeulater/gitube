@@ -99,7 +99,7 @@ export interface LifeViewPaintInput<L, G> {
   hover: LifeHover
   /** repo key */
   selected: string | null
-  /** the time-lapse's day (dayAt(clock, progress), a fractional day number): only what has grown by then is drawn. null: fully grown. */
+  /** the time-lapse's day (dayAt(clock, progress), a fractional day number): only what has appeared by then is drawn. null: fully drawn. */
   at: number | null
 }
 

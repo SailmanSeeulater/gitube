@@ -1,6 +1,6 @@
 /**
- * Remembers recently grown repos in this browser (IndexedDB), so growing one again within a day
- * shows it at once and spends no GitHub requests. Refresh (or Grow on the repo already shown)
+ * Remembers recently loaded repos in this browser (IndexedDB), so loading one again within a day
+ * shows it at once and spends no GitHub requests. Refresh (or Go on the repo already shown)
  * always goes to GitHub.
  *
  * The policy (freshness, how many repos are kept, the recent list) is cachePolicy.ts's, shared with
@@ -19,7 +19,7 @@ import {
 } from './cachePolicy'
 import type { RepoRef } from './parseRepoUrl'
 
-/** A cached repo is used for this long after it was fetched; after that Grow fetches it again. */
+/** A cached repo is used for this long after it was fetched; after that Go fetches it again. */
 export const CACHE_FRESH_MS = 24 * 60 * 60 * 1000
 /** Most repos kept; the least recently fetched go first. */
 export const CACHE_MAX_REPOS = 8
@@ -54,7 +54,7 @@ export interface RecentRepo {
   savedAt: string
 }
 
-/** Cached repos, most recently fetched first (fresh or not: growing a stale one simply refetches). */
+/** Cached repos, most recently fetched first (fresh or not: loading a stale one simply refetches). */
 export async function recentRepos(store: RepoStore, now: number): Promise<RecentRepo[]> {
   const entries = await currentEntries(store, POLICY, now)
   return entries.map((e) => ({ owner: e.data.owner, repo: e.data.repo, savedAt: e.savedAt }))
@@ -75,5 +75,5 @@ export function sharedRepoStore(): RepoStore | null {
  * Every operation swallows storage errors (quota, a blocked database): the app then simply fetches.
  */
 export function browserRepoStore(): RepoStore | null {
-  return indexedDbStore<RepoData>('repo-garden', 'repos')
+  return indexedDbStore<RepoData>('gitube', 'repos')
 }

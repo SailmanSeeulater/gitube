@@ -1,5 +1,5 @@
 /**
- * Pure helpers for the garden UI (no React, no DOM) so they can be unit-tested in node.
+ * Pure helpers for the map UI (no React, no DOM) so they can be unit-tested in node.
  */
 import type { Branch, FetchStage, GraphNode, ProfileFetchStage } from '../types'
 import { linkColour, linkColourDim, type ThemeTokens } from '../theme/themes'
@@ -194,7 +194,7 @@ export interface FitBbox {
   y: readonly [number, number] | readonly number[]
 }
 
-/** Garden's fit-to-view padding in screen px; symmetric because labels flip to the left near the right edge. */
+/** RepoGraph's fit-to-view padding in screen px; symmetric because labels flip to the left near the right edge. */
 export const FIT_PAD: FitPadding = { left: 96, right: 96, top: 72, bottom: 72 }
 /** Fit-to-view never zooms in further than this. */
 export const FIT_MAX_ZOOM = 2.5
@@ -555,7 +555,7 @@ function midWordCuts(text: string, short: string): number {
 /**
  * Shortens text to at most maxW without cutting into text[start, end) (a search match). It tries a
  * middle cut wholly after the match and one wholly before it, snapped to separators as in
- * middleEllipsis, and a window around the match ('…-stacktrace-with-v8', '…-skip-tags-…') grown
+ * middleEllipsis, and a window around the match ('…-stacktrace-with-v8', '…-skip-tags-…') widened
  * towards the end of the name first (where branches of one family differ), then towards its start;
  * the form keeping the most characters wins, a cut inside a word counting as SNAP_CHARS fewer.
  * Returns null when not even '…' + match + '…' fits.

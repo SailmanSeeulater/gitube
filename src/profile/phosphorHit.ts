@@ -3,8 +3,8 @@
  * day anywhere else. Labels are hit before this, by the label placer that drew them.
  *
  * Stacks are tried front to back (the reverse of paint order, so the shorter stack drawn over a
- * taller one wins); stacks not drawn (hidden, or not sown yet by the time-lapse) are skipped. A
- * stack is hit from its head block, as grown by then, down to the ground, a little wider than it is
+ * taller one wins); stacks not drawn (hidden, or not reached yet by the time-lapse) are skipped. A
+ * stack is hit from its head block, as drawn by then, down to the ground, a little wider than it is
  * drawn: the same geometry the painter reads (phosphorGeom, blocksAt, headTop).
  */
 import type { LifeCamera, LifeHover, LifeViewport } from './lifeTypes'

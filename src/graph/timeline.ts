@@ -1,18 +1,18 @@
 /**
- * The time-lapse clock: when each part of the shown graph appears as the garden grows from its
+ * The time-lapse clock: when each part of the shown graph appears as the map builds up from its
  * oldest fetched commit to today.
  *
  * Progress runs 0..1 at an even pace of one step per commit, not per day, so a repo that slept for
- * a year does not show a year of nothing. Every commit appears by 1 - GROW_SPAN, which leaves the
- * last ones room to finish growing (see growth) before the end.
+ * a year does not show a year of nothing. Every commit appears by 1 - REVEAL_SPAN, which leaves the
+ * last ones room to finish drawing (see revealProgress) before the end.
  *
  * Pure and deterministic. O(commits log commits).
  */
 import type { GraphBody } from './build'
 import { linkKey } from './contributors'
 
-/** Progress a node or stem takes to grow in, from first sight to full size. */
-export const GROW_SPAN = 0.015
+/** Progress a node or link takes to appear, from first sight to full size. */
+export const REVEAL_SPAN = 0.015
 
 export interface Timeline {
   /** Commit times (ms), ascending: every shown commit plus every commit hidden in a skeleton run. */
@@ -109,7 +109,7 @@ export function buildTimeline(shown: GraphBody, full: GraphBody): Timeline {
 
   // ties share a step: progress of the first commit at that time
   const last = Math.max(1, times.length - 1)
-  const progressOf = (t: number): number => (lowerBound(times, t) / last) * (1 - GROW_SPAN)
+  const progressOf = (t: number): number => (lowerBound(times, t) / last) * (1 - REVEAL_SPAN)
 
   const nodeAt = new Map<string, number>()
   for (const node of shown.nodes) nodeAt.set(node.id, progressOf(at(node.id)))
@@ -123,10 +123,10 @@ export function buildTimeline(shown: GraphBody, full: GraphBody): Timeline {
   return { times, nodeAt, runAt }
 }
 
-/** 0 before something has appeared, rising to 1 over GROW_SPAN of progress. */
-export function growth(at: number, progress: number): number {
+/** 0 before something has appeared, rising to 1 over REVEAL_SPAN of progress. */
+export function revealProgress(at: number, progress: number): number {
   if (progress < at) return 0
-  return Math.min(1, (progress - at) / GROW_SPAN)
+  return Math.min(1, (progress - at) / REVEAL_SPAN)
 }
 
 /** The commit time (ms) the clock shows at a progress, and how many commits have appeared by then. */
@@ -134,29 +134,29 @@ export function clockAt(timeline: Timeline, progress: number): { time: number; c
   const n = timeline.times.length
   if (n === 0) return { time: NaN, commits: 0 }
   const last = Math.max(1, n - 1)
-  const step = Math.min(n - 1, Math.max(0, Math.floor((Math.min(progress, 1 - GROW_SPAN) / (1 - GROW_SPAN)) * last + 1e-9)))
+  const step = Math.min(n - 1, Math.max(0, Math.floor((Math.min(progress, 1 - REVEAL_SPAN) / (1 - REVEAL_SPAN)) * last + 1e-9)))
   // every commit at or before that step's time has appeared
   return { time: timeline.times[step], commits: countUpTo(timeline.times, timeline.times[step]) }
 }
 
 /**
- * How much of a stem is drawn, 0..1, growing from the parent towards the child: a run's hidden
- * commits each add an equal share as they appear, and the child's own growth adds the last one.
+ * How much of a link is drawn, 0..1, drawn from the parent towards the child: a run's hidden
+ * commits each add an equal share as they appear, and the child's own reveal adds the last one.
  * Nothing shows until the parent has appeared.
  */
-export function stemGrowth(timeline: Timeline, source: string, target: string, progress: number): number {
+export function linkRevealed(timeline: Timeline, source: string, target: string, progress: number): number {
   const parentAt = timeline.nodeAt.get(target)
   if (parentAt === undefined || progress < parentAt) return 0
-  const child = growth(timeline.nodeAt.get(source) ?? 0, progress)
+  const child = revealProgress(timeline.nodeAt.get(source) ?? 0, progress)
   const run = timeline.runAt.get(linkKey(source, target))
   if (!run || run.length === 0) return child
   const k = countUpTo(run, progress)
-  // the newest hidden commit is still growing in; earlier ones are done
-  const partial = k > 0 ? k - 1 + growth(run[k - 1], progress) : 0
+  // the newest hidden commit is still appearing; earlier ones are done
+  const partial = k > 0 ? k - 1 + revealProgress(run[k - 1], progress) : 0
   return Math.min(1, (partial + child) / (run.length + 1))
 }
 
-/** Commits of a run that have appeared (the '+N' badge while it grows). */
+/** Commits of a run that have appeared (the '+N' badge while it fills in). */
 export function runShown(timeline: Timeline, source: string, target: string, progress: number): number {
   const run = timeline.runAt.get(linkKey(source, target))
   return run ? countUpTo(run, progress) : 0

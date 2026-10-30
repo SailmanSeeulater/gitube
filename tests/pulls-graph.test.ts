@@ -1,6 +1,6 @@
 /**
  * The overlay's pure logic: which tip gets which mark (graph/pulls), the branch search's pull
- * request qualifiers (components/branchQuery), the weeds tab's ticks, and the query plumbing of
+ * request qualifiers (components/branchQuery), the cleanup tab's ticks, and the query plumbing of
  * usePulls (its key, retry rule and error summary).
  */
 import { describe, expect, it } from 'vitest'
@@ -21,7 +21,7 @@ import {
   worstChecks,
   worstReview,
 } from '../src/graph/pulls'
-import { defaultWeedPicks } from '../src/graph/weeds'
+import { defaultLeftoverPicks } from '../src/graph/cleanup'
 import { branchQueryText, hasIsPr, matchesBranchQuery, parseBranchQuery, toggleIsPr } from '../src/components/branchQuery'
 import { checksWords, checksWordsShort, prMeta, prPhrase, prRowSuffix, reviewWords } from '../src/components/prMark'
 import { describePullsError, pullsQueryKey, shouldRetryPulls } from '../src/hooks/usePulls'
@@ -261,15 +261,15 @@ describe('branch search qualifiers', () => {
   })
 })
 
-describe('weeds and pull requests', () => {
-  it('never ticks a weed with an open pull request, nor one kept on purpose', () => {
-    const weeds = [
+describe('cleanup and pull requests', () => {
+  it('never ticks a leftover with an open pull request, nor one kept on purpose', () => {
+    const cleanup = [
       { name: 'old-fix', keep: false },
       { name: 'release/1.x', keep: true },
       { name: 'merged-but-open', keep: false },
     ]
-    expect([...defaultWeedPicks(weeds)].sort()).toEqual(['merged-but-open', 'old-fix'])
-    expect([...defaultWeedPicks(weeds, (name) => name === 'merged-but-open')]).toEqual(['old-fix'])
+    expect([...defaultLeftoverPicks(cleanup)].sort()).toEqual(['merged-but-open', 'old-fix'])
+    expect([...defaultLeftoverPicks(cleanup, (name) => name === 'merged-but-open')]).toEqual(['old-fix'])
   })
 })
 

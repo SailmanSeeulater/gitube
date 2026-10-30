@@ -1,11 +1,11 @@
 /**
  * The measures person mode's views share about a lane (lifeMeasures.ts): its height by counted
- * commits with a token and by active days without, a seedling's, the star signal on a log scale,
+ * commits with a token and by active days without, an uncounted repo's, the star signal on a log scale,
  * the lane's stretches end to end along its own time, its landed pull requests, and how much of it
- * the time-lapse has grown.
+ * the time-lapse has drawn.
  */
 import { describe, expect, it } from 'vitest'
-import { grownShare, isSeedling, landedOf, laneHeights, partsOf, starSignal } from '../src/profile/lifeMeasures'
+import { revealedShare, isUncounted, landedOf, laneHeights, partsOf, starSignal } from '../src/profile/lifeMeasures'
 import { buildLifeTimeline, dayKey, dayNumber } from '../src/profile/timeline'
 import type { ProfileData, ProfileRepo } from '../src/types'
 
@@ -74,14 +74,14 @@ const richHeights = laneHeights(richTimeline, 'graphql')
 const heightOf = (name: string) => richHeights[richTimeline.lanes.findIndex((lane) => lane.repo.toLowerCase() === `me/${name}`)]
 
 describe('laneHeights', () => {
-  it('grows taller with more counted commits on a token profile', () => {
+  it('stands taller with more counted commits on a token profile', () => {
     expect(heightOf('busy')).toBe(1)
     expect(heightOf('busy')).toBeGreaterThan(heightOf('old'))
     expect(heightOf('old')).toBeGreaterThan(heightOf('quiet'))
     expect(heightOf('quiet')).toBeGreaterThanOrEqual(0.06)
   })
 
-  it('grows taller with more active days without a token', () => {
+  it('stands taller with more active days without a token', () => {
     const p = profile({
       source: 'rest',
       repos: [
@@ -96,16 +96,16 @@ describe('laneHeights', () => {
     expect(long).toBe(1)
     expect(long).toBeGreaterThan(short)
     expect(short).toBeGreaterThan(blink)
-    for (const lane of timeline.lanes) expect(isSeedling(lane, 'rest')).toBe(false)
+    for (const lane of timeline.lanes) expect(isUncounted(lane, 'rest')).toBe(false)
   })
 
-  it('keeps a token profile repo GitHub counted no commits to short, as a seedling', () => {
+  it('keeps a token profile repo GitHub counted no commits to short, as an uncounted repo', () => {
     const copy = richTimeline.lanes.find((lane) => lane.repo === 'me/copy')!
-    expect(isSeedling(copy, 'graphql')).toBe(true)
+    expect(isUncounted(copy, 'graphql')).toBe(true)
     expect(heightOf('copy')).toBe(0.04)
   })
 
-  it('grows a lone repo full height, and only seedlings on a token profile with no counted commits', () => {
+  it('makes a lone repo full height, and only uncounted heights on a token profile with no counted commits', () => {
     const lone = buildLifeTimeline(profile({ source: 'rest', repos: [repo('a', { createdAt: iso('2024-06-15') })] }), NOW)
     expect(laneHeights(lone, 'rest')).toEqual([1])
     const none = buildLifeTimeline(profile({ repos: [repo('a'), repo('b')] }), NOW)
@@ -145,12 +145,12 @@ describe('landedOf', () => {
   })
 })
 
-describe('grownShare', () => {
+describe('revealedShare', () => {
   it('is all of a lane with the time-lapse off, none before its first day, and all from past its last', () => {
     const lane = { startDay: 100, endDay: 109 }
-    expect(grownShare(lane, null)).toBe(1)
-    expect(grownShare(lane, 90)).toBe(0)
-    expect(grownShare(lane, 105)).toBeCloseTo(0.5, 12)
-    expect(grownShare(lane, 200)).toBe(1)
+    expect(revealedShare(lane, null)).toBe(1)
+    expect(revealedShare(lane, 90)).toBe(0)
+    expect(revealedShare(lane, 105)).toBeCloseTo(0.5, 12)
+    expect(revealedShare(lane, 200)).toBe(1)
   })
 })

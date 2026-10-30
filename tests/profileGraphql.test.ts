@@ -17,8 +17,8 @@
  * that window's solo retry then meets, a slow, 502 or 504 batch or repositories query, GraphQL
  * primary and secondary rate limits, refusals and schema errors for a whole query, unknown errors,
  * an SSO FORBIDDEN inside one window, a core rate limit on the identity call, and the edge cases of
- * the fictional login quiet-sprout (private repos among them). The REST fallback replays the
- * gaearon fixture recorded for Phase 1; where kepano or quiet-sprout fall back, their REST answers
+ * the fictional login quiet-dev (private repos among them). The REST fallback replays the
+ * gaearon fixture recorded for Phase 1; where kepano or quiet-dev fall back, their REST answers
  * are synthesised as empty (no repos, no events).
  */
 import { describe, expect, it, vi } from 'vitest'
@@ -34,7 +34,7 @@ import {
 } from '../src/api/profileGraphql'
 import { profileCacheKey, type ProfileStore } from '../src/api/profileCache'
 import type { CacheEntry } from '../src/api/cachePolicy'
-import { personGrowEventData } from '../src/profile/analytics'
+import { personLoadEventData } from '../src/profile/analytics'
 import { GitHubFetchError } from '../src/types'
 import type { FetchProgress, ProfileData } from '../src/types'
 import vercel from './fixtures/github/profile-vercel.json'
@@ -105,8 +105,8 @@ function kepanoProfile(): Promise<ProfileData> {
 
 // ---------- synthetic data (fictional login, no real person) ----------
 
-const SPROUT_USER: Route = {
-  body: { login: 'Quiet-Sprout', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' },
+const QUIET_USER: Route = {
+  body: { login: 'Quiet-Dev', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' },
 }
 
 function repoNode(nameWithOwner: string, overrides: Record<string, unknown> = {}) {
@@ -162,18 +162,18 @@ function windowUser(plan: WindowPlan = {}) {
 }
 
 /**
- * quiet-sprout's GitHub: the identity, the repositories query (pages of own repos, by cursor 'cN'),
+ * quiet-dev's GitHub: the identity, the repositories query (pages of own repos, by cursor 'cN'),
  * each window from windows(alias), and empty REST answers for the fallback. graphql answers a
  * GraphQL call first when it returns a route.
  */
-function sproutRouter(plan: {
+function quietRouter(plan: {
   years: number[]
   pages?: unknown[][]
   windows?: (alias: string) => WindowPlan | undefined
   graphql?: (call: Call) => Route | undefined
   user?: Route
 }): Router {
-  const user = plan.user ?? SPROUT_USER
+  const user = plan.user ?? QUIET_USER
   const login = (user.body as { login: string }).login
   const rest = emptyRest(login)
   return (call) => {
@@ -555,18 +555,18 @@ describe('fetchProfileGraphql on the recorded fixtures', () => {
   })
 })
 
-// ---------- landed pull requests, on quiet-sprout ----------
+// ---------- landed pull requests, on quiet-dev ----------
 
 describe('fetchProfileGraphql: landed pull requests', () => {
   const merged = (occurredAt: string, mergedAt: string): [string, string] => [occurredAt, mergedAt]
   const NOW = Date.parse('2024-05-15T19:00:00Z')
 
   it('keeps merged pull requests into repos they do not own, by the Pacific day of the merge, sorted by day then repo', async () => {
-    const theirs = repoNode('Quiet-Sprout/garden')
+    const theirs = repoNode('Quiet-Dev/tracks')
     const upstream = repoNode('Upstream/tool', { createdAt: '2018-01-01T00:00:00Z', pushedAt: '2024-05-01T00:00:00Z' })
     const other = repoNode('Another/lib', { createdAt: '2019-01-01T00:00:00Z' })
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         pages: [[theirs]],
         windows: (alias) =>
@@ -574,7 +574,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
             ? {
                 prs: [
                   // into their own repo, whatever the case of the owner: not landed
-                  { repo: repoNode('QUIET-SPROUT/garden'), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-06T10:00:00Z')] },
+                  { repo: repoNode('QUIET-DEV/tracks'), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-06T10:00:00Z')] },
                   // 03:30 UTC on March 2 is still March 1 in Los Angeles; an open one is not landed
                   { repo: upstream, nodes: [merged('2024-02-01T12:00:00Z', '2024-03-02T03:30:00Z'), ['2024-02-10T12:00:00Z', null], merged('2024-01-20T12:00:00Z', '2024-01-21T18:00:00Z')] },
                   { repo: other, nodes: [merged('2024-01-19T12:00:00Z', '2024-01-21T18:00:00Z')] },
@@ -583,7 +583,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
             : undefined,
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: NOW })
     expect(profile.landed).toEqual([
       { day: '2024-01-21', repo: 'Another/lib' },
       { day: '2024-01-21', repo: 'Upstream/tool' },
@@ -592,7 +592,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
     expect(profile.truncated).toBe(false)
     // a repo named only by its landed pull requests gets a contributed repo of its own, from its
     // first merge to its last (never its own birth or push), with no counted commits
-    expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Quiet-Sprout/garden', 'Another/lib', 'Upstream/tool'])
+    expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Quiet-Dev/tracks', 'Another/lib', 'Upstream/tool'])
     expect(profile.repos.find((r) => r.nameWithOwner === 'Upstream/tool')).toMatchObject({
       isOwn: false,
       activity: [],
@@ -601,14 +601,14 @@ describe('fetchProfileGraphql: landed pull requests', () => {
       lastActiveAt: '2024-03-02T03:30:00Z',
       stars: 0,
     })
-    expect(profile.repos.find((r) => r.nameWithOwner === 'Quiet-Sprout/garden')).toMatchObject({ isOwn: true, activity: [] })
+    expect(profile.repos.find((r) => r.nameWithOwner === 'Quiet-Dev/tracks')).toMatchObject({ isOwn: true, activity: [] })
   })
 
   it("keeps a private repo (the views hide its name), and a landed pull request widens a counted repo's span", async () => {
     const secret = repoNode('Hush/vault', { isPrivate: true })
     const tool = repoNode('Upstream/tool')
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         windows: (alias) =>
           alias === 'w2024q1'
@@ -622,7 +622,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
             : undefined,
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: NOW })
     expect(profile.landed).toEqual([
       { day: '2024-01-03', repo: 'Hush/vault' },
       { day: '2024-01-10', repo: 'Upstream/tool' },
@@ -640,18 +640,18 @@ describe('fetchProfileGraphql: landed pull requests', () => {
 
   it('sets truncated for a window whose pull requests are still paging, or that returned 100 repositories, and keeps what came', async () => {
     const paging = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         windows: (alias) =>
           alias === 'w2024q1' ? { prs: [{ repo: repoNode('Upstream/tool'), nodes: [merged('2024-01-05T10:00:00Z', '2024-01-10T12:00:00Z')], hasNextPage: true }] } : undefined,
       }),
     )
-    const paged = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch: paging.fetch, now: NOW })
+    const paged = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch: paging.fetch, now: NOW })
     expect(paged.truncated).toBe(true)
     expect(paged.landed).toEqual([{ day: '2024-01-10', repo: 'Upstream/tool' }])
 
     const full = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         windows: (alias) =>
           alias === 'w2024q1'
@@ -659,7 +659,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
             : undefined,
       }),
     )
-    const capped = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch: full.fetch, now: NOW })
+    const capped = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch: full.fetch, now: NOW })
     expect(capped.truncated).toBe(true)
     expect(capped.landed).toHaveLength(100)
     expect(capped.repos).toHaveLength(100)
@@ -667,7 +667,7 @@ describe('fetchProfileGraphql: landed pull requests', () => {
 
   it('drops a merge after today, or one whose day it cannot read, and a repo named only by those', async () => {
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         windows: (alias) =>
           alias === 'w2024q2'
@@ -681,20 +681,20 @@ describe('fetchProfileGraphql: landed pull requests', () => {
             : undefined,
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: NOW })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: NOW })
     expect(profile.landed).toEqual([{ day: '2024-05-14', repo: 'Fine/thing' }])
     expect(profile.repos.map((r) => r.nameWithOwner)).toEqual(['Fine/thing'])
   })
 })
 
-// ---------- merging, on quiet-sprout ----------
+// ---------- merging, on quiet-dev ----------
 
 describe('fetchProfileGraphql: days, repos and milestones', () => {
   it('never yields a day after today in Pacific time, and ends the current quarter at now', async () => {
     // 03:00 UTC on 2024-05-15 is still the 14th in Pacific time.
     const now = Date.parse('2024-05-15T03:00:00Z')
     const { fetch, calls } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         windows: (alias) =>
           alias === 'w2024q2'
@@ -702,7 +702,7 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
             : { days: [['2024-03-31', 4]] },
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now })
     expect(windowCalls(calls).map(aliasesOf)).toEqual([['w2024q1', 'w2024q2']])
     expect(windowCalls(calls)[0].body?.variables.w2024q2_to).toBe('2024-05-15T03:00:00.000Z')
     expect(profile.days).toEqual([
@@ -713,9 +713,9 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
   })
 
   it("buckets commits by GitHub's day across a daylight saving change, never by UTC date", async () => {
-    const repo = repoNode('Quiet-Sprout/garden')
+    const repo = repoNode('Quiet-Dev/tracks')
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
         pages: [[repo]],
         windows: (alias) =>
@@ -735,7 +735,7 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
             : undefined,
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-03-20T12:00:00Z') })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-03-20T12:00:00Z') })
     expect(profile.repos[0].activity).toEqual([
       { date: '2024-03-09', commits: 1 },
       { date: '2024-03-10', commits: 2 },
@@ -744,39 +744,39 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
   })
 
   it('merges own repos with the ones only contributed to, summing activity across windows', async () => {
-    const garden = repoNode('Quiet-Sprout/garden', { createdAt: '2020-03-01T12:00:00Z', pushedAt: '2024-05-01T10:00:00Z', stargazerCount: 7 })
-    const idle = repoNode('Quiet-Sprout/idle', { createdAt: '2021-06-01T00:00:00Z', pushedAt: null, primaryLanguage: null, isArchived: true })
-    const fork = repoNode('Quiet-Sprout/fork', { createdAt: '2022-01-10T00:00:00Z', pushedAt: '2021-12-01T00:00:00Z', isFork: true })
+    const tracks = repoNode('Quiet-Dev/tracks', { createdAt: '2020-03-01T12:00:00Z', pushedAt: '2024-05-01T10:00:00Z', stargazerCount: 7 })
+    const idle = repoNode('Quiet-Dev/idle', { createdAt: '2021-06-01T00:00:00Z', pushedAt: null, primaryLanguage: null, isArchived: true })
+    const fork = repoNode('Quiet-Dev/fork', { createdAt: '2022-01-10T00:00:00Z', pushedAt: '2021-12-01T00:00:00Z', isFork: true })
     // pushed long after their last commit here: someone else's pushes
     const big = repoNode('other-org/big-project', { createdAt: '2016-01-01T00:00:00Z', pushedAt: '2024-05-14T00:00:00Z', stargazerCount: 900, forkCount: 40 })
     // their own, but not in the listing (as past the 500-repo cap)
-    const beyond = repoNode('quiet-sprout/beyond-cap', { createdAt: '2023-12-01T00:00:00Z', pushedAt: '2024-01-02T00:00:00Z' })
+    const beyond = repoNode('quiet-dev/beyond-cap', { createdAt: '2023-12-01T00:00:00Z', pushedAt: '2024-01-02T00:00:00Z' })
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
-        pages: [[garden, idle, fork]],
+        pages: [[tracks, idle, fork]],
         windows: (alias) =>
           alias === 'w2024q1'
-            ? { repos: [{ repo: garden, nodes: [['2024-02-03T08:00:00Z', 2]] }, { repo: beyond, nodes: [['2024-01-02T08:00:00Z', 1]] }] }
+            ? { repos: [{ repo: tracks, nodes: [['2024-02-03T08:00:00Z', 2]] }, { repo: beyond, nodes: [['2024-01-02T08:00:00Z', 1]] }] }
             : {
                 repos: [
                   { repo: big, nodes: [['2024-04-20T07:00:00Z', 1], ['2024-04-02T07:00:00Z', 3]] },
-                  { repo: garden, nodes: [['2024-04-02T07:00:00Z', 5]] },
+                  { repo: tracks, nodes: [['2024-04-02T07:00:00Z', 5]] },
                 ],
               },
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-05-15T12:00:00Z') })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-05-15T12:00:00Z') })
     expect(profile.repos.map((r) => r.nameWithOwner)).toEqual([
-      'Quiet-Sprout/garden',
-      'Quiet-Sprout/idle',
-      'Quiet-Sprout/fork',
-      'quiet-sprout/beyond-cap',
+      'Quiet-Dev/tracks',
+      'Quiet-Dev/idle',
+      'Quiet-Dev/fork',
+      'quiet-dev/beyond-cap',
       'other-org/big-project',
     ])
-    const [gardenRepo, idleRepo, forkRepo, beyondRepo, bigRepo] = profile.repos
-    expect(gardenRepo).toEqual({
-      nameWithOwner: 'Quiet-Sprout/garden',
+    const [tracksRepo, idleRepo, forkRepo, beyondRepo, bigRepo] = profile.repos
+    expect(tracksRepo).toEqual({
+      nameWithOwner: 'Quiet-Dev/tracks',
       createdAt: '2020-03-01T12:00:00Z',
       firstActiveAt: '2020-03-01T12:00:00Z',
       lastActiveAt: '2024-05-01T10:00:00Z',
@@ -813,11 +813,11 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
   })
 
   it('flags truncated for a window whose contributions still page', async () => {
-    const repo = repoNode('Quiet-Sprout/garden')
+    const repo = repoNode('Quiet-Dev/tracks')
     const { fetch } = makeFetch(
-      sproutRouter({ years: [2024], pages: [[repo]], windows: () => ({ repos: [{ repo, nodes: [['2024-02-03T08:00:00Z', 1]], hasNextPage: true }] }) }),
+      quietRouter({ years: [2024], pages: [[repo]], windows: () => ({ repos: [{ repo, nodes: [['2024-02-03T08:00:00Z', 1]], hasNextPage: true }] }) }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
     expect(profile.truncated).toBe(true)
     expect(profile.lostWindows).toEqual([])
   })
@@ -826,9 +826,9 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
     const read = (count: number) => {
       const repos = Array.from({ length: count }, (_, i) => repoNode(`other-org/repo-${i}`))
       const { fetch } = makeFetch(
-        sproutRouter({ years: [2024], windows: () => ({ repos: repos.map((repo) => ({ repo, nodes: [['2024-01-02T08:00:00Z', 1]] as Array<[string, number]> })) }) }),
+        quietRouter({ years: [2024], windows: () => ({ repos: repos.map((repo) => ({ repo, nodes: [['2024-01-02T08:00:00Z', 1]] as Array<[string, number]> })) }) }),
       )
-      return fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
+      return fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
     }
     const ninetyNine = await read(99)
     expect(ninetyNine.repos).toHaveLength(99)
@@ -838,15 +838,15 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
   })
 
   it('marks private repos private, own or seen only in a window, and names no first* repo whose privacy is not stated', async () => {
-    const garden = repoNode('Quiet-Sprout/garden')
+    const tracks = repoNode('Quiet-Dev/tracks')
     // private: their own, in the listing (a token owner looking at themselves)
-    const diary = repoNode('Quiet-Sprout/diary', { isPrivate: true, createdAt: '2023-01-05T00:00:00Z', pushedAt: '2024-01-10T00:00:00Z' })
+    const diary = repoNode('Quiet-Dev/diary', { isPrivate: true, createdAt: '2023-01-05T00:00:00Z', pushedAt: '2024-01-10T00:00:00Z' })
     // private: someone else's, seen only in a window (a viewer with access to it)
     const vault = repoNode('secret-org/vault', { isPrivate: true, createdAt: '2019-01-01T00:00:00Z', pushedAt: '2024-02-08T00:00:00Z' })
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2024],
-        pages: [[garden, diary]],
+        pages: [[tracks, diary]],
         windows: (alias) =>
           alias === 'w2024q1'
             ? {
@@ -854,17 +854,17 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
                   { repo: diary, nodes: [['2024-01-10T08:00:00Z', 2]] },
                   { repo: vault, nodes: [['2024-02-01T08:00:00Z', 3]] },
                 ],
-                firstRepositoryContribution: { occurredAt: '2024-01-03T10:00:00Z', repository: { nameWithOwner: 'Quiet-Sprout/diary', isPrivate: true } },
+                firstRepositoryContribution: { occurredAt: '2024-01-03T10:00:00Z', repository: { nameWithOwner: 'Quiet-Dev/diary', isPrivate: true } },
                 // its repository came back without isPrivate: its privacy is unknown, so it is not named
                 firstIssueContribution: { occurredAt: '2024-01-15T10:00:00Z', issue: { repository: { nameWithOwner: 'mystery-org/unknown' } } },
               }
             : undefined,
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
     expect(profile.repos.map((r) => [r.nameWithOwner, r.isOwn, r.isPrivate])).toEqual([
-      ['Quiet-Sprout/garden', true, false],
-      ['Quiet-Sprout/diary', true, true],
+      ['Quiet-Dev/tracks', true, false],
+      ['Quiet-Dev/diary', true, true],
       ['secret-org/vault', false, true],
     ])
     expect(profile.repos[2]).toMatchObject({ firstActiveAt: '2024-02-01T08:00:00Z', activity: [{ date: '2024-02-01', commits: 3 }] })
@@ -878,7 +878,7 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
 
   it('names no repo for a restricted or private first contribution, and keeps the earliest of each', async () => {
     const { fetch } = makeFetch(
-      sproutRouter({
+      quietRouter({
         years: [2023, 2024],
         windows: (alias) => {
           if (alias === 'w2023q2') {
@@ -899,7 +899,7 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
         },
       }),
     )
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z') })
     expect(profile.milestones).toEqual([
       // no joinedGitHubContribution in the windows read (they start in 2023): the account's creation
       { kind: 'joined', date: '2020-02-01T00:00:00Z', label: 'Joined GitHub' },
@@ -912,9 +912,9 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
   })
 
   it('reads no windows for a user who never contributed', async () => {
-    const { fetch, calls } = makeFetch(sproutRouter({ years: [], pages: [[repoNode('Quiet-Sprout/garden')]] }))
+    const { fetch, calls } = makeFetch(quietRouter({ years: [], pages: [[repoNode('Quiet-Dev/tracks')]] }))
     const progress: FetchProgress[] = []
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z'), onProgress: (p) => progress.push(p) })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z'), onProgress: (p) => progress.push(p) })
     expect(windowCalls(calls)).toEqual([])
     expect(profile.days).toEqual([])
     expect(profile.repos).toHaveLength(1)
@@ -924,15 +924,15 @@ describe('fetchProfileGraphql: days, repos and milestones', () => {
 
   it('pages the own repos up to 500, oldest first, and flags truncated past them', async () => {
     const pages = Array.from({ length: 6 }, (_, p) =>
-      Array.from({ length: 100 }, (_, i) => repoNode(`Quiet-Sprout/repo-${p * 100 + i}`, { createdAt: new Date(Date.UTC(2020, 2, 1) + (p * 100 + i) * DAY_MS).toISOString() })),
+      Array.from({ length: 100 }, (_, i) => repoNode(`Quiet-Dev/repo-${p * 100 + i}`, { createdAt: new Date(Date.UTC(2020, 2, 1) + (p * 100 + i) * DAY_MS).toISOString() })),
     )
-    const { fetch, calls } = makeFetch(sproutRouter({ years: [2024], pages }))
+    const { fetch, calls } = makeFetch(quietRouter({ years: [2024], pages }))
     const progress: FetchProgress[] = []
-    const profile = await fetchProfileGraphql('quiet-sprout', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z'), onProgress: (p) => progress.push(p) })
+    const profile = await fetchProfileGraphql('quiet-dev', { token: TOKEN, fetch, now: Date.parse('2024-02-10T12:00:00Z'), onProgress: (p) => progress.push(p) })
     const repoCalls = graphqlCalls(calls).filter((c) => aliasesOf(c).length === 0)
     expect(repoCalls.map((c) => c.body?.variables.after ?? null)).toEqual([null, 'c1', 'c2', 'c3', 'c4'])
     expect(profile.repos).toHaveLength(500)
-    expect(profile.repos[499].nameWithOwner).toBe('Quiet-Sprout/repo-499')
+    expect(profile.repos[499].nameWithOwner).toBe('Quiet-Dev/repo-499')
     expect(profile.truncated).toBe(true)
     expect(progress.some((p) => p.stage === 'repos' && /cap of 500/.test(p.message))).toBe(true)
   })
@@ -1288,14 +1288,14 @@ describe('fetchProfile with a token', () => {
   })
 
   it('names no login in a limit message, so a login cannot flip which limit it reads as', async () => {
-    const user = (login: string): Route => ({ body: { ...(SPROUT_USER.body as object), login } })
+    const user = (login: string): Route => ({ body: { ...(QUIET_USER.body as object), login } })
     for (const login of ['secondary-fan', 'graphql-fan']) {
-      const primary = await fetchProfile(login, { token: TOKEN, fetch: makeFetch(sproutRouter({ years: [2024], user: user(login), graphql: () => limited403 })).fetch, now: GAEARON_NOW })
+      const primary = await fetchProfile(login, { token: TOKEN, fetch: makeFetch(quietRouter({ years: [2024], user: user(login), graphql: () => limited403 })).fetch, now: GAEARON_NOW })
       expect(primary.fallback?.limit, login).toBe('graphql')
       expect(primary.fallback?.message, login).not.toContain(login)
       const refused = await fetchProfile(login, {
         token: TOKEN,
-        fetch: makeFetch(sproutRouter({ years: [2024], user: user(login), graphql: () => ({ status: 401, body: { message: 'Bad credentials' } }) })).fetch,
+        fetch: makeFetch(quietRouter({ years: [2024], user: user(login), graphql: () => ({ status: 401, body: { message: 'Bad credentials' } }) })).fetch,
         now: GAEARON_NOW,
       })
       expect(refused.fallback?.limit, login).toBeNull()
@@ -1436,9 +1436,9 @@ describe('fetchProfile with a token', () => {
     expect(org.calls).toHaveLength(1)
 
     const missing = makeFetch(() => undefined)
-    const missingErr = await expectFetchError(fetchProfile('No-Such-Sprout', { token: TOKEN, fetch: missing.fetch, now: GAEARON_NOW }))
+    const missingErr = await expectFetchError(fetchProfile('No-Such-Dev', { token: TOKEN, fetch: missing.fetch, now: GAEARON_NOW }))
     expect(missingErr.code).toBe('not_found')
-    expect(missingErr.message).toBe('No-Such-Sprout was not found. Check the spelling.')
+    expect(missingErr.message).toBe('No-Such-Dev was not found. Check the spelling.')
     expect(missing.calls).toHaveLength(1)
 
     // fetchProfileGraphql settles them the same way, before any GraphQL request
@@ -1488,13 +1488,13 @@ describe('fetchProfile with a token', () => {
   })
 })
 
-// ---------- the grow rule and the cache ----------
+// ---------- the load rule and the cache ----------
 
-describe('grow data and the cache with a token', () => {
-  it("grow data: source graphql, or rest after a fallback; neither names the login (a token is set)", async () => {
+describe('load data and the cache with a token', () => {
+  it("load data: source graphql, or rest after a fallback; neither names the login (a token is set)", async () => {
     const graphql = await kepanoProfile()
-    expect(personGrowEventData(graphql, false, true)).toEqual({ mode: 'person', source: 'graphql', cached: false, token: true })
-    expect(personGrowEventData(graphql, true, true)).toEqual({ mode: 'person', source: 'graphql', cached: true, token: true })
+    expect(personLoadEventData(graphql, false, true)).toEqual({ mode: 'person', source: 'graphql', cached: false, token: true })
+    expect(personLoadEventData(graphql, true, true)).toEqual({ mode: 'person', source: 'graphql', cached: true, token: true })
 
     const fallback = await fetchProfile('gaearon', {
       token: TOKEN,
@@ -1502,7 +1502,7 @@ describe('grow data and the cache with a token', () => {
       now: GAEARON_NOW,
     })
     expect(fallback.fallback).not.toBeNull()
-    const event = personGrowEventData(fallback, false, true)
+    const event = personLoadEventData(fallback, false, true)
     expect(event).toEqual({ mode: 'person', source: 'rest', cached: false, token: true })
     expect('login' in event).toBe(false)
   })
