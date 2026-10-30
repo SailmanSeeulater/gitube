@@ -7,11 +7,11 @@ back like a metro map. Paste a login instead and their repos become lines
 through the years, from the first commit to today. It all runs in your
 browser against the GitHub API: no clone, no server, no sign-up.
 
-**Live:** https://repogarden.latesailor.dev
+**Live:** https://gitube.latesailor.dev (the old address, repogarden.latesailor.dev, redirects there with share links intact)
 
-[![Andrej Karpathy's coding life as life lines: one line per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-lines.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=lines)
+[![Andrej Karpathy's coding life as life lines: one line per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-lines.jpg)](https://gitube.latesailor.dev/?user=karpathy&view=lines)
 
-<sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://repogarden.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant.</sub>
+<sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://gitube.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant.</sub>
 
 ## Contents
 
@@ -33,43 +33,43 @@ than its commit count.
 <table>
   <tr>
     <td colspan="2">
-      <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-metro.jpg" alt="vuejs/core in repo mode as a metro map: branches on straight lanes forking off main"></a>
+      <a href="https://gitube.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-metro.jpg" alt="vuejs/core in repo mode as a metro map: branches on straight lanes forking off main"></a>
       <br><b>repo mode</b> · <code>vuejs/core</code> as a metro map, the default layout: the newest end of 83 branches, each on its own lane off <code>main</code>, with the fix branches fanning out near the tip and spikes on the ones far apart from it. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <a href="https://repogarden.latesailor.dev/?user=gaearon&view=lines"><img src="docs/screenshots/gaearon-lines.jpg" alt="Dan Abramov's repos as life lines, from react-hot-loader and redux experiments in 2015 to react and atproto"></a>
+      <a href="https://gitube.latesailor.dev/?user=gaearon&view=lines"><img src="docs/screenshots/gaearon-lines.jpg" alt="Dan Abramov's repos as life lines, from react-hot-loader and redux experiments in 2015 to react and atproto"></a>
       <br><b>lines</b> · Dan Abramov (<code>gaearon</code>): 300 repos as tube-map lines, thick while active. The 2015 burst of React tooling fans out at the left.
     </td>
     <td width="50%">
-      <a href="https://repogarden.latesailor.dev/?user=antirez&view=constellation"><img src="docs/screenshots/antirez-constellation.jpg" alt="Salvatore Sanfilippo's repos as a constellation, one row per language"></a>
+      <a href="https://gitube.latesailor.dev/?user=antirez&view=constellation"><img src="docs/screenshots/antirez-constellation.jpg" alt="Salvatore Sanfilippo's repos as a constellation, one row per language"></a>
       <br><b>constellation</b> · Salvatore Sanfilippo (<code>antirez</code>): a row per language, C on top from linenoise and sds to kilo and redis, Ruby and Tcl below.
     </td>
   </tr>
   <tr>
     <td>
-      <a href="https://repogarden.latesailor.dev/?user=yyx990803&view=phosphor"><img src="docs/screenshots/yyx990803-phosphor.jpg" alt="Evan You's repos as stacks of green blocks on a phosphor screen"></a>
+      <a href="https://gitube.latesailor.dev/?user=yyx990803&view=phosphor"><img src="docs/screenshots/yyx990803-phosphor.jpg" alt="Evan You's repos as stacks of green blocks on a phosphor screen"></a>
       <br><b>phosphor</b> · Evan You (<code>yyx990803</code>): a green CRT, each repo a stack of blocks rising where it began, from HTML5 experiments to the Vue and Vite years.
     </td>
     <td>
-      <a href="https://repogarden.latesailor.dev/?user=sindresorhus&view=htop"><img src="docs/screenshots/sindresorhus-htop.jpg" alt="Sindre Sorhus's 500 oldest repos as rows of a system monitor"></a>
+      <a href="https://gitube.latesailor.dev/?user=sindresorhus&view=htop"><img src="docs/screenshots/sindresorhus-htop.jpg" alt="Sindre Sorhus's 500 oldest repos as rows of a system monitor"></a>
       <br><b>htop</b> · Sindre Sorhus (<code>sindresorhus</code>): one meter per repo, lit where it was active; the oldest 500 of his small modules, row after row from 2011 on.
     </td>
   </tr>
   <tr>
     <td>
-      <a href="https://repogarden.latesailor.dev/?user=tj&view=gitlog"><img src="docs/screenshots/tj-gitlog.jpg" alt="TJ Holowaychuk's repos as git log --graph branches, Node modules then Go"></a>
+      <a href="https://gitube.latesailor.dev/?user=tj&view=gitlog"><img src="docs/screenshots/tj-gitlog.jpg" alt="TJ Holowaychuk's repos as git log --graph branches, Node modules then Go"></a>
       <br><b>git log</b> · TJ Holowaychuk (<code>tj</code>): every repo a branch off the trunk; commander.js, n and the co family through 2014, then the go-* years.
     </td>
     <td>
-      <a href="https://repogarden.latesailor.dev/?user=kepano&view=minimap"><img src="docs/screenshots/kepano-minimap.jpg" alt="Steph Ango's repos as lines of code in an editor, with a minimap strip"></a>
+      <a href="https://gitube.latesailor.dev/?user=kepano&view=minimap"><img src="docs/screenshots/kepano-minimap.jpg" alt="Steph Ango's repos as lines of code in an editor, with a minimap strip"></a>
       <br><b>minimap</b> · Steph Ango (<code>kepano</code>): a code editor, one numbered line per repo, from the Minimal theme to Obsidian plugins and Defuddle.
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <a href="https://repogarden.latesailor.dev/?user=torvalds&view=helix"><img src="docs/screenshots/torvalds-helix.jpg" alt="Linus Torvalds's repos wound into a coil, one turn per year"></a>
+      <a href="https://gitube.latesailor.dev/?user=torvalds&view=helix"><img src="docs/screenshots/torvalds-helix.jpg" alt="Linus Torvalds's repos wound into a coil, one turn per year"></a>
       <br><b>helix</b> · Linus Torvalds (<code>torvalds</code>): the life wound into a coil, one turn per year with January at the top, so seasons line up across turns. linux runs the whole length; subsurface, libgit2 and the 2025 guitar pedals join along the way.
     </td>
   </tr>
@@ -191,7 +191,7 @@ Then open http://localhost:5173.
 | `npx tsx scripts/smoke.ts owner/repo [maxBranches]` | live fetch plus graph checks against the real API |
 | `npx tsx scripts/smoke-profile.ts <login> [--token-env NAME]` | live person-mode fetch plus sanity checks. With `--token-env` it reads a token from that environment variable (never printed) and runs the GraphQL tier. Exits 3 on a core rate limit without retrying |
 
-**Deploy.** Pushes to `master` deploy to https://repogarden.latesailor.dev on
+**Deploy.** Pushes to `master` deploy to https://gitube.latesailor.dev on
 the Oracle VPS through GitHub Actions. One-time setup (DNS, nginx, the deploy
 key) is in [DEPLOY.md](DEPLOY.md).
 
@@ -285,7 +285,7 @@ The tracker sets no cookies and writes nothing to the browser's storage.
 
 **What reaches Umami.** Each pageview and event is one request carrying:
 
-- The page as its origin only (`https://repogarden.latesailor.dev/`), never the
+- The page as its origin only (`https://gitube.latesailor.dev/`), never the
   path, query string or fragment. Share links keep their repo or user in the
   query string, so a pageview says someone opened gitube, not what they
   looked at.
@@ -338,7 +338,7 @@ which it works out the location, browser, OS and device type.
   A cached copy is never named. No event names a private repo.
 - Every value is checked on the way out: anything that looks like a token or
   a query string is dropped, and strings are cut to 50 characters.
-- Do Not Track is honoured, and only `repogarden.latesailor.dev` is counted.
+- Do Not Track is honoured, and only `gitube.latesailor.dev` is counted.
   To stop counting your own visits, run
   `localStorage.setItem('umami.disabled', '1')` in the console on the live site.
 

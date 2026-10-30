@@ -20,7 +20,7 @@ import { useAppStore } from '../store/useAppStore'
 
 export const UMAMI_HOST = 'https://stats.latesailor.dev'
 /** Where pageviews count; the tracker ignores every other hostname (localhost included). */
-export const UMAMI_DOMAINS = 'repogarden.latesailor.dev'
+export const UMAMI_DOMAINS = 'gitube.latesailor.dev'
 export const MAX_VALUE_LENGTH = 50
 /** How many events wait for the tracker while it loads; the first ones are kept, the rest dropped. */
 export const MAX_QUEUED_EVENTS = 20
