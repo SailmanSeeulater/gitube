@@ -164,7 +164,7 @@ describe('loading', () => {
     setGarden({ progress: PROGRESS })
     const html = personApp('octo', '', { profile: PUBLIC, fetching: true })
     const text = textOf(html)
-    expect(html).toContain('aria-label="life garden of octo: 2 repos')
+    expect(html).toContain('aria-label="life lines of octo: 2 repos')
     expect(html).toContain('<aside')
     expect(text).not.toContain('growing octo…')
     expect(text).toContain('listing repos')
@@ -250,7 +250,7 @@ describe('a fetch that failed', () => {
   it('leaves the profile on show after a failed refetch, under a card that can be closed', () => {
     const error = new GitHubFetchError('GitHub API rate limit exceeded while looking up octo.', 'rate_limited', RESET)
     const html = personApp('octo', '', { profile: PUBLIC, error })
-    expect(html).toContain('aria-label="life garden of octo: 2 repos')
+    expect(html).toContain('aria-label="life lines of octo: 2 repos')
     const shown = card(html)
     expect(textOf(shown)).toContain('GitHub rate limit reached')
     expect(shown).toContain('aria-label="Dismiss"')
@@ -267,7 +267,7 @@ describe('a life with nothing to draw', () => {
   it('says a user without a token has no public repos, and offers a token', () => {
     const html = personApp('octo', '', { profile: empty })
     const text = textOf(html)
-    expect(html).toContain('aria-label="life garden of octo: 0 repos')
+    expect(html).toContain('aria-label="life lines of octo: 0 repos')
     expect(text).toContain('octo has no public repos yet')
     expect(text).toContain('with a token, repos they contributed to show too.')
     expect(buttons(html)).toContain('add a token')
@@ -305,7 +305,7 @@ describe('a life with nothing to draw', () => {
 
 describe('a profile of only repos they contributed to', () => {
   it('shows in every view, with each repo marked and no empty note', () => {
-    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as const) {
+    for (const view of ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as const) {
       const html = personApp('helper', FAKE_TOKEN, { profile: VISITOR }, view)
       const title = LIFE_VIEWS[view].title
       expect(html).toContain(`aria-label="${title} of helper: 2 repos, 2018 to `)
@@ -323,7 +323,7 @@ describe('very old and very young lives', () => {
     // one of GitHub's first accounts, with a repo a year from 2008 on and the 500-repo cap reached
     const repos = Array.from({ length: 17 }, (_, i) => repo(`pioneer/r${2008 + i}`, { createdAt: iso(`${2008 + i}-03-01`), lastActiveAt: iso(`${2008 + i}-09-01`), language: i % 2 ? 'Ruby' : 'C' }))
     const pioneer: ProfileData = { ...PUBLIC, login: 'pioneer', createdAt: iso('2007-10-20'), repos, truncated: true, milestones: [{ kind: 'joined', date: iso('2007-10-20'), label: 'joined GitHub' }] }
-    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as const) {
+    for (const view of ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as const) {
       const html = personApp('pioneer', '', { profile: pioneer }, view)
       expect(html).toMatch(/aria-label="[a-z ]+ of pioneer: 17 repos, 2007 to 20\d\d"/)
       const text = textOf(html)
@@ -351,7 +351,7 @@ describe('very old and very young lives', () => {
     const today = new Date().toISOString()
     const newborn: ProfileData = { ...PUBLIC, login: 'newborn', createdAt: today, repos: [], milestones: [{ kind: 'joined', date: today, label: 'joined GitHub' }] }
     const html = personApp('newborn', '', { profile: newborn })
-    expect(html).toMatch(/aria-label="life garden of newborn: 0 repos, 20\d\d"/)
+    expect(html).toMatch(/aria-label="life lines of newborn: 0 repos, 20\d\d"/)
     expect(textOf(html)).toContain('newborn has no public repos yet')
   })
 })

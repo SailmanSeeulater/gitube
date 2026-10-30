@@ -248,8 +248,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
 
   // ---- layouts ----
   // Metro's engine is a chunk of its own, loaded once metro is picked (or was the saved layout).
-  // Until it is in, the canvas keeps the layout it had and then tweens across as before; a garden
-  // about to appear for the first time waits for it, so a saved metro layout never flashes organic.
+  // Until it is in, the canvas keeps the layout it had and then tweens across as before; a repo
+  // about to appear for the first time waits for it, so the metro default never flashes organic.
   const metroWanted = layoutMode === 'metro'
   const metroEngine = useChunk(metroChunk, metroWanted)
   const metroLayout = metroWanted && metroEngine.status === 'ready' ? metroEngine.value.metroLayout : null
@@ -545,7 +545,6 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
             focus={focus}
             timelapse={gardenTimelapse}
             thorns={weeds?.thorns ?? null}
-            garden={drawnLayout === 'garden'}
             prMarks={timelapseOpen ? null : marks}
           />
         )}

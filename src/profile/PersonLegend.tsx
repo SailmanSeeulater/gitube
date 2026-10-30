@@ -1,7 +1,6 @@
 import type { ProfileData } from '../types'
 import type { Theme } from '../theme/themes'
 import type { PersonView } from '../share/shareUrl'
-import { gardenInk, leafColour } from '../components/gardenPaint'
 import { DORMANT_DAYS, githubDay, type LifeTimeline } from './timeline'
 import { LockIcon } from './personIcons'
 import { htopLanguageSlots } from './htopLayout'
@@ -12,15 +11,7 @@ import { minimapTones } from './minimapLayout'
 import { toneColour } from './minimapPaint'
 
 type GlyphKind =
-  // the life garden's
-  | 'bloom'
-  | 'bud'
-  | 'wilted'
-  | 'leaf'
-  | 'cutting'
-  | 'visiting'
-  | 'seedling'
-  | 'landed'
+  // every view's
   | 'milestone'
   | 'lock'
   // life lines'
@@ -77,111 +68,21 @@ type GlyphKind =
   | 'faint-coil'
   | 'landed-coil'
 
-// The petal directions gardenLook's petalAngles gives an open bloom at turn 0.1 and a wilted head at
-// turn 0.5, as the repo garden's legend draws them; written out, so the first-load entry need not
-// export petalAngles for these two glyphs alone (a test holds them equal).
-export const LEGEND_BLOOM_PETALS = [0, 1, 2, 3, 4, 5].map((i) => (i / 6) * Math.PI * 2 + 0.1 * Math.PI)
-export const LEGEND_WILTED_PETALS = [-0.9, -0.3, 0.3, 0.9].map((d) => Math.PI / 2 + d)
-
-/** Ellipse petals around (9, 9), as gardenPaint draws them. */
-function Petals({ angles, reach, long, short, fill }: { angles: number[]; reach: number; long: number; short: number; fill: string }) {
-  return (
-    <>
-      {angles.map((a) => (
-        <ellipse
-          key={a}
-          cx={9 + Math.cos(a) * reach}
-          cy={9 + Math.sin(a) * reach}
-          rx={long}
-          ry={short}
-          transform={`rotate(${(a * 180) / Math.PI} ${9 + Math.cos(a) * reach} ${9 + Math.sin(a) * reach})`}
-          fill={fill}
-        />
-      ))}
-    </>
-  )
-}
-
 /** The views' glyphs in the active theme, in the accent, the colour of the leading language. */
 function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
   const common = { width: 18, height: 18, viewBox: '0 0 18 18', 'aria-hidden': true as const }
   const colour = theme.accent
-  const ink = gardenInk(theme)
-  const horizon = <line x1="1" y1="14" x2="17" y2="14" stroke={ink.root} strokeWidth="1.5" />
+  /** an archived repo's colour, and the horizon's */
+  const dry = theme.derived.dry
+  const horizon = theme.derived.horizon
   /** a life line's thin dormant stretch, behind a mark on it */
   const track = <line x1="1" y1="9" x2="17" y2="9" stroke={colour} strokeWidth="1" />
   switch (kind) {
-    case 'bloom':
-      return (
-        <svg {...common}>
-          <Petals angles={LEGEND_BLOOM_PETALS} reach={3.6} long={3} short={1.7} fill={colour} />
-          <circle cx="9" cy="9" r="2.2" fill={ink.centre} />
-        </svg>
-      )
-    case 'bud':
-      return (
-        <svg {...common}>
-          <path d="M9 14.5 Q6 13 4.5 11.5 Q7 11 9 13.5Z M9 14.5 Q12 13 13.5 11.5 Q11 11 9 13.5Z" fill={leafColour(colour, ink)} />
-          <path d="M9 3 Q13.5 9 9 14 Q4.5 9 9 3Z" fill={colour} />
-        </svg>
-      )
-    // dry: the stem and the head both in the wilt colour
-    case 'wilted':
-      return (
-        <svg {...common}>
-          <path d="M2 13 Q6 4 9 7" fill="none" stroke={ink.wilt} strokeWidth="1.4" />
-          <Petals angles={LEGEND_WILTED_PETALS} reach={3} long={2.6} short={1.2} fill={ink.wilt} />
-          <circle cx="9" cy="9" r="1.8" fill={ink.wiltCore} />
-        </svg>
-      )
-    case 'leaf':
-      return (
-        <svg {...common}>
-          <line x1="9" y1="17" x2="9" y2="2" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M9 10Q13.24 9.3 13.95 5.05Q9.7 5.76 9 10Z M9 13Q8.3 8.76 4.05 8.05Q4.76 12.3 9 13Z" fill={leafColour(colour, ink)} />
-        </svg>
-      )
-    // a fork: a stem cut off slanting at the base, with no roots
-    case 'cutting':
-      return (
-        <svg {...common}>
-          <line x1="9" y1="13.5" x2="9" y2="4" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="9" cy="4" r="1.8" fill={colour} />
-          <line x1="5" y1="15.5" x2="13" y2="12" stroke={ink.root} strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      )
-    // a repo they only contributed to: a hollow ring where they arrived
-    case 'visiting':
-      return (
-        <svg {...common}>
-          {horizon}
-          <line x1="9" y1="14" x2="9" y2="4" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="9" cy="4" r="1.8" fill={colour} />
-          <circle cx="9" cy="14" r="2.6" fill={theme.canvas} stroke={theme.rootRing} strokeWidth="1.2" />
-        </svg>
-      )
-    case 'seedling':
-      return (
-        <svg {...common}>
-          {horizon}
-          <line x1="9" y1="14" x2="9" y2="10.5" stroke={colour} strokeWidth="1.2" strokeLinecap="round" />
-          <path d="M9 7.5Q10.6 9.3 9 11Q7.4 9.3 9 7.5Z" fill={colour} />
-        </svg>
-      )
     case 'milestone':
       return (
         <svg {...common}>
-          <line x1="1" y1="9" x2="17" y2="9" stroke={ink.root} strokeWidth="1.5" />
+          <line x1="1" y1="9" x2="17" y2="9" stroke={horizon} strokeWidth="1.5" />
           <path d="M9 5L13 9L9 13L5 9Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
-        </svg>
-      )
-    // a pull request of theirs merged into the repo: a diamond in the accent on the stem at its day
-    case 'landed':
-      return (
-        <svg {...common}>
-          {horizon}
-          <line x1="9" y1="14" x2="9" y2="3" stroke={colour} strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M9 6L12 9L9 12L6 9Z" fill={theme.accent} stroke={theme.derived.textHalo} strokeWidth="1.5" paintOrder="stroke" />
         </svg>
       )
     case 'lock':
@@ -231,8 +132,8 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
     case 'terminus':
       return (
         <svg {...common}>
-          <line x1="2" y1="9" x2="12" y2="9" stroke={ink.wilt} strokeWidth="3" strokeLinecap="round" />
-          <line x1="13" y1="4" x2="13" y2="14" stroke={ink.wilt} strokeWidth="1.5" />
+          <line x1="2" y1="9" x2="12" y2="9" stroke={dry} strokeWidth="3" strokeLinecap="round" />
+          <line x1="13" y1="4" x2="13" y2="14" stroke={dry} strokeWidth="1.5" />
         </svg>
       )
     // a milestone of the repo, on its line
@@ -290,7 +191,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
     case 'dry-star':
       return (
         <svg {...common}>
-          <circle cx="9" cy="9" r="3.5" fill={ink.wilt} />
+          <circle cx="9" cy="9" r="3.5" fill={dry} />
         </svg>
       )
     case 'link':
@@ -343,8 +244,8 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       return (
         <svg {...common}>
           {horizon}
-          <rect x="7" y="10.5" width="4" height="2.5" fill={ink.wilt} />
-          <rect x="7" y="7" width="4" height="2.5" fill={ink.wilt} />
+          <rect x="7" y="10.5" width="4" height="2.5" fill={dry} />
+          <rect x="7" y="7" width="4" height="2.5" fill={dry} />
         </svg>
       )
     case 'faint-stack':
@@ -404,7 +305,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
       return (
         <svg {...common}>
           {[3, 5, 7, 9, 11].map((x) => (
-            <rect key={x} x={x} y="6" width="1" height="6" fill={ink.wilt} />
+            <rect key={x} x={x} y="6" width="1" height="6" fill={dry} />
           ))}
         </svg>
       )
@@ -493,7 +394,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
     case 'dim-coil':
       return (
         <svg {...common}>
-          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={ink.wilt} strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M1 9 C4 2, 7 2, 9 9 C11 16, 14 16, 17 9" fill="none" stroke={dry} strokeWidth="1.8" strokeLinecap="round" />
         </svg>
       )
     case 'faint-coil':
@@ -529,7 +430,7 @@ function Glyph({ kind, theme }: { kind: GlyphKind; theme: Theme }) {
     case 'comment':
       return (
         <svg {...common}>
-          <rect x="1" y="7" width="16" height="4" rx="1.5" fill={ink.wilt} />
+          <rect x="1" y="7" width="16" height="4" rx="1.5" fill={dry} />
         </svg>
       )
     case 'hollow-token':
@@ -577,7 +478,6 @@ export const GRAPHQL_FAILED = 'GraphQL failed, so this is the public profile; tr
  * with a token, and what stands in for them without commit counts.
  */
 const MEASURES: { readonly [V in PersonView]: { counted: string; uncounted: string } } = {
-  garden: { counted: "a plant's height", uncounted: "a plant's height is how long the repo was active" },
   lines: { counted: "a line's thickness", uncounted: 'every line is drawn one thickness, and its thick run is how long the repo was active' },
   constellation: { counted: "a star's size", uncounted: "a star's size is how long the repo was active" },
   phosphor: { counted: "a stack's height", uncounted: "a stack's height is how long the repo was active" },
@@ -590,11 +490,11 @@ const MEASURES: { readonly [V in PersonView]: { counted: string; uncounted: stri
 /**
  * What GitHub's data leaves out of this profile, as the legend of a view lists it (PROFILE_SPEC.md
  * section 2, "Known limits"): the tier's own limits, worded for what the view measures a repo by,
- * then anything cut short, naming the quarters lost. The life garden's when view is left out.
+ * then anything cut short, naming the quarters lost. Life lines' when view is left out.
  */
 export function dataLimits(
   profile: Pick<ProfileData, 'source' | 'recentFrom' | 'restrictedContributions' | 'truncated' | 'lostWindows' | 'fallback'>,
-  view: PersonView = 'garden',
+  view: PersonView = 'lines',
 ): string[] {
   const out: string[] = []
   const measure = MEASURES[view]
@@ -650,7 +550,7 @@ export interface PersonLegendProps {
   theme: Theme
   /** the profile holds a private repo (any copy of it) */
   hasPrivate: boolean
-  /** the view it explains; the life garden when left out */
+  /** the view it explains; life lines when left out */
   view?: PersonView
 }
 
@@ -676,35 +576,6 @@ const LANDED_HINT = 'a pull request of theirs merged into a repo they do not own
 /** Whether any lane has a landed pull request: then the view draws the mark, and the legend lists it. */
 function anyLanded(timeline: LifeTimeline): boolean {
   return timeline.lanes.some((lane) => lane.landed.length > 0)
-}
-
-/** The life garden's intro, glyphs and colours. */
-function gardenLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean): ViewLegend {
-  const items: LegendItem[] = [
-    { kind: 'bloom', label: 'stars', hint: 'a repo with stars blooms: the more stars, the bigger the flower' },
-    { kind: 'bud', label: 'no stars', hint: 'a repo without stars ends in a bud' },
-    {
-      kind: 'leaf',
-      label: 'active span',
-      hint: `a leaf for each run of activity; quiet gaps under ${DORMANT_DAYS} days stay in one run, and the stem thins where the repo lay dormant`,
-    },
-    { kind: 'wilted', label: 'archived', hint: 'an archived repo is drawn dry and ends at its last activity; its head still grows with its stars' },
-    { kind: 'cutting', label: 'fork', hint: 'a fork is drawn as a cutting: cut off at the base, with no roots' },
-    { kind: 'milestone', label: 'milestone', hint: 'a milestone on the horizon: hover it, or see the milestones tab' },
-  ]
-  if (timeline.lanes.some((lane) => !lane.isOwn)) {
-    items.push({ kind: 'visiting', label: 'contributed', hint: 'a repo they only contributed to, rooted on the day of their first counted commit, with a ring at the root' })
-  }
-  if (graphql && timeline.lanes.some((lane) => !lane.detailed)) items.push({ kind: 'seedling', label: 'seedling', hint: SEEDLING_HINT })
-  if (anyLanded(timeline)) items.push({ kind: 'landed', label: LANDED_LABEL, hint: `a diamond on the stem: ${LANDED_HINT}` })
-  if (hasPrivate) items.push(PRIVATE_ITEM)
-  return {
-    intro: `time runs left to right; each plant is a repo, rooted where their part in it starts. ${
-      graphql ? 'height: the commits GitHub counted.' : 'height: how long it was active.'
-    }`,
-    items,
-    colours: "colour = a repo's main language; the strip under the horizon, the leading one each quarter.",
-  }
 }
 
 /** Life lines' intro, glyphs and colours. */
@@ -922,7 +793,6 @@ function helixLegend(timeline: LifeTimeline, graphql: boolean, hasPrivate: boole
 }
 
 const LEGENDS: { readonly [V in PersonView]: (timeline: LifeTimeline, graphql: boolean, hasPrivate: boolean) => ViewLegend } = {
-  garden: gardenLegend,
   lines: linesLegend,
   constellation: constellationLegend,
   phosphor: phosphorLegend,
@@ -933,7 +803,7 @@ const LEGENDS: { readonly [V in PersonView]: (timeline: LifeTimeline, graphql: b
 }
 
 /** The legend of the view on show: its glyphs, its language colours and the limits of GitHub's data. */
-export default function PersonLegend({ profile, timeline, colourOf, theme, hasPrivate, view = 'garden' }: PersonLegendProps) {
+export default function PersonLegend({ profile, timeline, colourOf, theme, hasPrivate, view = 'lines' }: PersonLegendProps) {
   const graphql = profile.source === 'graphql'
   const { intro, items, colours, swatch } = LEGENDS[view](timeline, graphql, hasPrivate)
   const swatchOf = swatch === undefined ? colourOf : swatch
@@ -943,7 +813,7 @@ export default function PersonLegend({ profile, timeline, colourOf, theme, hasPr
 
   return (
     <div>
-      <p className="mb-2 text-[11px] leading-snug text-garden-muted">{intro}</p>
+      <p className="mb-1.5 text-[11px] leading-snug text-garden-muted">{intro}</p>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {items.map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>

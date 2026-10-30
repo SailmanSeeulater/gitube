@@ -212,9 +212,8 @@ const VIEW_OPTIONS: ReadonlyArray<{ value: ViewMode; label: string }> = [
 ]
 
 const LAYOUT_OPTIONS: ReadonlyArray<{ value: LayoutMode; label: string }> = [
-  { value: 'organic', label: 'organic' },
   { value: 'metro', label: 'metro' },
-  { value: 'garden', label: 'garden' },
+  { value: 'organic', label: 'organic' },
 ]
 
 const STALE_SEGMENTS = STALE_OPTIONS.map((o) => ({ value: o.days, label: o.label }))
@@ -554,7 +553,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         <div className="flex-1">
           <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={pickView} />
         </div>
-        <div className="flex-[1.45]" title="organic: free physics. metro: straight lanes, like a tube map. garden: grown upward as plants">
+        <div className="flex-1" title="metro: straight lanes, like a tube map. organic: free physics">
           <Segmented
             ariaLabel="Layout"
             options={LAYOUT_OPTIONS}

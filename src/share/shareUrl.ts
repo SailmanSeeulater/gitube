@@ -3,7 +3,8 @@
  *
  * Repo mode: ?repo=owner/repo, plus &branch=<name> or &by=<login> (a contributor without a GitHub
  * account: &by=name:<author name>), and &vs=owner/repo for a garden battle.
- * Person mode: ?user=<login>, plus &view=garden, lines or constellation for the chosen view. A repo
+ * Person mode: ?user=<login>, plus &view=<view> for the chosen view (lines, constellation or a
+ * console view). A link from before the life garden was retired, &view=garden, opens lines. A repo
  * wins when a link names both.
  *
  * Pure: reads and writes query strings only.
@@ -21,11 +22,13 @@ export interface ShareState {
 }
 
 /** The person mode views a share link can name. */
-export type PersonView = 'garden' | 'lines' | 'constellation' | 'phosphor' | 'htop' | 'gitlog' | 'minimap' | 'helix'
+export type PersonView = 'lines' | 'constellation' | 'phosphor' | 'htop' | 'gitlog' | 'minimap' | 'helix'
 
 const NAME_PREFIX = 'name:'
 const LOGIN_PREFIX = 'login:'
-const PERSON_VIEWS = new Set(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'])
+const PERSON_VIEWS = new Set(['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'])
+/** Views a link may still name that are gone, and the view each now opens. */
+const RETIRED_VIEWS: Readonly<Record<string, PersonView>> = { garden: 'lines' }
 
 /** Reads a location.search string. Anything malformed is dropped, never thrown. */
 export function readShareState(search: string): ShareState {
@@ -47,7 +50,8 @@ export function readShareState(search: string): ShareState {
  * What a location.search string opens: a repo with its share state, a user with their view, or
  * null for neither. A ?repo= that parses wins, and user and view are then ignored; otherwise a
  * ?user= that parses as a login (so @login and github.com URLs work, as ?repo= takes URLs) is the
- * subject, and branch, by and vs are ignored. &view= counts only when it names a view exactly.
+ * subject, and branch, by and vs are ignored. &view= counts only when it names a view exactly, or a
+ * retired one (garden opens lines).
  */
 export function readSubject(
   search: string,
@@ -59,7 +63,8 @@ export function readSubject(
   const login = userParam ? parseLogin(userParam) : null
   if (!login) return null
   const viewParam = params.get('view')
-  const view = viewParam !== null && PERSON_VIEWS.has(viewParam) ? (viewParam as PersonView) : null
+  const view =
+    viewParam === null ? null : PERSON_VIEWS.has(viewParam) ? (viewParam as PersonView) : Object.hasOwn(RETIRED_VIEWS, viewParam) ? RETIRED_VIEWS[viewParam] : null
   return { kind: 'user', login, view }
 }
 

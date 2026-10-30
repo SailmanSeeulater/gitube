@@ -56,9 +56,9 @@ describe('share links', () => {
 
 describe('person share links', () => {
   it('writes the user and the view, and reads them back', () => {
-    expect(writeUserShare({ login: 'octocat', view: 'garden' })).toBe('?user=octocat&view=garden')
+    expect(writeUserShare({ login: 'octocat', view: 'lines' })).toBe('?user=octocat&view=lines')
     expect(writeUserShare({ login: 'octocat', view: null })).toBe('?user=octocat')
-    for (const view of ['garden', 'lines', 'constellation', null] satisfies (PersonView | null)[]) {
+    for (const view of ['lines', 'constellation', 'helix', null] satisfies (PersonView | null)[]) {
       for (const login of ['octocat', 'SailmanSeeulater', 'foo--bar-']) {
         expect(readSubject(writeUserShare({ login, view }))).toEqual({ kind: 'user', login, view })
       }
@@ -94,7 +94,8 @@ describe('person share links', () => {
       kind: 'repo',
       share: { repo: express, branch: 'main', person: null },
     })
-    expect(readSubject('?repo=not a repo&user=octocat&view=garden')).toEqual({ kind: 'user', login: 'octocat', view: 'garden' })
+    // a retired view: the life garden's links open life lines
+    expect(readSubject('?repo=not a repo&user=octocat&view=garden')).toEqual({ kind: 'user', login: 'octocat', view: 'lines' })
     // a repo's selection means nothing to a user
     expect(readSubject('?user=x&branch=m&by=a&vs=c/d')).toEqual({ kind: 'user', login: 'x', view: null })
   })

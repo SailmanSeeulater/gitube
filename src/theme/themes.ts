@@ -33,12 +33,12 @@ export const LABEL_PLATE_FILL_ALPHA = 0.92
 export const LABEL_PLATE_RING_ALPHA = 0.25
 
 /**
- * The garden layout's natural colours, which no branch palette provides: dead petals and their
- * core, roots, and the green laid over a branch colour for its leaves. Lighter on dark canvases.
+ * Person mode's earth tones, which no language palette provides: an archived repo's dry brown and
+ * the horizon under every view. Lighter on dark canvases.
  */
-export const GARDEN_NATURALS: Readonly<Record<ThemeMode, { wilt: string; wiltCore: string; root: string; leafGreen: string }>> = {
-  dark: { wilt: '#9a7652', wiltCore: '#5e4630', root: '#8c6a4a', leafGreen: '#7cc46a' },
-  light: { wilt: '#8a6440', wiltCore: '#5a3f27', root: '#7a5838', leafGreen: '#4f9a3f' },
+export const EARTH_TONES: Readonly<Record<ThemeMode, { dry: string; horizon: string }>> = {
+  dark: { dry: '#9a7652', horizon: '#8c6a4a' },
+  light: { dry: '#8a6440', horizon: '#7a5838' },
 }
 
 /**
@@ -185,11 +185,9 @@ export interface ThemeDerived {
   inputBg: string
   /** html { color-scheme }: mode */
   colorScheme: ThemeMode
-  /** garden layout (GARDEN_NATURALS for the mode): wilted petals, their core, roots, leaf green */
-  gardenWilt: string
-  gardenWiltCore: string
-  gardenRoot: string
-  gardenLeafGreen: string
+  /** person mode (EARTH_TONES for the mode): an archived repo, and the horizon */
+  dry: string
+  horizon: string
 }
 
 export interface Theme extends ThemeTokens {
@@ -634,10 +632,8 @@ export function buildTheme(t: ThemeTokens): Theme {
       warnChipBorder: hexToRgba(t.warn, 0.4),
       inputBg: t.field,
       colorScheme: t.mode,
-      gardenWilt: GARDEN_NATURALS[t.mode].wilt,
-      gardenWiltCore: GARDEN_NATURALS[t.mode].wiltCore,
-      gardenRoot: GARDEN_NATURALS[t.mode].root,
-      gardenLeafGreen: GARDEN_NATURALS[t.mode].leafGreen,
+      dry: EARTH_TONES[t.mode].dry,
+      horizon: EARTH_TONES[t.mode].horizon,
     },
   }
 }

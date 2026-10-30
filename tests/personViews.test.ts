@@ -1,6 +1,6 @@
 /**
- * Person mode's three views end to end (PROFILE_SPEC.md Phase 6): the life garden, life lines and
- * the constellation share the panel (its switcher marking the view on show, its legend explaining
+ * Person mode's views end to end (PROFILE_SPEC.md Phase 6): life lines, the constellation and the
+ * console views share the panel (its switcher marking the view on show, its legend explaining
  * it), the inspector, the theme, the time-lapse (one clock grows each view, and the caption counts
  * the same repos in all of them), the poster (the view on show, fully grown) and the recording (one
  * canvas, the switcher locked while it records). A switch leaves the store as it was, so hidden
@@ -23,7 +23,6 @@ import { closeLifeTimelapse, lapseCaption, openLifeTimelapse } from '../src/prof
 import { LIFE_VIEWS, VIEW_OPTIONS, switchView } from '../src/profile/lifeViews'
 import { viewInk } from '../src/profile/lifeView'
 import type { LifeHover } from '../src/profile/lifeTypes'
-import { leafColour } from '../src/components/gardenPaint'
 import { languagePalette } from '../src/profile/lifeInk'
 import { PRIVATE_REPO_LABEL, repoKey } from '../src/profile/privacy'
 import { dayAt } from '../src/profile/timeline'
@@ -59,11 +58,10 @@ import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/record
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
+const VIEWS: PersonView[] = ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 const PROGRESSES = [0, 0.25, 0.5, 0.75, 1]
 /** What each view's legend says first, and only it. */
 const INTROS: Record<PersonView, string> = {
-  garden: 'each plant is a repo, rooted where their part in it starts',
   lines: 'each line is a repo, from where their part in it starts to today: thick while active, thin while dormant',
   constellation: "each star is a repo, placed where their part in it starts, in its language's row",
   phosphor: 'each stack of blocks is a repo, rising where their part in it starts',
@@ -156,10 +154,10 @@ describe('the panel and the inspector', () => {
     }
   })
 
-  it('opens the garden for a link that names no view', () => {
+  it('opens life lines for a link that names no view', () => {
     const html = personApp(kepano, null, FAKE_TOKEN)
-    expect(html).toContain('aria-label="life garden of kepano:')
-    expect(checkedViews(html)).toEqual(['garden'])
+    expect(html).toContain('aria-label="life lines of kepano:')
+    expect(checkedViews(html)).toEqual(['lines'])
   })
 
   it('shows the same inspector for a hovered or selected repo, whichever view is on show', () => {
@@ -191,19 +189,11 @@ describe('the panel and the inspector', () => {
   })
 })
 
-/** Every colour the theme lets the views draw with: its ink, its language colours, and the garden's leaves of them. */
+/** Every colour the theme lets the views draw with: its ink and its language colours. */
 function allowedColours(g: Grown): Set<string> {
-  const allowed = new Set<string>()
-  const { garden, dimAlpha: _alpha, ...flat } = g.ink
-  for (const value of [...Object.values(flat), ...Object.values(garden)]) allowed.add(value)
-  for (const colour of [...Object.values(languagePalette(g.timeline, g.theme)), g.theme.fallback]) {
-    allowed.add(colour)
-    try {
-      allowed.add(leafColour(colour, g.ink.garden))
-    } catch {
-      // not hex: the garden draws its leaves in the colour itself
-    }
-  }
+  const { dimAlpha: _alpha, ...flat } = g.ink
+  const allowed = new Set<string>(Object.values(flat))
+  for (const colour of [...Object.values(languagePalette(g.timeline, g.theme)), g.theme.fallback]) allowed.add(colour)
   return allowed
 }
 
@@ -288,7 +278,7 @@ describe('the time-lapse', () => {
       for (const p of PROGRESSES) {
         const captions = VIEWS.map((view) => {
           const { def, layout } = growView(g, view)
-          return lapseCaption(g.timeline, { plants: def.scene.items(layout) }, p, hidden)
+          return lapseCaption(g.timeline, def.scene.items(layout), p, hidden)
         })
         for (const caption of captions) expect(caption, `${label} at ${p}`).toEqual(captions[0])
         const huds = VIEWS.map((view) => {
@@ -386,8 +376,7 @@ describe('the poster', () => {
         return [view, lastFrame(r.recs[0])]
       }),
     ) as Record<PersonView, CtxEntry[]>
-    // the garden's stems and heads (drawTip's petals) are its own
-    expect(count(plots.garden, 'quadraticCurveTo')).toBeGreaterThan(g.timeline.lanes.length)
+    // no curves or petals: those were the retired life garden's
     for (const view of ['lines', 'constellation'] as const) {
       expect(count(plots[view], 'quadraticCurveTo'), view).toBe(0)
       expect(count(plots[view], 'ellipse'), view).toBe(0)
@@ -496,9 +485,9 @@ describe('a switch', () => {
     store.setSearch('obs')
     const before = { ...usePersonStore.getState() }
     stubTracker()
-    let view: PersonView = 'garden'
-    for (const next of ['lines', 'constellation', 'garden'] as PersonView[]) switchView(view, next, (v) => (view = v))
-    expect(view).toBe('garden')
+    let view: PersonView = 'helix'
+    for (const next of ['lines', 'constellation', 'helix'] as PersonView[]) switchView(view, next, (v) => (view = v))
+    expect(view).toBe('helix')
     const after = usePersonStore.getState()
     for (const field of Object.keys(before) as Array<keyof typeof before>) expect(Object.is(after[field], before[field]), field).toBe(true)
   })

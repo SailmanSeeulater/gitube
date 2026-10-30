@@ -247,6 +247,10 @@ All views paint on canvas, read colours from the active theme (`src/theme/themes
 themes work with no extra work, and share one side panel (repo list with hide toggles, milestones,
 legend) and one inspector (hover a repo or a day for details).
 
+> **Retired.** The life garden below was removed when the app moved to its metro look: life lines
+> is the default view, and a `?user=…&view=garden` link opens life lines. The rest of this spec
+> keeps its history as it was built.
+
 1. **Life garden (v1 default).** A horizon with time running left to right. Each repo is a plant
    rooted at its `firstActiveAt` (its birth for the person's own repos, their first counted day for
    repos they only contributed to). Height follows total activity, leaves mark active spans, a bloom marks

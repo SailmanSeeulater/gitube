@@ -1,10 +1,10 @@
 /**
  * A person-mode recording, end to end (PROFILE_SPEC.md Phase 5, "a recording plays from the join
- * year to today and respects the privacy toggle"): the recorder captures the life garden's canvas,
- * painted frame by frame by one painter (as LifeGarden keeps one while the time-lapse is on) under
+ * year to today and respects the privacy toggle"): the recorder captures the view's canvas,
+ * painted frame by frame by one painter (as LifeView keeps one while the time-lapse is on) under
  * the time-lapse value PersonApp hands it, its progress written by the controls' clock (lapseTick
- * at LAPSE_FPS) from openLifeTimelapse's 0, through the hold on the grown garden, to the save. On
- * every frame the caption's year runs from the timeline's start to today and stems only join; no
+ * at LAPSE_FPS) from openLifeTimelapse's 0, through the hold on the grown view, to the save. On
+ * every frame the caption's year runs from the timeline's start to today and lines only join; no
  * text drawn or measured on any frame names a private repo while the toggle hides it, and once
  * revealed for this login the names are on the canvas, and a recording the toggle turns under is
  * thrown away, with no file and no event. Then the three events Phase 5 sends (timelapse-play,
@@ -30,6 +30,7 @@ import { githubDay } from '../src/profile/timeline'
 import { useGardenStore } from '../src/store/useGardenStore'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
+import { LINES_VIEW } from '../src/profile/lifeViews'
 import { FAKE_TOKEN, GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, paint, painterFor, withPrivate, type Grown } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
 
@@ -81,7 +82,8 @@ interface Frame {
   progress: number
   /** the caption's year */
   year: string | undefined
-  stems: number
+  /** lineTo calls: life lines' strokes */
+  strokes: number
   /** the caption names the person and the app */
   credited: boolean
 }
@@ -111,7 +113,7 @@ function record(g: Grown) {
     frames.push({
       progress: progress.current,
       year: typeof year === 'string' ? year : undefined,
-      stems: rec.calls('quadraticCurveTo').length,
+      strokes: rec.calls('lineTo').length,
       credited: texts.includes(`${g.profile.login} · repo-garden`),
     })
     rec.clear()
@@ -121,14 +123,14 @@ function record(g: Grown) {
 }
 
 describe('a recording of a life', () => {
-  it('plays from the start year (through the join year) to today, stems only joining, then holds and saves', () => {
+  it('plays from the start year (through the join year) to today, lines only joining, then holds and saves', () => {
     for (const [label, profile, now] of [
       ['kepano (graphql)', kepano, KEPANO_NOW],
       ['gaearon (rest)', gaearon, GAEARON_NOW],
     ] as const) {
       const g = grow(profile, now, theme)
       const { frames } = record(g)
-      // a frame a tick for the play, then the hold on the grown garden
+      // a frame a tick for the play, then the hold on the grown view
       expect(frames.length, label).toBe(LENGTH * LAPSE_FPS + (LAPSE_HOLD_MS * LAPSE_FPS) / 1000 + 1)
       expect(frames[0].progress, label).toBe(0)
       expect(frames.findIndex((f) => f.progress === 1), label).toBe(LENGTH * LAPSE_FPS)
@@ -144,12 +146,12 @@ describe('a recording of a life', () => {
       expect(years, label).toContain(joined)
       for (let i = 1; i < frames.length; i++) {
         expect(Number(years[i]), `${label} frame ${i}`).toBeGreaterThanOrEqual(Number(years[i - 1]))
-        expect(frames[i].stems, `${label} frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1].stems)
+        expect(frames[i].strokes, `${label} frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1].strokes)
       }
       expect(frames.every((f) => f.credited), label).toBe(true)
       // it starts sparse and ends fully grown, as a still frame
-      expect(frames[0].stems, label).toBeLessThan(frames[frames.length - 1].stems)
-      expect(frames[frames.length - 1].stems, label).toBe(paint(g).rec.calls('quadraticCurveTo').length)
+      expect(frames[0].strokes, label).toBeLessThan(frames[frames.length - 1].strokes)
+      expect(frames[frames.length - 1].strokes, label).toBe(paint(g).rec.calls('lineTo').length)
     }
   })
 
@@ -180,7 +182,7 @@ describe('a recording of a life', () => {
     const take = { type: WEBM, finish: vi.fn(async () => new Blob(['frames'])), cancel: vi.fn() }
     recorder.start(take, 0, true)
     const timelapse = { progress, title: secret.login }
-    // LifeGarden's painter, one per namer: the revealed one, then the hidden one once the toggle turns
+    // the view's painter, one per namer: the revealed one, then the hidden one once the toggle turns
     let { painter } = painterFor(grow(secret, KEPANO_NOW, theme, 'KEPANO'), {}, { timelapse })
     const g = grow(secret, KEPANO_NOW, theme)
     const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
@@ -252,7 +254,7 @@ describe("Phase 5's events", () => {
       recorder.start({ type: WEBM, finish: async () => new Blob(['webm']), cancel: noop }, 0, false)
       expect(await recorder.finish(g.profile.login, async () => kit, NOW)).toBe(true)
       const { profile, timeline, layout, colourOf, name } = g
-      await saveLifePoster({ profile, timeline, layout, theme, colourOf, name, hidden: new Set() }, deps)
+      await saveLifePoster({ profile, timeline, layout, view: LINES_VIEW, theme, colourOf, name, hidden: new Set() }, deps)
 
       expect(umamiTrack.mock.calls, token ? 'with a token' : 'without one').toEqual([['timelapse-play'], ['export', { format: 'webm' }], ['poster-export']])
       const sent = JSON.stringify(umamiTrack.mock.calls)

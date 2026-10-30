@@ -1,6 +1,6 @@
 /**
  * Person mode's share link and the Phase 5 controls (PROFILE_SPEC.md Phase 5): a copied
- * ?user=…&view=garden link reads back as the same person and view, PersonApp leaves it as it is,
+ * ?user=…&view=lines link reads back as the same person and view, PersonApp leaves it as it is,
  * and opening it starts clean (nothing hidden, selected or revealed, so the names a copier had
  * revealed stay hidden); the panel's copy-link and poster buttons, the strip's "watch it grow", the
  * top bar's save menu (the poster as its image, never JSON), and PersonApp's wiring of them: the
@@ -33,6 +33,7 @@ import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
 import { FAKE_TOKEN, KEPANO_NOW, grow, kepanoProfile, setGarden, setPerson, withPrivate } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
+import { LINES_VIEW } from '../src/profile/lifeViews'
 
 const noop = () => {}
 const theme = getTheme('obsidian')
@@ -92,24 +93,28 @@ function startLink(href: string): void {
 
 describe('a copied link', () => {
   it('reads back as the same person and view, for every view', () => {
-    for (const view of ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as PersonView[]) {
+    for (const view of ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix'] as PersonView[]) {
       const href = `${ORIGIN}/${personSearch('kepano', view, '')}`
       expect(href).toBe(`${ORIGIN}/?user=kepano&view=${view}`)
       expect(readSubject(new URL(href).search)).toEqual({ kind: 'user', login: 'kepano', view })
     }
     // the login keeps its typed case, and other parameters ride along
-    const tagged = `${ORIGIN}/${personSearch('Kepano', 'garden', '?utm_source=x')}`
-    expect(readSubject(new URL(tagged).search)).toEqual({ kind: 'user', login: 'Kepano', view: 'garden' })
+    const tagged = `${ORIGIN}/${personSearch('Kepano', 'lines', '?utm_source=x')}`
+    expect(readSubject(new URL(tagged).search)).toEqual({ kind: 'user', login: 'Kepano', view: 'lines' })
   })
 
   it('is left as it is when opened: PersonApp writes back the very same address', () => {
-    for (const current of ['?user=kepano&view=garden', '?utm_source=x&user=kepano&view=garden', '?user=kepano&view=lines']) {
+    for (const current of ['?user=kepano&view=lines', '?utm_source=x&user=kepano&view=lines', '?user=kepano&view=constellation']) {
       const { login, view } = propsFor(`${ORIGIN}/${current}`)
-      // the view PersonApp holds: the link's, or the garden
-      expect(personSearch(login, view ?? 'garden', current)).toBe(current)
+      // the view PersonApp holds: the link's, or life lines
+      expect(personSearch(login, view ?? 'lines', current)).toBe(current)
     }
-    // a link that names no view gets the garden written in
-    expect(personSearch('kepano', propsFor(`${ORIGIN}/?user=kepano`).view ?? 'garden', '?user=kepano')).toBe('?user=kepano&view=garden')
+    // a link that names no view gets life lines written in
+    expect(personSearch('kepano', propsFor(`${ORIGIN}/?user=kepano`).view ?? 'lines', '?user=kepano')).toBe('?user=kepano&view=lines')
+    // a link from before the life garden was retired opens life lines, and the address says so
+    const old = propsFor(`${ORIGIN}/?user=kepano&view=garden`)
+    expect(old.view).toBe('lines')
+    expect(personSearch(old.login, old.view ?? 'lines', '?user=kepano&view=garden')).toBe('?user=kepano&view=lines')
   })
 
   it('names only the user and the view, whatever the copier had hidden, selected, searched or revealed', () => {
@@ -120,22 +125,22 @@ describe('a copied link', () => {
     store.setSearch(KEPANO_PRIVATE[2])
     store.setReveal('kepano', true)
     // the address bar PersonApp keeps, which CopyLinkButton copies as it is
-    const href = `${ORIGIN}/${personSearch('kepano', 'garden', `?repo=${KEPANO_PRIVATE[3]}&branch=main`)}`
+    const href = `${ORIGIN}/${personSearch('kepano', 'lines', `?repo=${KEPANO_PRIVATE[3]}&branch=main`)}`
     expect([...new URL(href).searchParams.keys()].sort()).toEqual(['user', 'view'])
     expectNoSecret(decodeURIComponent(href), 'the copied link')
   })
 
   it('opens the same view of the same person, with the panel, the inspector, the strip and the controls', () => {
-    const href = `${ORIGIN}/?user=kepano&view=garden`
+    const href = `${ORIGIN}/?user=kepano&view=lines`
     startLink(href)
     const html = openLink(href, kepano, FAKE_TOKEN)
-    expect(html).toContain('aria-label="life garden of kepano:')
+    expect(html).toContain('aria-label="life lines of kepano:')
     expect(html).toContain('href="https://github.com/kepano"')
     expect(html).toContain('aria-label="Collapse panel"')
     expect(html).toContain('aria-label="Copy a link to this view"')
     expect(html).toContain('aria-label="Save a poster"')
     expect(html).toContain('watch it grow')
-    // the whole garden on show: the time-lapse waits for its button
+    // the whole life on show: the time-lapse waits for its button
     expect(html).not.toContain('aria-label="Time-lapse"')
     // and no JSON save in person mode: the top bar's save menu offers the poster only
     expect(personAppSource).toContain('canExportData={false}')
@@ -145,7 +150,7 @@ describe('a copied link', () => {
     // the copier: kepano with a token, names revealed, a private repo selected and hovered
     const key = repoKey(KEPANO_PRIVATE[0])
     setPerson({ owner: 'kepano', revealFor: 'kepano', selected: key, hover: { kind: 'repo', key }, hidden: new Set([repoKey(KEPANO_PRIVATE[1])]) })
-    const href = `${ORIGIN}/${personSearch('kepano', 'garden', '')}`
+    const href = `${ORIGIN}/${personSearch('kepano', 'lines', '')}`
 
     // whoever opens the link: PersonApp's first request resets the store before it paints
     startLink(href)
@@ -157,7 +162,7 @@ describe('a copied link', () => {
     expect(state.search).toBe('')
 
     const html = openLink(href, secret, FAKE_TOKEN)
-    expect(html).toContain('aria-label="life garden of kepano:')
+    expect(html).toContain('aria-label="life lines of kepano:')
     expect(html).toContain(PRIVATE_REPO_LABEL)
     expectNoSecret(html, 'the opened link')
   })
@@ -319,7 +324,7 @@ describe('a failed poster save', () => {
 
   it("reads saveLifePoster's own rejections: its chunk, or its encoder", async () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const input = { profile: g.profile, timeline: g.timeline, layout: g.layout, theme, colourOf: g.colourOf, name: g.name, hidden: new Set<string>() }
+    const input = { profile: g.profile, timeline: g.timeline, layout: g.layout, view: LINES_VIEW, theme, colourOf: g.colourOf, name: g.name, hidden: new Set<string>() }
     const makeCanvas = (width: number, height: number) => {
       const rec = recordingCtx(width, height)
       return { width, height, getContext: (kind: string) => (kind === '2d' ? rec.ctx : null) } as unknown as HTMLCanvasElement

@@ -9,7 +9,7 @@ import { findWeeds } from './weeds'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEK_MS = 7 * DAY_MS
-/** A branch quiet this long counts as stale (the garden layout's wilting age). */
+/** A branch quiet this long counts as stale: about six months. */
 export const STALE_DAYS = 180
 
 export interface GardenStats {

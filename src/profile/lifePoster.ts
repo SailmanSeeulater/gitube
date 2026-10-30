@@ -25,10 +25,10 @@ import type { LifeMilestone, LifeTimeline } from './timeline'
 import type { LifeInk, LifeViewport, RepoNamer, ShownName } from './lifeTypes'
 import { viewInk, type LifeViewDef, type LifeViewModel } from './lifeView'
 import { fitLifeCamera } from './lifeCamera'
-import { drawLock } from './lifeGardenPaint'
+import { drawLock } from './drawLock'
 import { GROUND_MARKS_PX, VIEW_TOP } from './lifeGeometry'
 import { lifeInk } from './lifeInk'
-import { GARDEN_SCENE, makeViewPaint, type LifePaintState } from './lifePaint'
+import { makeViewPaint, type LifePaintState } from './lifePaint'
 import { shownMilestoneRepo } from './privacy'
 
 /** The poster in CSS px... */
@@ -155,10 +155,10 @@ export function loadPosterAvatar(url: string | null, timeoutMs = AVATAR_TIMEOUT_
 }
 
 export interface PosterGarden {
-  /** the view's layout: a life garden's when view is left out */
+  /** the view's layout */
   layout: LifeViewModel
-  /** the view on show; the life garden when left out */
-  view?: LifeViewDef
+  /** the view on show */
+  view: LifeViewDef
   timeline: LifeTimeline
   ink: LifeInk
   colourOf: (language: string | null) => string
@@ -180,8 +180,7 @@ export interface PosterGarden {
 export function paintPosterGarden(ctx: CanvasRenderingContext2D, view: LifeViewport, garden: PosterGarden, maxFrames = SETTLE_FRAMES): void {
   const { layout, timeline, ink, colourOf, name, login, hidden, measure } = garden
   const state: LifePaintState = { hidden, hover: null, selected: null }
-  const scene: LifeViewDef['scene'] = garden.view?.scene ?? GARDEN_SCENE
-  const painter = makeViewPaint(scene, { layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
+  const painter = makeViewPaint(garden.view.scene, { layout, timeline, ink, colourOf, name, login, measure, timelapse: null, state: () => state })
   const camera = fitLifeCamera(layout.days, view)
   for (let frame = 0; frame < Math.max(1, maxFrames); frame++) {
     if (!painter.paint(ctx, view, camera, SETTLE_DT_MS)) break
@@ -210,7 +209,7 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
   return lo > 0 ? `${text.slice(0, lo)}…` : ''
 }
 
-/** A small diamond, as the garden marks a milestone on its horizon. */
+/** A small diamond, as the views mark a milestone on their horizon. */
 function diamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, colour: string): void {
   ctx.beginPath()
   ctx.moveTo(x, y - r)
@@ -342,10 +341,10 @@ function consoleFrame(theme: Theme, ink: LifeInk): Theme {
 export interface PosterInput {
   profile: ProfileData
   timeline: LifeTimeline
-  /** the view's layout: a life garden's when view is left out */
+  /** the view's layout */
   layout: LifeViewModel
-  /** the view on show, drawn as the canvas draws it; the life garden when left out */
-  view?: LifeViewDef
+  /** the view on show, drawn as the canvas draws it */
+  view: LifeViewDef
   theme: Theme
   /** language -> colour in the theme, the one the canvas paints with */
   colourOf: (language: string | null) => string

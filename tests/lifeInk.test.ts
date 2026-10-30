@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { gardenInk, leafColour } from '../src/components/gardenPaint'
 import { colorAt } from '../src/graph/color'
 import { dominantLanguage, languageColour, languagePalette, lifeInk } from '../src/profile/lifeInk'
 import { buildLifeTimeline, type LifeTimeline } from '../src/profile/timeline'
@@ -71,9 +70,8 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('life ink in %s
       fallback: theme.fallback,
       rootRing: theme.rootRing,
       eraBand: blendHex(theme.text, theme.canvas, 0.05),
-      horizon: theme.derived.gardenRoot,
-      dry: theme.derived.gardenWilt,
-      garden: gardenInk(theme),
+      horizon: theme.derived.horizon,
+      dry: theme.derived.dry,
       hoverRing: theme.derived.hoverRing,
       inspectedRing: theme.derived.inspectedRing,
       textHalo: theme.derived.textHalo,
@@ -83,7 +81,7 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('life ink in %s
     })
   })
 
-  it('keeps the garden readable on its canvas', () => {
+  it('keeps every view readable on its canvas', () => {
     for (const colour of [ink.dry, ink.horizon, ink.rootRing, ink.fallback, ink.accent]) {
       expect(contrastRatio(colour, ink.canvas), colour).toBeGreaterThanOrEqual(3)
     }
@@ -93,15 +91,13 @@ describe.each(THEMES.map((theme) => [theme.id, theme] as const))('life ink in %s
     expect(contrastRatio(ink.eraBand, ink.canvas)).toBeLessThan(1.3)
   })
 
-  it('colours sixteen languages, and their leaves, readably on the canvas', () => {
+  it('colours sixteen languages readably on the canvas', () => {
     const palette = languagePalette(MANY, theme)
     expect(Object.keys(palette).sort()).toEqual([...LANGUAGES].sort())
     expect(palette.Go).toBe(theme.accent)
     for (const language of LANGUAGES) {
       const colour = palette[language]
       expect(contrastRatio(colour, theme.canvas), `${language} ${colour}`).toBeGreaterThanOrEqual(3)
-      const leaf = leafColour(colour, ink.garden)
-      expect(contrastRatio(leaf, theme.canvas), `${language} leaf ${leaf}`).toBeGreaterThanOrEqual(3)
     }
     expect(new Set(Object.values(palette)).size).toBe(LANGUAGES.length)
   })

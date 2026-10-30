@@ -158,8 +158,8 @@ function paint(s: Scene, over: Partial<LinesPaintInput> = {}): RecordingCtx {
 
 /** Every colour the theme lets the view draw with: its ink and its language colours. */
 function allowedColours(s: Scene): Set<string> {
-  const { garden, dimAlpha: _alpha, ...flat } = s.ink
-  const allowed = new Set<string>([...Object.values(flat), ...Object.values(garden)])
+  const { dimAlpha: _alpha, ...flat } = s.ink
+  const allowed = new Set<string>(Object.values(flat))
   for (const colour of [...Object.values(languagePalette(s.timeline, s.theme)), s.theme.fallback]) allowed.add(colour)
   return allowed
 }

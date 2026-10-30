@@ -5,10 +5,10 @@ import { readStoredThemeId, writeStoredThemeId } from '../theme/storage'
 import { isThemeId, type ThemeId } from '../theme/themes'
 
 /**
- * How the garden is laid out: free force physics, pinned to a straight metro map, or the physics
- * grown upward and drawn as plants (stems, leaves, blooms, roots).
+ * How the repo is laid out: pinned to a straight metro map (the default), or free force physics.
+ * A layout saved as 'garden' before that layout was retired opens as metro.
  */
-export type LayoutMode = 'organic' | 'metro' | 'garden'
+export type LayoutMode = 'metro' | 'organic'
 
 /** Which list the side panel shows. */
 export type PanelTab = 'branches' | 'contributors' | 'weeds'
@@ -25,16 +25,15 @@ function readStoredToken(): string {
   }
 }
 
-/** localStorage key for the organic | metro | garden layout choice. */
+/** localStorage key for the metro | organic layout choice. */
 export const LAYOUT_STORAGE_KEY = 'repo-garden:layout'
 
 export function readStoredLayoutMode(): LayoutMode {
   try {
-    if (typeof localStorage === 'undefined') return 'organic'
-    const stored = localStorage.getItem(LAYOUT_STORAGE_KEY)
-    return stored === 'metro' || stored === 'garden' ? stored : 'organic'
+    if (typeof localStorage === 'undefined') return 'metro'
+    return localStorage.getItem(LAYOUT_STORAGE_KEY) === 'organic' ? 'organic' : 'metro'
   } catch {
-    return 'organic'
+    return 'metro'
   }
 }
 

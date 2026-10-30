@@ -210,11 +210,10 @@ describe('with pull requests', () => {
 describe('legend', () => {
   const items = (html: string) => (html.match(/<li /g) ?? []).length
 
-  it('adds one item, only with pull requests on the canvas: organic fills its sixth cell, metro and garden a seventh', () => {
+  it('adds one item, only with pull requests on the canvas: organic fills its sixth cell, metro a seventh', () => {
     for (const [layout, base] of [
       ['organic', 5],
       ['metro', 6],
-      ['garden', 6],
     ] as const) {
       setStore({ layoutMode: layout })
       expect(items(renderToStaticMarkup(h(Legend))), layout).toBe(base)
@@ -228,7 +227,7 @@ describe('legend', () => {
 
   it('draws what the canvas draws: the gapped ring in the tip’s own colour until some review or checks are known', () => {
     const theme = getTheme(useGardenStore.getState().themeId)
-    for (const layout of ['organic', 'metro', 'garden'] as const) {
+    for (const layout of ['organic', 'metro'] as const) {
       setStore({ layoutMode: layout })
       const unknown = renderToStaticMarkup(h(Legend, { hasPrs: true, prKnown: false }))
       expect(unknown, layout).not.toContain(`stroke="${theme.success}"`)

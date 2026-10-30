@@ -5,21 +5,16 @@
  * from what the last frame drew. LifeView and the tests (tests/helpers/personScene.ts) build it the
  * same way, so what the tests paint and hit is what the canvas does.
  *
- * makeViewPaint drives any view's scene (lifeView.ts's LifeScene); GARDEN_SCENE is the life
- * garden's, and makeLifePaint the garden's painter as it always was. Repo names reach the canvas
+ * makeViewPaint drives any view's scene (lifeView.ts's LifeScene). Repo names reach the canvas
  * only through the labels, built from the namer here: a scene never receives one.
  *
  * Pure: the store's hidden repos, hover and selection, the pointer and the hover's setter come in
  * as functions. It keeps only its labels and the last frame.
  */
-import { leafColour, type GardenInk } from '../components/gardenPaint'
 import { dayAt, type LifeTimeline } from './timeline'
-import type { LifeCamera, LifeGardenLayout, LifeHover, LifeInk, LifeViewport, PlantGeom, RepoNamer } from './lifeTypes'
+import type { LifeCamera, LifeHover, LifeInk, LifeViewport, RepoNamer } from './lifeTypes'
 import type { LifeScene, LifeViewModel } from './lifeView'
-import { plantGeom } from './lifeGeometry'
-import { hitLifeGarden } from './lifeGardenHit'
-import { paintLifeGarden, plantColour } from './lifeGardenPaint'
-import { LifeLabelSet, gardenAnchor, gardenLabelItems, groundKeepOut, labelNames } from './useLifeLabels'
+import { LifeLabelSet, labelNames } from './useLifeLabels'
 import type { LifePaint } from './useLifeCanvas'
 import { lapseCaption, paintLapseHud } from './lifeTimelapse'
 
@@ -62,9 +57,6 @@ export interface ViewPaintOptions<L> {
   /** the pointer over the canvas while no button is down; null otherwise */
   pointer?: () => { x: number; y: number } | null
 }
-
-/** The life garden's painter options. */
-export type LifePaintOptions = ViewPaintOptions<LifeGardenLayout>
 
 export interface LifePainter {
   labels: LifeLabelSet
@@ -148,7 +140,7 @@ export function makeViewPaint<L extends LifeViewModel, G>(scene: LifeScene<L, G>
     const busy = labels.update({ anchor, keepOut, view, dtMs, cameraMoving, forced, explore: hovered })
     labels.draw(ctx, ink, (i) => scene.itemColour(layout, i, ink, colourOf), picked)
     // the time-lapse's caption over everything, so a recording carries it
-    if (timelapse) paintLapseHud(ctx, view, ink, lapseCaption(timeline, { plants: items }, p, hidden), p, timelapse.title ?? opts.login)
+    if (timelapse) paintLapseHud(ctx, view, ink, lapseCaption(timeline, items, p, hidden), p, timelapse.title ?? opts.login)
     // the camera moved under a still pointer: the hover follows what is under it now
     const pointer = opts.pointer?.() ?? null
     if (pointer !== null && (cameraMoving || busy)) opts.setHover?.(hitAt(pointer.x, pointer.y))
@@ -157,46 +149,4 @@ export function makeViewPaint<L extends LifeViewModel, G>(scene: LifeScene<L, G>
   }
 
   return { labels, paint, hitAt, pickAt }
-}
-
-/** Leaves are a language colour turned green: blended once per colour per theme (its garden ink). */
-const leafCache = new WeakMap<GardenInk, (colour: string) => string>()
-
-function leafOf(garden: GardenInk): (colour: string) => string {
-  let of = leafCache.get(garden)
-  if (of === undefined) {
-    const leaves = new Map<string, string>()
-    of = (colour) => {
-      let leaf = leaves.get(colour)
-      if (leaf === undefined) {
-        // a palette colour need not be hex (Obsidian's cycles in hsl), which leafColour cannot blend
-        try {
-          leaf = leafColour(colour, garden)
-        } catch {
-          leaf = colour
-        }
-        leaves.set(colour, leaf)
-      }
-      return leaf
-    }
-    leafCache.set(garden, of)
-  }
-  return of
-}
-
-/** The life garden's scene (PROFILE_SPEC.md section 5, view 1): its plants, drawn, hit and labelled by the garden's own modules. */
-export const GARDEN_SCENE: LifeScene<LifeGardenLayout, PlantGeom[]> = {
-  items: (layout) => layout.plants,
-  geoms: (layout, camera, view) => layout.plants.map((plant) => plantGeom(plant, camera, view)),
-  paint: (ctx, input) => paintLifeGarden(ctx, { ...input, leafOf: leafOf(input.ink.garden) }),
-  hit: (layout, geoms, camera, view, sx, sy, notDrawn) => hitLifeGarden(layout, geoms, camera, view, sx, sy, notDrawn),
-  anchor: gardenAnchor,
-  labelOrder: (layout) => gardenLabelItems(layout).order,
-  keepOut: (_layout, view) => groundKeepOut(view),
-  itemColour: (layout, i, ink, colourOf) => plantColour(layout.plants[i], ink, colourOf),
-}
-
-/** The life garden's painter, as LifeGarden has always made it. */
-export function makeLifePaint(opts: LifePaintOptions): LifePainter {
-  return makeViewPaint(GARDEN_SCENE, opts)
 }

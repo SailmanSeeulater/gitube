@@ -1,6 +1,6 @@
 /**
- * The canvas every person-mode view shares (PROFILE_SPEC.md section 5): the life garden, life lines
- * or the constellation, as def says, along one time axis. Hover a repo or its label for the repo,
+ * The canvas every person-mode view shares (PROFILE_SPEC.md section 5): life lines, the
+ * constellation or a console view, as def says, along one time axis. Hover a repo or its label for the repo,
  * or the ground for the day (the inspector follows the hover in usePersonStore), click to select,
  * drag or scroll to move through time.
  *

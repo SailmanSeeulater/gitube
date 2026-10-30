@@ -7,7 +7,7 @@
  * size in px, stacked from STACK_BASE_PX above the horizon, so a stack's block count follows the
  * plot's height and its share of it.
  */
-import { grownShare } from './lifeGardenPaint'
+import { grownShare } from './lifeMeasures'
 import { horizonY } from './lifeGeometry'
 import type { LifeCamera, LifeViewport } from './lifeTypes'
 import type { PhosphorLayout, PhosphorStack } from './phosphorLayout'

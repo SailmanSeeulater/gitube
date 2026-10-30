@@ -1,7 +1,7 @@
 /**
  * The order of person mode's lanes gives no hidden name away (PROFILE_SPEC.md section 2, "Privacy
  * rule"). Lanes rooted on one instant are told apart somehow, and that order shows: in the panel's
- * rows, a day's repo list, the garden's depth rows and twin seeds, and which repo a milestone picks.
+ * rows, a day's repo list, life lines' tracks, and which repo a milestone picks.
  * So a private repo renamed to the other end of the alphabet, or two private names swapped, must
  * change nothing a visitor can see while the names are hidden.
  */
@@ -49,8 +49,8 @@ function repo(nameWithOwner: string, over: Partial<ProfileRepo>): ProfileRepo {
 }
 
 /**
- * What each private repo is, whatever it is called. All three are alike in every field the plants are
- * seeded from, so their twin seeds go by their order; one and two tie on stars (the most starred repo)
+ * What each private repo is, whatever it is called. All three are alike in every field a view seeds
+ * from, so their twin seeds go by their order; one and two tie on stars (the most starred repo)
  * and with the public fork on their first day (a day's repo list); all three are the first repo. Three
  * is private only in a stale copy, so only the merge makes its lane private.
  */
@@ -127,7 +127,7 @@ function seen(g: Grown) {
   const dayRepos = [...days.repos]
     .sort((a, b) => a[0] - b[0])
     .map(([day, repos]) => [dayKey(day), repos.map((r) => [positionOf(g, r.repo), name(r.repo).text, r.n, r.unit])])
-  const plants = layout.plants.map(({ key, ...rest }) => ({ ...rest, position: positionOf(g, key) }))
+  const lines = layout.lines.map(({ key, ...rest }) => ({ ...rest, position: positionOf(g, key) }))
   const milestones = timeline.milestones.map(({ repo: shown, ...rest }) => ({ ...rest, position: shown ? positionOf(g, shown) : null }))
   const views = [
     panel(g, 'repos'),
@@ -138,7 +138,7 @@ function seen(g: Grown) {
     ...timeline.lanes.map((lane) => inspector(g, { hover: { kind: 'repo', key: repoKey(lane.repo) } })),
     ...timeline.lanes.map((lane) => inspector(g, { selected: repoKey(lane.repo) })),
   ]
-  return { lanes, dayRepos, plants, milestones, views }
+  return { lanes, dayRepos, lines, milestones, views }
 }
 
 describe('lane order and hidden names', () => {
@@ -151,19 +151,16 @@ describe('lane order and hidden names', () => {
     expect(new Set(lanes.slice(1).map((lane) => lane.rootDay)).size).toBe(1)
     // one day lists the fork and all three, two of them tied
     expect(base.days.repos.get(dayNumber('2021-03-03'))?.map((r) => r.n)).toEqual([2, 2, 2, 1])
-    // the three are twins in every seeded field, so their seeds go by their turn
-    const seeds = base.layout.plants.filter((plant) => base.privateKeys.has(plant.key)).map((plant) => plant.turn)
-    expect(new Set(seeds).size).toBe(3)
     expect(base.timeline.milestones.filter((m) => m.repo !== undefined).map((m) => m.kind)).toEqual(['first-repo', 'top-repo'])
   })
 
   for (const [label, names] of VARIANTS) {
-    it(`shows the same panel, day lists, garden and milestones with ${label}`, () => {
+    it(`shows the same panel, day lists, lines and milestones with ${label}`, () => {
       const expected = seen(base)
       const other = seen(grow(profileWith(names), NOW, theme))
       expect(other.lanes).toEqual(expected.lanes)
       expect(other.dayRepos).toEqual(expected.dayRepos)
-      expect(other.plants).toEqual(expected.plants)
+      expect(other.lines).toEqual(expected.lines)
       expect(other.milestones).toEqual(expected.milestones)
       expect(other.views).toEqual(expected.views)
     })

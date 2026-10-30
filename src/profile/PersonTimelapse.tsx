@@ -22,9 +22,9 @@ export interface PersonTimelapseProps {
   timeline: LifeTimeline
   /** the person, for the recording's file name only */
   login: string
-  /** 0..1, shared with LifeGarden, which reads it every frame */
+  /** 0..1, shared with the view's canvas (LifeView), which reads it every frame */
   progress: RefObject<number>
-  /** the life garden canvas to record */
+  /** the view's canvas to record */
   getCanvas: () => HTMLCanvasElement | null
   /** the side panel is open: keep clear of it */
   besidePanel: boolean
@@ -34,7 +34,7 @@ export interface PersonTimelapseProps {
   onRecordingChange?: (recording: boolean) => void
   /**
    * the canvas has to paint every frame (playing, recording or scrubbing): PersonApp hands it to
-   * LifeGarden as the time-lapse's live flag, in a new time-lapse value so the canvas wakes for it.
+   * LifeView as the time-lapse's live flag, in a new time-lapse value so the canvas wakes for it.
    * Otherwise the canvas paints only while the progress moves (lifePaint.ts)
    */
   onLiveChange?: (live: boolean) => void
@@ -123,7 +123,7 @@ export default function PersonTimelapse({
     progress.current = 0
   }, [progress])
 
-  // ---- playback, paced by the clock (lapseTick: dropped frames never slow it down); LifeGarden
+  // ---- playback, paced by the clock (lapseTick: dropped frames never slow it down); LifeView
   // repaints every frame while it plays (onLiveChange) ----
   useEffect(() => {
     if (!playing) return
@@ -141,7 +141,7 @@ export default function PersonTimelapse({
         setPlaying(false)
         return
       }
-      // a recording lingers on the grown garden, then saves
+      // a recording lingers on the grown view, then saves
       if (tick.next === 'save') {
         void finishRecording()
         return

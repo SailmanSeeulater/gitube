@@ -192,8 +192,13 @@ describe('useGardenStore', () => {
     expect(readStoredLayoutMode()).toBe('metro')
     useGardenStore.getState().setLayoutMode('organic')
     expect(readStoredLayoutMode()).toBe('organic')
-    store.set(LAYOUT_STORAGE_KEY, 'bogus')
-    expect(readStoredLayoutMode()).toBe('organic')
+    // anything else saved, the retired 'garden' layout included, opens on metro, the default
+    for (const saved of ['bogus', 'garden']) {
+      store.set(LAYOUT_STORAGE_KEY, saved)
+      expect(readStoredLayoutMode()).toBe('metro')
+    }
+    store.delete(LAYOUT_STORAGE_KEY)
+    expect(readStoredLayoutMode()).toBe('metro')
   })
 
   it('layout mode survives broken storage and a new repo', () => {
@@ -206,11 +211,11 @@ describe('useGardenStore', () => {
       },
       removeItem: () => {},
     })
-    expect(readStoredLayoutMode()).toBe('organic')
-    useGardenStore.getState().setLayoutMode('metro')
-    expect(useGardenStore.getState().layoutMode).toBe('metro')
+    expect(readStoredLayoutMode()).toBe('metro')
+    useGardenStore.getState().setLayoutMode('organic')
+    expect(useGardenStore.getState().layoutMode).toBe('organic')
     useGardenStore.getState().resetForNewRepo()
-    expect(useGardenStore.getState().layoutMode).toBe('metro')
+    expect(useGardenStore.getState().layoutMode).toBe('organic')
   })
 })
 

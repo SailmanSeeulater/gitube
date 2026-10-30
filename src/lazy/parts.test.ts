@@ -40,18 +40,17 @@ const LAZY_ONLY = [
   'profile/useProfileData.ts',
   'profile/usePersonAnalytics.ts',
   'profile/dayIndex.ts',
-  // the life garden: its model, its canvas and its labels
-  'profile/lifeGardenLayout.ts',
+  // the views' shared model, canvas and labels
   'profile/lifeGeometry.ts',
+  'profile/lifeMeasures.ts',
+  'profile/drawLock.ts',
+  'profile/hash01.ts',
   'profile/lifeCamera.ts',
-  'profile/lifeGardenHit.ts',
   'profile/lifeInk.ts',
-  'profile/lifeGardenPaint.ts',
   'profile/useLifeCanvas.ts',
   'profile/useLifeLabels.ts',
   'profile/lifePaint.ts',
   'profile/personRequests.ts',
-  'profile/LifeGarden.tsx',
   // the panel, inspector, legend, status strip, error copy and icons
   'profile/PersonPanel.tsx',
   'profile/PersonInspector.tsx',
@@ -403,7 +402,7 @@ describe('person mode and the first download', () => {
   }, 60_000)
 
   it("keeps person mode's words out of the first download", () => {
-    const said = [/user not found/, /private repo(?!s)/, /names hidden/, /life garden/, /showing the public profile/, /add a token for commits/, /data leaves out/]
+    const said = [/user not found/, /private repo(?!s)/, /names hidden/, /life lines/, /showing the public profile/, /add a token for commits/, /data leaves out/]
     const found: string[] = []
     for (const file of eagerModules().keys()) {
       const text = withoutComments(sources.get(file) ?? '')

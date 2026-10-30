@@ -1,8 +1,8 @@
 /**
  * Person mode's time-lapse (PROFILE_SPEC.md Phase 5): a play paced by the wall clock, which runs
  * from the timeline's start (the join year on these recordings) to today; the caption the canvas
- * carries; the garden it grows, painted by LifeGarden's own painter on a recording context, only
- * ever adding stems, labels and repos; a hit test that never names a repo before it appears; the
+ * carries; the view it grows (life lines), painted by the view's own painter on a recording context,
+ * only ever adding lines, labels and repos; a hit test that never names a repo before it appears; the
  * privacy toggle on every frame, caption included; frames asked for only while the time-lapse is
  * live or its progress moves; and the analytics it sends: timelapse-play when it opens, export
  * { format: 'webm' } when a recording is saved, never a name. A recording from rec to its download
@@ -18,7 +18,9 @@ import type { VideoType } from '../src/export/video'
 import { ChunkLoadError } from '../src/lazy/chunk'
 import { useGardenStore } from '../src/store/useGardenStore'
 import { getTheme } from '../src/theme/themes'
-import LifeGarden from '../src/profile/LifeGarden'
+import LifeView from '../src/profile/LifeViewCanvas'
+import { LINES_VIEW } from '../src/profile/lifeViews'
+import { linesAnchor } from '../src/profile/lifeLinesPaint'
 import PersonTimelapse from '../src/profile/PersonTimelapse'
 import {
   LAPSE_DEFAULT_LENGTH,
@@ -111,7 +113,7 @@ describe('lapseTick', () => {
     expect(lapseTick(play({ lengthS: 10 }), 6000).progress).toBe(0.5)
   })
 
-  it('holds a recording on the grown garden, then saves it', () => {
+  it('holds a recording on the grown view, then saves it', () => {
     const rec = play({ recording: true })
     const end = lapseTick(rec, 21000)
     expect(end).toEqual({ progress: 1, endedAt: 21000, next: 'go' })
@@ -127,7 +129,7 @@ describe('lapseTick', () => {
     expect(lapseTick(resumed, 35000)).toMatchObject({ progress: 1, next: 'stop' })
   })
 
-  it('offers the lengths of the repo garden, 20 seconds first', () => {
+  it('offers the lengths of repo mode, 20 seconds first', () => {
     expect([...LAPSE_LENGTHS]).toEqual([10, 20, 40, 60])
     expect(LAPSE_DEFAULT_LENGTH).toBe(20)
     expect(LAPSE_FPS).toBe(30)
@@ -162,12 +164,12 @@ describe('a play from the join year to today', () => {
     for (const { label, profile, now } of profiles()) {
       const g = grow(profile, now, theme)
       // two repos hidden with the eye
-      const hidden = new Set(g.layout.plants.slice(0, 2).map((plant) => plant.key))
+      const hidden = new Set(g.layout.lines.slice(0, 2).map((line) => line.key))
       const lapse = play({ startedAt: 0, lengthS: LAPSE_DEFAULT_LENGTH })
       const captions = []
       for (let frame = 0; frame <= LAPSE_DEFAULT_LENGTH * LAPSE_FPS; frame++) {
         const tick = lapseTick(lapse, (frame * 1000) / LAPSE_FPS)
-        captions.push(lapseCaption(g.timeline, g.layout, tick.progress, hidden))
+        captions.push(lapseCaption(g.timeline, g.layout.lines, tick.progress, hidden))
         if (tick.next !== 'go') break
       }
       const first = captions[0]
@@ -183,7 +185,7 @@ describe('a play from the join year to today', () => {
         expect(dayNumber(captions[i].day), label).toBeGreaterThanOrEqual(dayNumber(captions[i - 1].day))
         expect(captions[i].sown, label).toBeGreaterThanOrEqual(captions[i - 1].sown)
       }
-      expect(last.sown, label).toBe(g.layout.plants.length - hidden.size)
+      expect(last.sown, label).toBe(g.layout.lines.length - hidden.size)
       expect(first.sown, label).toBeLessThan(last.sown)
       // the years go by one after another
       const years = [...new Set(captions.map((c) => c.year))]
@@ -191,25 +193,25 @@ describe('a play from the join year to today', () => {
     }
   })
 
-  it('grows the garden frame by frame: stems and labels only ever join, each once its repo is sown', () => {
+  it('grows the view frame by frame: lines and labels only ever join, each once its repo is sown', () => {
     for (const { label, profile, now } of profiles()) {
       const g = grow(profile, now, theme)
-      const names = labelNames(g.layout, g.timeline, g.name, profile.login)
+      const names = labelNames(g.layout.lines, g.timeline, g.name, profile.login)
       // painterFor's measure
       const measure = (text: string) => text.length * 6.5
       const forms = names.map((name, i) => lifeLabelSpec(i, name, measure).texts)
-      let stems = -1
+      let strokes = -1
       let sownBefore = -1
       for (const p of PROGRESSES) {
         const { rec } = paint(g, { progress: p })
-        const count = rec.calls('quadraticCurveTo').length
-        expect(count, `${label} at ${p}`).toBeGreaterThanOrEqual(stems)
-        stems = count
+        const count = rec.calls('lineTo').length
+        expect(count, `${label} at ${p}`).toBeGreaterThanOrEqual(strokes)
+        strokes = count
         const at = atOf(g, p)
         const sown = new Set<string>()
         const unsown = new Set<string>()
-        g.layout.plants.forEach((plant, i) => {
-          for (const text of forms[i]) (plant.startDay > at ? unsown : sown).add(text)
+        g.layout.lines.forEach((line, i) => {
+          for (const text of forms[i]) (line.startDay > at ? unsown : sown).add(text)
         })
         const drawn = labelTexts(rec)
         expect(drawn.filter((text) => unsown.has(text) && !sown.has(text)), `${label} at ${p}`).toEqual([])
@@ -218,13 +220,13 @@ describe('a play from the join year to today', () => {
           expect(unsown.size, label).toBeGreaterThan(0)
           expect(drawn.filter((text) => sown.has(text)).length, label).toBeGreaterThan(0)
         }
-        const { sown: plants } = lapseCaption(g.timeline, g.layout, p, new Set())
-        expect(plants, `${label} at ${p}`).toBeGreaterThanOrEqual(sownBefore)
-        sownBefore = plants
+        const { sown: repos } = lapseCaption(g.timeline, g.layout.lines, p, new Set())
+        expect(repos, `${label} at ${p}`).toBeGreaterThanOrEqual(sownBefore)
+        sownBefore = repos
       }
-      // fully grown at the end: as many stems as a frame with no time-lapse
-      expect(stems, label).toBe(paint(g).rec.calls('quadraticCurveTo').length)
-      expect(paint(g, { progress: 0 }).rec.calls('quadraticCurveTo').length, label).toBeLessThan(stems)
+      // fully grown at the end: as many strokes as a frame with no time-lapse
+      expect(strokes, label).toBe(paint(g).rec.calls('lineTo').length)
+      expect(paint(g, { progress: 0 }).rec.calls('lineTo').length, label).toBeLessThan(strokes)
     }
   })
 
@@ -232,7 +234,7 @@ describe('a play from the join year to today', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     for (const p of PROGRESSES) {
       const { rec } = paint(g, { progress: p })
-      const caption = lapseCaption(g.timeline, g.layout, p, new Set())
+      const caption = lapseCaption(g.timeline, g.layout.lines, p, new Set())
       const texts = rec.calls('fillText').map((c) => String(c.args[0]))
       expect(texts).toContain(caption.year)
       expect(texts).toContain(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`)
@@ -260,20 +262,22 @@ describe('a play from the join year to today', () => {
     const p = 0.5
     const lapse = paint(g, { progress: p }).painter
     const at = atOf(g, p)
-    const later = g.layout.plants
-      .map((plant, i) => ({ plant, x: g.geoms[i].x2, y: g.geoms[i].y2 }))
-      .filter(({ plant, x, y }) => plant.startDay > at && x > 0 && x < g.view.width && full.hitAt(x, y)?.kind === 'repo' && (full.hitAt(x, y) as { key: string }).key === plant.key)
+    // each line's start marker, fully grown
+    const out = new Float32Array(3)
+    const later = g.layout.lines
+      .map((line, i) => (linesAnchor(g.layout, g.geoms, i, null, out), { line, x: out[0], y: out[1] }))
+      .filter(({ line, x, y }) => line.startDay > at && x > 0 && x < g.view.width && full.hitAt(x, y)?.kind === 'repo' && (full.hitAt(x, y) as { key: string }).key === line.key)
     expect(later.length).toBeGreaterThanOrEqual(3)
     const hits = later.map(({ x, y }) => lapse.hitAt(x, y))
     for (const [k, hit] of hits.entries()) {
-      expect(hit?.kind === 'repo' && hit.key === later[k].plant.key).toBe(false)
-      if (hit?.kind === 'repo') expect(g.layout.plants[g.layout.byKey.get(hit.key)!].startDay).toBeLessThanOrEqual(at)
-      expect(lapse.pickAt(later[k].x, later[k].y)).not.toBe(later[k].plant.key)
+      expect(hit?.kind === 'repo' && hit.key === later[k].line.key).toBe(false)
+      if (hit?.kind === 'repo') expect(g.layout.lines[g.layout.byKey.get(hit.key)!].startDay).toBeLessThanOrEqual(at)
+      expect(lapse.pickAt(later[k].x, later[k].y)).not.toBe(later[k].line.key)
     }
     expect(hits.some((hit) => hit?.kind === 'day')).toBe(true)
     // once grown, the same spot is the repo again
     const grown = paint(g, { progress: 1 }).painter
-    expect(grown.hitAt(later[0].x, later[0].y)).toEqual({ kind: 'repo', key: later[0].plant.key })
+    expect(grown.hitAt(later[0].x, later[0].y)).toEqual({ kind: 'repo', key: later[0].line.key })
   })
 })
 
@@ -294,7 +298,7 @@ describe('the privacy toggle on every frame', () => {
       // and the markup of the canvas and the controls
       const html = [
         renderToStaticMarkup(
-          h(LifeGarden, { ...g, login: profile.login, timelapse: { progress: { current: 0.5 }, title: profile.login } }),
+          h(LifeView, { ...g, def: LINES_VIEW, login: profile.login, timelapse: { progress: { current: 0.5 }, title: profile.login } }),
         ),
         renderToStaticMarkup(
           h(PersonTimelapse, { onClose: () => {}, timeline: g.timeline, login: profile.login, progress: { current: 0 }, getCanvas: () => null, besidePanel: true, revealed: false }),
@@ -335,11 +339,11 @@ describe('paintLapseHud', () => {
 
   it('counts the repos the painter draws: sown and not hidden', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
-    const all = new Set(g.layout.plants.map((plant) => plant.key))
-    expect(lapseCaption(g.timeline, g.layout, 1, new Set()).sown).toBe(g.layout.plants.length)
-    expect(lapseCaption(g.timeline, g.layout, 1, all).sown).toBe(0)
+    const all = new Set(g.layout.lines.map((line) => line.key))
+    expect(lapseCaption(g.timeline, g.layout.lines, 1, new Set()).sown).toBe(g.layout.lines.length)
+    expect(lapseCaption(g.timeline, g.layout.lines, 1, all).sown).toBe(0)
     const at = atOf(g, 0.5)
-    expect(lapseCaption(g.timeline, g.layout, 0.5, new Set()).sown).toBe(g.layout.plants.filter((plant) => plant.startDay <= at).length)
+    expect(lapseCaption(g.timeline, g.layout.lines, 0.5, new Set()).sown).toBe(g.layout.lines.filter((line) => line.startDay <= at).length)
     // a progress that is no number paints the start rather than throwing
     const quiet = quietCtx(10, 10)
     expect(() => painterFor(g, {}, { timelapse: { progress: { current: Number.NaN } } }).painter.paint(quiet, g.view, g.camera, 16)).not.toThrow()
@@ -357,7 +361,7 @@ describe('opening and closing', () => {
     expect(umamiTrack.mock.calls).toEqual([['timelapse-play']])
   })
 
-  it('closes on the whole garden, and sends nothing', () => {
+  it('closes on the whole view, and sends nothing', () => {
     const umamiTrack = stubTracker()
     const progress = { current: 0.3 }
     const close = vi.fn()
