@@ -1,41 +1,27 @@
-# repo-garden
+# gitube
 
-Paste a GitHub repo and see how its branches fork and merge, drawn as a metro
-map (or, in the organic layout, an Obsidian-style node graph). Paste a GitHub
-login instead and see that person's whole coding life
-([person mode](#person-mode)).
+**A tube map of any GitHub repo, and of anyone's life on GitHub.**
+
+Paste `owner/repo` and every branch gets its own line, forking off and merging
+back like a metro map. Paste a login instead and their repos become lines
+through the years, from the first commit to today. It all runs in your
+browser against the GitHub API: no clone, no server, no sign-up.
+
+**Live:** https://repogarden.latesailor.dev
 
 [![Andrej Karpathy's coding life as life lines: one line per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-lines.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=lines)
 
-<sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://repogarden.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant. Repo mode, more people and every view in the [gallery](#gallery).</sub>
+<sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://repogarden.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant.</sub>
 
-- **Metro** (the default layout) lays every branch on its own straight lane,
-  like a tube map, with forks and merges as interchanges. **Organic** lets
-  the same graph settle under free force physics instead.
-- **Skeleton view** keeps branch tips, fork points, merge commits and roots, and
-  collapses straight runs of commits into one edge with a `+N` badge.
-- **Full view** shows every fetched commit.
-- Hover a node to spotlight its neighbours; pick a branch in the side panel to
-  isolate its lineage; hide branches with the eye toggle; filter stale ones.
-- Ten colour themes (palette icon in the top bar): Obsidian, the original dark
-  look and the default, and Midnight are dark; Paper, Slate, Sage, Sand, Rose,
-  Sky, Contrast and Solar are light. Each has its own branch palette, checked
-  for contrast on its canvas. The choice is saved in this browser.
-- Open pull requests show on the branch tips they come from: the tip's ring
-  splits into review (left) and checks (right), green, amber (half lit) or red
-  (broken), dotted for a draft; until they are looked up both halves keep the
-  tip's own colour. Click a tip for the details; `is:pr`, `checks:failing`,
-  `review:approved` and the like narrow the branch list. A repo without pull
-  requests looks exactly as before.
-- **Person mode**: a login (`octocat`, `@octocat` or `github.com/octocat`)
-  grows one user's repos over time, as life lines or a constellation, or in
-  five console looks (phosphor, htop, git log, minimap,
-  helix),
-  with its own time-lapse, poster and share link.
-- Everything runs in the browser against the GitHub API (REST, plus GraphQL
-  once a token is set). No clone, no server. Add a personal access token (key
-  icon) for private repos, a much higher rate limit and, in person mode, the
-  commits GitHub counted.
+## Contents
+
+- [Gallery](#gallery)
+- [Repo mode](#repo-mode)
+- [Person mode](#person-mode)
+- [Run it](#run-it)
+- [How the data is fetched](#how-the-data-is-fetched)
+- [Privacy and analytics](#privacy-and-analytics)
+- [Stack](#stack)
 
 ## Gallery
 
@@ -48,7 +34,7 @@ than its commit count.
   <tr>
     <td colspan="2">
       <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-metro.jpg" alt="vuejs/core in repo mode as a metro map: branches on straight lanes forking off main"></a>
-      <br><b>repo mode</b> · <code>vuejs/core</code> as a metro map, the default layout: the newest end of 83 branches, each on its own lane off <code>main</code>, with the fix branches fanning out near the tip and thorns on the ones far behind it. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
+      <br><b>repo mode</b> · <code>vuejs/core</code> as a metro map, the default layout: the newest end of 83 branches, each on its own lane off <code>main</code>, with the fix branches fanning out near the tip and spikes on the ones far apart from it. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
     </td>
   </tr>
   <tr>
@@ -89,6 +75,105 @@ than its commit count.
   </tr>
 </table>
 
+## Repo mode
+
+Type `owner/repo` (or paste a GitHub URL) and press **Go**.
+
+**Layouts.** **Metro**, the default, lays every branch on its own straight
+lane, oldest commits on the left. Forks and merges are interchanges, a branch
+cut off from its history starts with a dashed lead-in, and a merged branch
+that was since deleted runs on as a faint line. **Organic** lets the same
+graph settle under free force physics instead, which can read better for a
+tangled merge history.
+
+**Views.** **Skeleton** keeps branch tips, fork points, merges and roots, and
+folds straight runs of commits into one stretch with a `+N` count. **Full**
+shows every fetched commit.
+
+**Finding your way.**
+
+- Hover a commit to light up its neighbours.
+- Pick a branch in the side panel to isolate its line, hide branches with the
+  eye toggle, and filter out ones that have gone quiet (30 days, 90 days, a year).
+- The **people** tab ranks contributors by commits; pick one to light up their work.
+- The **cleanup** tab lists merged branches nobody deleted, with the `git push`
+  command to remove the ones you tick. It also lists **diverged** branches:
+  far from the default branch on both sides, so a merge will likely hurt. The
+  map marks them with spikes.
+
+**Pull requests.** Open pull requests show on the tips they come from. The
+tip's ring splits into review (left) and checks (right): green, amber (half
+lit while running) or red (broken), dotted for a draft. Until a pull request is
+looked up, both halves keep the tip's own colour. Click a tip for the details,
+and filter the branch list with `is:pr`, `checks:failing`, `review:approved`
+and the like.
+
+**More.**
+
+- **Replay** in the status strip rebuilds the map from its first loaded commit,
+  and **rec** saves that as a silent video.
+- **vs** (the swords in the side panel) opens a second repo beside this one and
+  scores the two, measure by measure.
+- Save the picture as a PNG, or the data as a `.json` file. Drop a saved file
+  on the page to open it again with no API requests. Files saved by
+  repo-garden, gitube's old name, still open.
+- The address bar is a share link: it names the repo, the selected branch or
+  person, and the other side of a vs.
+
+## Person mode
+
+Type a GitHub login where a repo goes (`octocat`, `@octocat` or a
+`github.com/octocat` link), or open `?user=octocat`. It shows one user's
+coding life: when each repo was born, when it was busy, when it went quiet,
+which languages led when, and their milestones. Milestones are joining
+GitHub, the first repo, the most starred one and language switches, plus with
+a token the first pull request, the first issue and the longest streak.
+
+An organization is not a user: its login says "that's an organization" (a
+bot's, "that's a bot"), and its repos still open as `owner/repo`.
+
+**Seven views** paint the same life on one canvas. Pick one in the side panel,
+or with `&view=` in the link. They all share the panel, the inspector (hover a
+repo or a day), the theme, the replay and the poster.
+
+| View | What it draws |
+|---|---|
+| `lines` (default) | Each repo is a line from where the person's part in it starts, thick while active and thin while dormant, thicker for more commits with a token. Milestones are stations, archived repos end at a terminus, forks branch in, and repos they only contributed to start hollow. |
+| `constellation` | Each repo is a star, placed by when it starts (across) and its language (down), sized by activity, glowing by stars, with faint links between repos active in the same months. |
+| `phosphor` | A green CRT: each repo a stack of blocks rising where it starts, taller the busier it was. |
+| `htop` | A system monitor: each repo a numbered row whose meter is lit where it was active. |
+| `gitlog` | Like `git log --graph`: each repo a branch off the trunk, with commit dots and a short hash made from its dates, never its name. |
+| `minimap` | A code editor: each repo a numbered line whose syntax-coloured tokens are its active spans, with a minimap strip at the right. |
+| `helix` | An amber vector display: the life wound into a coil, one turn per calendar year with January at the top, each repo a thread on its own ring. |
+
+The last five keep their own terminal colours whatever the theme. A link with
+`&view=garden`, from before that view was retired, opens `lines`.
+
+**Around the canvas.**
+
+- The side panel holds the repo list (search, hide, pick one to spotlight it),
+  the milestones, and the legend, which ends with what GitHub's data leaves out.
+- **Replay** plays the life from its first day to today. Months with activity
+  get equal time and quiet ones a tenth of it, so empty years go by quickly.
+  Pick a length from 10 to 60 seconds, and **rec** saves a silent video
+  (`<login>-life-timelapse-<day>`, WebM or mp4 in Safari).
+- **Poster** saves a PNG of the view on show, fully drawn, with the avatar,
+  the login, the years and the top three milestones (`<login>-life-poster-<day>.png`).
+- **Share link**: the address bar names the user and the view, and nothing else.
+
+**Private repos.** With a token, a profile can include private repos: your
+own, or ones the person contributed to that your token can see. Their names
+are hidden everywhere by default, shown as "private repo" with a lock. The
+panel's search matches only what is shown, so a name can't be found by
+guessing it. The panel's toggle reveals them on this screen, for this login
+only, until a reload, a new search or leaving person mode. Posters and
+recordings show names exactly as the screen does. Their file names carry only
+the login. No link, address bar or analytics event ever carries a repo name.
+
+**Cache.** A profile fetched in this browser within a day opens again for free
+(IndexedDB, six profiles at most). Refresh in the status strip fetches it
+again. Copies fetched with and without a token are kept apart.
+
 ## Run it
 
 ```bash
@@ -98,325 +183,184 @@ npm run dev
 
 Then open http://localhost:5173.
 
-## Deploy
-
-Pushes to `master` deploy to https://repogarden.latesailor.dev on the Oracle
-VPS through GitHub Actions. One-time setup (DNS, nginx, the deploy key) is in
-[DEPLOY.md](DEPLOY.md).
-
-## Scripts
-
 | Command | What it does |
 |---|---|
 | `npm run dev` | Vite dev server |
-| `npm run build` | typecheck + production build to `dist/` |
-| `npm test` | vitest (graph engine, API clients, store, UI helpers, person mode) |
-| `npx tsx scripts/smoke.ts owner/repo [maxBranches]` | live fetch + graph invariants against the real API |
-| `npx tsx scripts/smoke-profile.ts <login> [--token-env NAME]` | live person-mode fetch + sanity checks: repo count, requests spent, the span; with `--token-env` it reads a token from the environment variable `NAME` (never printed), runs the GraphQL tier (falling back to REST as the app does, and saying so) and prints contributions per year to hold against the github.com profile. Exits 3 on a core rate limit, without retrying (a GraphQL limit falls back instead) |
+| `npm run build` | typecheck and production build to `dist/` |
+| `npm test` | Vitest: graph engine, API clients, stores, UI, person mode |
+| `npx tsx scripts/smoke.ts owner/repo [maxBranches]` | live fetch plus graph checks against the real API |
+| `npx tsx scripts/smoke-profile.ts <login> [--token-env NAME]` | live person-mode fetch plus sanity checks. With `--token-env` it reads a token from that environment variable (never printed) and runs the GraphQL tier. Exits 3 on a core rate limit without retrying |
 
-## How the graph is built
+**Deploy.** Pushes to `master` deploy to https://repogarden.latesailor.dev on
+the Oracle VPS through GitHub Actions. One-time setup (DNS, nginx, the deploy
+key) is in [DEPLOY.md](DEPLOY.md).
+
+**Token.** Add a GitHub personal access token with the key icon for private
+repos, a much higher rate limit and, in person mode, the commits GitHub
+counted. It stays in this browser's storage and is only ever sent to GitHub.
+
+## How the data is fetched
+
+GitHub allows 60 requests an hour without a token, and 5,000 with one.
+
+### A repo
 
 1. `GET /repos/{o}/{r}` for the default branch.
-2. `GET /repos/{o}/{r}/branches` (paginated, capped at 200).
-3. One `compare/{default}...{branch}` call per branch. It returns the merge base
-   (fork point) and the branch's unique commits with parents.
+2. `GET /repos/{o}/{r}/branches`, paginated, capped at 200 branches.
+3. One `compare/{default}...{branch}` call per branch, for its merge base and
+   its own commits.
 4. A walk of the default branch's history, stopping once every fork point is
    connected.
-5. Everything merges into one commit map; `src/graph` turns it into nodes and
-   child-to-parent links, flags forks/merges/roots, colours each commit by the
-   first branch that reaches it, and (in skeleton mode) collapses linear runs.
+5. `src/graph` turns the commits into nodes and child-to-parent links, colours
+   each commit by the first branch that reaches it, and folds straight runs in
+   skeleton view.
 
-Roughly one request per branch. Unauthenticated GitHub allows 60 per hour.
+That is roughly one request per branch.
 
-Open pull requests come after the graph (`src/api/pulls.ts`). Without a token:
-`GET /repos/{o}/{r}/pulls` (1 request per 100 open pull requests, at most 3),
-skipped below 5 requests left; a pull request's review and checks cost 3 more
-(check runs, commit statuses, reviews) and are read when its tip is opened,
-while at least 15 are left. With a token: one GraphQL query per 40 branches,
-review and checks included, plus one per page for a branch with more than 5
-open pull requests (often a default branch that bots sync into forks), and no
-REST requests. Pull requests from forks have no branch here and are not drawn.
-They are never cached or saved.
+Open pull requests come after the map (`src/api/pulls.ts`):
 
-## Person mode
+- **Without a token:** `GET /repos/{o}/{r}/pulls` costs 1 request per 100 open
+  pull requests, at most 3, and is skipped below 5 requests left. A pull
+  request's review and checks cost 3 more, read when its tip is opened, while
+  at least 15 are left.
+- **With a token:** one GraphQL query per 40 branches, review and checks
+  included, and no REST requests.
 
-Type a GitHub login where a repo goes (`octocat`, `@octocat`, or a
-`github.com/octocat` link), or open `?user=octocat`, with `&view=lines`,
-`&view=constellation`, `&view=phosphor`, `&view=htop`,
-`&view=gitlog`, `&view=minimap` or `&view=helix` to pick the view. It grows one user's
-coding life: when each repo was born, when it was busy, when it went quiet,
-which languages led when, and their milestones (joining GitHub, the first
-repo, the most starred one, language switches, and with a token the first pull
-request, the first issue and the longest streak). `owner/repo` in the same
-input goes back to the repo garden. An organization is not a user: its login
-shows "that's an organization" (a bot's, "that's a bot"), and its repos still
-grow as `owner/repo`. A user with no repos to show gets a note saying so,
-with "add a token" when a token would show more.
+Pull requests from forks have no branch here and are not drawn. Pull requests
+are never cached or saved.
 
-Seven views, picked in the side panel (the life views on its first row, the
-console views on its second), paint the same life on one canvas and share the
-panel, the inspector (hover a repo or a day), the theme, the
-time-lapse and the poster:
+### A person
 
-- **lines** (the default): time runs left to right. Each repo is a line from
-  where the person's part in it starts (its birth for their own repos, their
-  first counted day, with a hollow start, for one they only contributed to),
-  thick while active and thin while dormant, thicker for more commits with a
-  token. Milestones are stations, the leading language of each stretch shows
-  as bands behind, archived repos end at a terminus and forks branch in.
-  A link from before the life garden was retired (`&view=garden`) opens lines.
-- **constellation**: each repo is a star, placed by when the person's part in
-  it starts (across) and its language (down), sized by activity, glowing by
-  stars, with faint links between repos active in the same months.
+Both tiers start with `GET /users/{login}` (1 request), which settles a login
+that doesn't exist, or is an organization or a bot.
 
-The console views keep their own terminal colours whatever the theme (the
-labels, the time-lapse caption and the poster follow them):
+**Without a token: REST, 3 to 9 requests.**
 
-- **phosphor**: a green CRT screen with scanlines; each repo is a stack of
-  blocks rising where the person's part in it starts, taller the busier it
-  was, its head brighter for stars.
-- **htop**: a system monitor; each repo is a numbered row whose meter is lit
-  where it was active, brighter for busier stretches.
-- **git log**: like `git log --graph`; each repo is a branch forking off the
-  trunk where the person's part in it starts, with commit dots and a short
-  hash (from its dates, never its name).
-- **minimap**: a code editor; each repo is a numbered line whose syntax-coloured
-  tokens are its active spans, with a minimap strip of every line at the right.
-- **helix**: an amber vector display; the life is wound into a coil, one turn
-  per calendar year with January at the top, so the same time of year lines up
-  in every turn. Each repo is a thread on its own ring, thick where it was busy
-  and thin where dormant, the far side of the coil drawn dimmer.
+1. `GET /users/{login}/repos?type=owner&sort=created&direction=asc`, at most 5
+   pages: the user's own public repos, the oldest 500.
+2. `GET /users/{login}/events/public`, at most 3 pages, for the days they
+   pushed. If these fail, the profile stands without them.
 
-The side panel also holds the repo list (search, hide, pick one to spotlight
-it), the milestones, and the legend, which ends with what GitHub's data leaves
-out (below). The status strip shows the repos, the years and, with a token,
-the contributions; after a live fetch, the GitHub requests left this hour;
-and "add a token for commits" when none is set.
-
-- **Time-lapse**: "watch it grow" in the status strip replays the life from
-  its first day (the account's creation, or earlier backdated commits) to
-  today, in the view on show. Each month with any activity gets the same share
-  of the play and a quiet one a tenth of it, so quiet years do not play as
-  dead air. Play, pause, scrub, pick a length (10 to 60 seconds), and rec
-  saves the play as a silent video (WebM, mp4 in Safari),
-  `<login>-life-timelapse-<day>`.
-- **Poster**: the poster button in the panel, or Save image in the top bar,
-  saves a PNG of the view on show, fully grown, framed with the avatar, the
-  login, the span of years and the top three milestones:
-  `<login>-life-poster-<day>.png`. Person mode has no Save data: the garden
-  file format is the repo garden's.
-- **Share link**: the address bar names the user and the view
-  (`?user=<login>&view=<view>`), and the copy-link button in the panel copies
-  it. Nothing hidden, picked or revealed goes into it.
-
-**Private repos.** A profile can hold private repos: your own, on your own
-login with a token that can read them, or one the person contributed to that
-your token can see. Their names are hidden by default, everywhere on the
-page: "private repo" with a lock, and the panel's search matches only what is
-shown, so a name cannot be found by guessing it. The panel's toggle shows them
-on this screen, for this login only; a reload, a new grow or leaving person
-mode hides them again. A poster or a recording shows names as the screen shows
-them when it is made (the toggle stays put while a recording runs and saves),
-and their file names carry only the login. No link, address bar or analytics
-event ever carries a repo name.
-
-**Cache.** A profile fetched in this browser within a day shows again at no
-API cost (IndexedDB, in its own `repo-garden-profiles` database, six profiles
-at most). Grow on the person on show, or refresh in the status strip, fetches
-it again from GitHub. Copies fetched with and without a token are kept apart,
-so adding a token never serves the tokenless copy, and a copy fetched with a
-token is never shown without one.
-
-### Two tiers
-
-Both tiers start with `GET /users/{login}` over REST (1 request), which
-settles a login that does not exist, or is an organization or a bot, before
-anything else.
-
-**Without a token: REST, 3 to 9 requests.** After the identity call:
-
-1. `GET /users/{login}/repos?type=owner&sort=created&direction=asc`, 100 a
-   page, at most 5 pages: the user's own public repos, the oldest 500.
-2. `GET /users/{login}/events/public`, at most 3 pages (GitHub keeps 300
-   events), for the days they pushed. If these fail, the profile stands
-   without them.
-
-They come out of the same anonymous 60 an hour that the repo garden spends.
-Each repo is one span, from its creation to its last push, and the last 30 or
+Each repo is one span from its creation to its last push, and the last 30 or
 so days add pushes per repo per day.
 
-**With a token: GraphQL, about one query per year of account age.** After the
-identity call, one query lists the years the user contributed in and their own
-repos (one more per 100 repos, up to 500), private ones too when the login is
-your own and the token can read them. Then the contributions are read in
-calendar quarters, four to a query (one query per year since the first year
-they contributed in), one query after another. A query GitHub is too slow for
-is asked again in halves, down to one quarter (still too slow, and the
-fallback below takes over). A quarter that comes back with an error is asked
-once more on its own; if that fails too, the quarter keeps whatever came back
-for it, counts as cut short, and the legend names it. This tier adds the contribution calendar day by day, commits per repo per
-day, the repos they only contributed to (up to 100 a quarter), and the first
-pull request and issue. GraphQL spends the token's GraphQL points, not the core
-budget the requests-left counter shows.
+**With a token: GraphQL, about one query per year of account age.** One query
+lists the years they contributed in and their own repos, private ones too when
+the login is yours. Then contributions are read in calendar quarters, four to
+a query. A query GitHub is too slow for is split in halves, down to one
+quarter. A quarter that still fails is cut short, and the legend names it.
+This tier adds the day-by-day calendar, commits per repo per day, the repos
+they only contributed to (up to 100 a quarter), and the first pull request
+and issue. It spends the token's GraphQL points, not the core budget the
+requests-left counter shows.
 
-**The fallback.** With a token, GraphQL failing does not lose the profile:
-when it refuses the token, hits a GraphQL rate limit (primary or secondary),
-still times out after the halving, or answers with anything unexpected, the
-profile is read with the same REST plan as without a token (the token's 5000
-an hour paying for it), and the status strip says why
-("GraphQL limit reached until 14:05; showing the public profile", with "try
-again"). A profile filled this way is not cached, so the next grow tries
-GraphQL again. There is no fallback when the REST identity call itself fails:
-an abort, a network error, a token GitHub rejects (an expired or revoked one),
-a core rate limit (REST would hit the same wall), or a login that is not found
-or not a user. Those show their error card.
+**The fallback.** When GraphQL refuses the token, hits a rate limit, still
+times out or answers with anything unexpected, the profile is read the REST
+way instead, and the status strip says why. A profile filled this way isn't
+cached, so the next search tries GraphQL again. There is no fallback when
+the identity call itself fails; those show their error card.
 
-### Limits
+### What GitHub's data leaves out
 
-What GitHub's data leaves out, as each view's legend lists it:
+Each view's legend lists these:
 
-- Without a token there are no commit counts. A repo is one span from its
-  creation to its last push, recent activity is pushes per repo per day (since
-  2025-10-07 a push event carries no commit count), and GitHub keeps only about
-  30 days of events, so the days before them are unknown, not quiet. Only the
-  user's own public repos show: repos they only contributed to, and private
-  ones, need a token.
+- Without a token there are no commit counts. Recent activity is pushes per
+  repo per day, and GitHub keeps only about 30 days of events, so earlier days
+  are unknown rather than quiet. Only the user's own public repos show.
 - With a token, GitHub counts a commit only on a repo's default branch (or
   `gh-pages`), made with an email linked to the account, and not in a fork.
-  The user's own repos show even with no counted commits.
 - Contributions to private repos count only with a token that has `read:user`
-  and can see the repo. Otherwise GitHub gives only their number, and only if
-  the user shares it; the legend says how many.
-- Days are GitHub's, in US Pacific time, not the viewer's time zone.
-- GitHub's GraphQL calendar can differ from the count on the github.com profile
-  by a few contributions a year.
+  and can see the repo. Otherwise GitHub gives only their number, if the user
+  shares it.
+- Days are GitHub's, in US Pacific time.
+- GitHub's GraphQL calendar can differ from the github.com profile by a few
+  contributions a year.
 - Caps: 500 own repos in either tier, and with a token 100 repos a quarter. A
-  profile cut short says so ("profile truncated" in the status strip, and the
-  legend names any quarter lost).
+  profile cut short says so.
 
-## Analytics
+## Privacy and analytics
 
 The live site counts visits with Umami, self-hosted at `stats.latesailor.dev`.
 The tracker sets no cookies and writes nothing to the browser's storage.
 
-**What reaches Umami**
+**What reaches Umami.** Each pageview and event is one request carrying:
 
-Each pageview and each event is one request to `stats.latesailor.dev`
-carrying:
+- The page as its origin only (`https://repogarden.latesailor.dev/`), never the
+  path, query string or fragment. Share links keep their repo or user in the
+  query string, so a pageview says someone opened gitube, not what they
+  looked at.
+- The referrer, cut down to `/` within the site or the other site's origin.
+- The screen size, the browser's language, the page title (always `gitube`),
+  the hostname and the website ID.
+- For an event, its name and the data in the tables below, and nothing else.
 
-- The page as its origin only, `https://repogarden.latesailor.dev/`: never
-  the path, the query string or the fragment. A share link keeps its repo,
-  contributors and battle (or its user and view) in the query string, so a
-  pageview says someone opened repo-garden, not what they looked at. The app
-  rewrites the query string as you click; those rewrites are not pageviews.
-- The referrer, cut down: `/` when the visitor came from this site, the
-  origin alone (`https://github.com`, say) when from another site, empty when
-  there is none. Only the pageview, and events sent before the app first
-  rewrites the address bar, carry another site's origin: the tracker takes
-  each rewrite for a move within the site, so later events carry `/`.
-- The screen size, the browser's language, the page title (always
-  `repo-garden`), the hostname (`repogarden.latesailor.dev`) and the website
-  ID.
-- For an event, its name and data: the events in the two tables below, and no
-  others.
-
-The repo garden sends these:
+Repo mode sends these:
 
 | Event | Data | Sent when |
 |---|---|---|
-| `grow` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | the repo on show was grown or refreshed (Grow, an example chip, opening a share link, the refresh button in the status strip or the inspector) and its data arrived, from GitHub or the cache: once per request. Not for a battle challenger, a token change, a background refetch or an opened file; a request that fails sends `fetch-error` instead |
-| `layout-switch` | `layout`: `metro` or `organic` | another layout is picked in the side panel |
-| `theme-switch` | `theme`: the theme's id (`obsidian`, `paper`, ...) | once when the theme picker closes on a different theme than it opened with, naming that one; themes tried on the way do not count |
-| `view-mode` | `view`: `skeleton` or `full` | another view is picked in the side panel |
-| `timelapse-play` | none | the time-lapse is opened |
-| `export` | `format`: `png` (Save image), `webm` (the time-lapse recording, also when Safari records mp4), `json` (Save data) or `garden-file` | a file is saved: an image or the data from the export menu, or a time-lapse recording when it stops; or a saved garden file is opened (`garden-file`) |
-| `battle-start` | none | a battle is started from the side panel (not when a share link opens one) |
-| `pr-overlay` | `state`: `on` when open pull requests put rings on tips, `off` when they put none | once per answer from GitHub about the repo's open pull requests (there is no overlay toggle); looking up one pull request's review and checks does not count |
+| `grow` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | a repo's data arrived after Go, an example chip, a share link or a refresh: once per request. Not for a vs challenger, a token change, a background refetch or an opened file |
+| `layout-switch` | `layout`: `metro` or `organic` | another layout is picked |
+| `theme-switch` | `theme`: the theme's id | the theme picker closes on a different theme than it opened with |
+| `view-mode` | `view`: `skeleton` or `full` | another view is picked |
+| `timelapse-play` | none | the replay is opened |
+| `export` | `format`: `png`, `webm` (also when Safari records mp4), `json` or `garden-file` | a file is saved, or a saved file is opened (`garden-file`) |
+| `battle-start` | none | a vs is started from the side panel (not from a share link) |
+| `pr-overlay` | `state`: `on` or `off` | once per answer from GitHub about the repo's open pull requests |
 | `share-copy` | none | the share link is copied |
-| `token-added` | none | a new token is saved in the key field, replacing one included (clearing it sends nothing) |
-| `fetch-error` | `code`: the `GitHubFetchError` code (`not_found`, `rate_limited`, `unauthorized`, ...) | the repo on show fails to load: the code only, no message and no repo |
+| `token-added` | none | a new token is saved |
+| `fetch-error` | `code`: the error code (`not_found`, `rate_limited`, ...) | the repo fails to load: the code only |
 
-Person mode sends these (`src/profile/analytics.ts` has the `grow` rules):
+Person mode sends these (`src/profile/analytics.ts` has the rules):
 
 | Event | Data | Sent when |
 |---|---|---|
-| `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached`, `token` (whether the profile was fetched with a token, read from the fetch result, not the token set now); `login` only for a live fetch without a token | the person on show was grown or refreshed (a login typed in either input, the same one again included, a `?user=` link, refresh or "try again" in the status strip) and the profile arrived, from GitHub or the cache: once per request. Not for a token change, a background refetch or a view switch; a request that fails sends nothing |
-| `view-switch` | `view`: `lines`, `constellation`, `phosphor`, `htop`, `gitlog`, `minimap` or `helix` | another view is picked in the side panel |
-| `timelapse-play` | none | the time-lapse is opened ("watch it grow") |
-| `export` | `format: 'webm'`, also when Safari records mp4 | a time-lapse recording is saved; the only `export` person mode sends |
-| `poster-export` | none | a poster is saved (the panel's poster button, or Save image in the top bar), after its download; a save that fails sends nothing |
-| `share-copy` | none | the panel's copy-link button copies the link |
-| `theme-switch` | `theme`, as above | the top bar's theme picker, as in the repo garden |
-| `token-added` | none | the top bar's key field, as in the repo garden |
+| `grow` | `mode: 'person'`, `source` (`rest` or `graphql`), `cached`, `token`; `login` only for a live fetch without a token | the profile arrived after a search, a `?user=` link or a refresh: once per request |
+| `view-switch` | `view`: one of the seven view ids | another view is picked |
+| `timelapse-play` | none | the replay is opened |
+| `export` | `format: 'webm'` | a replay recording is saved |
+| `poster-export` | none | a poster is saved |
+| `share-copy`, `theme-switch`, `token-added` | as in repo mode | as in repo mode |
 
-Umami also gets what any server gets: the visitor's IP address, the browser's
-User-Agent, and a `Referer` header holding the site's origin only. From the IP
-address and the User-Agent it works out the country, region and city, the
-browser, the OS and the device type. No cookie goes with any of it: the
-script is fetched with CORS (`crossorigin="anonymous"`, which the server
-allows) and the reports omit credentials. The one thing the tracker reads from the browser's
-storage is `umami.disabled` in localStorage, which turns it off (below); the
-visit token Umami answers with is kept in memory and sent back only with that
-page's later requests.
+The event names and values predate the rename (`grow`, `battle-start`,
+`garden-file`) and stay as they are, so the stats keep one history.
 
-**The privacy rules**
+Umami also gets what any server gets: the IP address and the User-Agent, from
+which it works out the location, browser, OS and device type.
 
-- Umami never gets the GitHub token, the query string or the URL path. Share
-  links carry repo names, contributor logins, battle repos or a user's login,
-  and with a token the repos can be private. The tracker is told to drop the
-  query string and the fragment (`data-exclude-search`, `data-exclude-hash`),
-  and the function it calls before every send (`data-before-send`,
-  `beforeSend` in `src/analytics/umami.ts`) cuts the page URL down to the
-  origin and the referrer down to `/` or its origin, so no path or query
-  string goes out even if those attributes ever stop working. No `Referer`
-  carries them either: the script is fetched with `no-referrer`, and the
-  site's `Referrer-Policy` sends only the origin to other hosts.
-- An event names a repo or a login only when the data was fetched without a
-  token, which proves it public. With a token set, events carry no names, only
-  counts and modes: `track()` drops the `repo` and `login` keys whatever the
-  caller passed. A copy from the cache is never named either, since it may
-  have been fetched with a token since removed. In person mode `grow`'s
-  `login` is the only name any event carries: none names a repo, even while
-  the privacy toggle shows private names on screen.
-- Every value is checked on the way out, and again in `beforeSend`: anything
-  that looks like a token or a query string is dropped, and strings are cut
-  to 50 characters.
-- Do Not Track is honoured (`data-do-not-track`), and only
-  `repogarden.latesailor.dev` is counted (`data-domains`): local builds (unless
-  made with `VITE_UMAMI_DOMAINS`, below) and copies of the site on other hosts
-  send nothing. To stop counting your own visits, run
-  `localStorage.setItem('umami.disabled', '1')` in the console on the live
-  site.
+**The rules.**
 
-**Setup**
+- Umami never gets the GitHub token, the query string or the URL path. The
+  tracker drops the query string and fragment (`data-exclude-search`,
+  `data-exclude-hash`), and `beforeSend` in `src/analytics/umami.ts` cuts the
+  URL to its origin again before every send.
+- An event names a repo or a login only when it was fetched without a token,
+  which proves it public. With a token set, `track()` drops `repo` and `login`.
+  A cached copy is never named. No event names a private repo.
+- Every value is checked on the way out: anything that looks like a token or
+  a query string is dropped, and strings are cut to 50 characters.
+- Do Not Track is honoured, and only `repogarden.latesailor.dev` is counted.
+  To stop counting your own visits, run
+  `localStorage.setItem('umami.disabled', '1')` in the console on the live site.
 
-- The website ID lives in `.env.production` as `VITE_UMAMI_WEBSITE_ID`. It is
-  not a secret: every visitor's page carries it. Empty means analytics off.
-  The tracker is only added in a production build (`import.meta.env.PROD`)
-  with a valid UUID as the ID, so `npm run dev` never loads it.
-- The tracker is not bundled. `initAnalytics()` adds
-  `https://stats.latesailor.dev/script.js` once the page has loaded, so the
-  app's own files never wait on it. Events from before it has loaded wait for
-  it: the first 20 are kept (any more are dropped) and sent in order once it
-  loads, each checked again then, so a token added in the meantime still
-  drops names. If the script fails to load, or something blocks it, they are
-  dropped. Where `initAnalytics()` adds no tracker, `track()` does nothing.
-- `VITE_UMAMI_DOMAINS` (comma-separated hostnames) replaces
-  `repogarden.latesailor.dev` as the hostnames to count. It is only for
-  checking a local production build:
-  `VITE_UMAMI_DOMAINS=localhost npm run build && npm run preview`, then open
-  http://localhost:4173. Like the ID it is read at build time, so never set it
-  for the deployed build: the live site would count nothing. The events from
-  such a check land in the live stats.
+**Setup.**
+
+- The website ID is `VITE_UMAMI_WEBSITE_ID` in `.env.production`. It isn't a
+  secret. Empty turns analytics off, and `npm run dev` never loads the tracker.
+- The tracker isn't bundled: `initAnalytics()` adds
+  `https://stats.latesailor.dev/script.js` after the page loads. Up to 20 early
+  events wait for it and are checked again before they go.
+- `VITE_UMAMI_DOMAINS` (comma-separated hostnames) replaces the counted host,
+  only for checking a local production build:
+  `VITE_UMAMI_DOMAINS=localhost npm run build && npm run preview`. Never set
+  it for the deployed build, or the live site counts nothing.
 - The site's Content-Security-Policy must allow `stats.latesailor.dev`
-  (`script-src` and `connect-src`). The deploy only ships `dist/`, so the
-  updated headers snippet goes to the VPS by hand, once, before merging:
+  (`script-src` and `connect-src`); see
   [DEPLOY.md, step 6](DEPLOY.md#6-analytics-umami-update-the-headers-snippet-before-merging).
-  The deploy's smoke test fails if the live policy does not list it.
+  The deploy's smoke test fails if the live policy doesn't list it.
 
 ## Stack
 
 Vite 8, React 19, TypeScript 7, Tailwind v4, react-force-graph-2d (d3-force on
-canvas), @octokit/rest, TanStack Query, Zustand, Vitest. See [PLAN.md](PLAN.md)
-for the original design notes and [PROFILE_SPEC.md](PROFILE_SPEC.md) for person
-mode's.
+canvas), @octokit/rest, TanStack Query, Zustand, Vitest.
+[PLAN.md](PLAN.md) has the original design notes and
+[PROFILE_SPEC.md](PROFILE_SPEC.md) person mode's.
