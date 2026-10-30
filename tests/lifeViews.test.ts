@@ -2,7 +2,7 @@
  * Person mode's views and their switcher (lifeViews.ts, PROFILE_SPEC.md section 5 and Phase 6): the
  * registry names each view by the share link's view, switchView sends view-switch with the view (and
  * nothing else) once per real change, the panel's switcher hands its option's value on and is the
- * repo garden's Segmented to the class, and each view's scene keeps the contract the painter, the
+ * repo mode's Segmented to the class, and each view's scene keeps the contract the painter, the
  * labels, the time-lapse and the panel's focus rely on, on both recordings. The views' own drawing
  * code writes no colour of its own: the life views paint the theme, the console views their own fixed
  * palette (src/theme/console), labels and plates included.
@@ -18,7 +18,7 @@ import { axisOf } from '../src/profile/lifeView'
 import { horizonY } from '../src/profile/lifeGeometry'
 import { languagePalette } from '../src/profile/lifeInk'
 import { repoKey } from '../src/profile/privacy'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import type { PersonView } from '../src/share/shareUrl'
 import { THEMES, getTheme } from '../src/theme/themes'
 import { PHOSPHOR } from '../src/theme/console/phosphor'
@@ -57,7 +57,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 /** Umami's tracker stubbed in, as the app sees it once loaded. */
@@ -81,7 +81,7 @@ describe('the registry', () => {
 
 describe('switchView', () => {
   it('sends view-switch with the view, once per real change, and sets it', () => {
-    useGardenStore.setState({ token: '' })
+    useAppStore.setState({ token: '' })
     const umamiTrack = stubTracker()
     const set = vi.fn()
     let current: PersonView = 'helix'
@@ -110,7 +110,7 @@ describe('switchView', () => {
 
   it('carries the view only, with or without a token', () => {
     for (const token of ['', 'ghp_' + 'R8vK2mW5qT9xL3nB7cJ4hF6dS1aG0eY2uI8o']) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker()
       switchView('helix', 'lines', () => {})
       expect(umamiTrack.mock.calls).toEqual([['view-switch', { view: 'lines' }]])
@@ -148,7 +148,7 @@ describe('the switcher', () => {
     expect(buttons.every((b) => b.props.disabled === true)).toBe(true)
   })
 
-  it("is the repo garden panel's Segmented to the class, copied rather than taken from the first download", () => {
+  it("is repo mode's panel Segmented to the class, copied rather than taken from the first download", () => {
     const segmented = panelSource.slice(panelSource.indexOf('function Segmented<'), panelSource.indexOf('const VIEW_OPTIONS'))
     const copy = personPanelSource.slice(personPanelSource.indexOf('export function ViewSwitch('), personPanelSource.indexOf('function PrivacyToggle('))
     expect(segmented.length).toBeGreaterThan(200)
@@ -156,7 +156,7 @@ describe('the switcher', () => {
     // the group is the Segmented's field, stacked into rows (one per VIEW_ROWS row) and nothing else
     const groupClass = (code: string) => /role="radiogroup"[^>]*?className="([^"]+)"/.exec(code)?.[1].split(' ') ?? []
     const field = groupClass(segmented)
-    expect(field).toEqual(['flex', 'rounded-lg', 'bg-garden-field', 'p-0.5'])
+    expect(field).toEqual(['flex', 'rounded-lg', 'bg-ui-field', 'p-0.5'])
     const stacked = groupClass(copy)
     for (const name of field) expect(stacked, name).toContain(name)
     expect(stacked.filter((name) => !field.includes(name))).toEqual(['flex-col', 'gap-0.5'])
@@ -167,7 +167,7 @@ describe('the switcher', () => {
       'role="radio"',
       'aria-checked={active}',
       'className={`flex-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] transition-colors ${',
-      "active ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:text-garden-text'",
+      "active ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:text-ui-text'",
     ]) {
       expect(segmented, part).toContain(part)
       expect(copy, part).toContain(part)
@@ -315,7 +315,7 @@ describe("the views' drawing code", () => {
     }
   })
 
-  it('never imports the repo garden’s branch metro engine', () => {
+  it('never imports repo mode’s branch metro engine', () => {
     for (const [file, text] of Object.entries(sources)) expect(text, file).not.toMatch(/(?:from|import\()\s*['"][^'"]*graph\/metro/)
   })
 })

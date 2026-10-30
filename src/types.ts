@@ -1,5 +1,5 @@
 /**
- * Shared contracts for repo-garden.
+ * Shared contracts for gitube.
  * api/github.ts produces RepoData; graph/* turns RepoData into a Graph;
  * components render the Graph. Keep this file the single source of truth.
  */

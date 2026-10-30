@@ -1,6 +1,6 @@
 /**
  * Person mode's analytics rules (PROFILE_SPEC.md section 6, "Analytics"). Person mode sends grow
- * alone (with mode 'person'); the top bar's own events go as they do in the repo garden.
+ * alone (with mode 'person'); the top bar's own events go as they do in repo mode.
  *
  * grow counts requests, as in repo mode: a ?user= link or a switch to person mode, a login grown
  * from the input (the same one again included) and the refresh button each ask for a profile, and

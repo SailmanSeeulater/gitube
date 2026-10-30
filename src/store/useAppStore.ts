@@ -3,6 +3,7 @@ import type { FetchProgress, ViewMode } from '../types'
 import type { RateInfo } from '../api/http'
 import { readStoredThemeId, writeStoredThemeId } from '../theme/storage'
 import { isThemeId, type ThemeId } from '../theme/themes'
+import { LAYOUT_STORAGE_KEY, TOKEN_STORAGE_KEY } from '../storageKeys'
 
 /**
  * How the repo is laid out: pinned to a straight metro map (the default), or free force physics.
@@ -13,8 +14,7 @@ export type LayoutMode = 'metro' | 'organic'
 /** Which list the side panel shows. */
 export type PanelTab = 'branches' | 'contributors' | 'weeds'
 
-/** localStorage key for the GitHub personal access token. */
-export const TOKEN_STORAGE_KEY = 'repo-garden:token'
+export { LAYOUT_STORAGE_KEY, TOKEN_STORAGE_KEY }
 
 function readStoredToken(): string {
   try {
@@ -25,8 +25,6 @@ function readStoredToken(): string {
   }
 }
 
-/** localStorage key for the metro | organic layout choice. */
-export const LAYOUT_STORAGE_KEY = 'repo-garden:layout'
 
 export function readStoredLayoutMode(): LayoutMode {
   try {
@@ -56,7 +54,7 @@ function writeStoredToken(token: string): void {
   }
 }
 
-export interface GardenState {
+export interface AppState {
   /** GitHub personal access token, '' when unset. Persisted under TOKEN_STORAGE_KEY. */
   token: string
   viewMode: ViewMode
@@ -93,7 +91,7 @@ export interface GardenState {
   rate: RateInfo | null
 }
 
-export interface GardenActions {
+export interface AppActions {
   setToken: (token: string) => void
   setViewMode: (mode: ViewMode) => void
   toggleViewMode: () => void
@@ -130,9 +128,9 @@ export interface GardenActions {
   resetForNewRepo: () => void
 }
 
-export type GardenStore = GardenState & GardenActions
+export type AppStore = AppState & AppActions
 
-export const useGardenStore = create<GardenStore>()((set, get) => ({
+export const useAppStore = create<AppStore>()((set, get) => ({
   token: readStoredToken(),
   viewMode: 'skeleton',
   layoutMode: readStoredLayoutMode(),

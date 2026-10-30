@@ -310,7 +310,7 @@ describe('the status strip', () => {
       expect(withHealth).toContain(`title="${item.title.replace(/'/g, '&#x27;')}">${item.text}</span>`)
     }
     // the second line is the muted small one
-    expect(withHealth).toContain('w-full flex-wrap items-center gap-x-2 text-[11px] text-garden-muted')
+    expect(withHealth).toContain('w-full flex-wrap items-center gap-x-2 text-[11px] text-ui-muted')
     // an empty list, or null, changes nothing; nor does the prop while fetching
     expect(renderToStaticMarkup(h(StatusStrip, { data, graph, isFetching: false, health: [] }))).toBe(without)
     expect(renderToStaticMarkup(h(StatusStrip, { data, graph, isFetching: false, health: null }))).toBe(without)

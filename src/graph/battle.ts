@@ -1,5 +1,5 @@
 /**
- * Garden battle: two repos' gardens measured side by side, with a winner per measure and a final
+ * vs: two repos measured side by side, with a winner per measure and a final
  * score. Pure. Every measure comes from the fetched data, so counts describe the loaded window
  * (FetchOptions caps), the same for both sides.
  */
@@ -12,7 +12,7 @@ const WEEK_MS = 7 * DAY_MS
 /** A branch quiet this long counts as stale: about six months. */
 export const STALE_DAYS = 180
 
-export interface GardenStats {
+export interface RepoStats {
   /** 'owner/repo' */
   name: string
   branches: number
@@ -30,7 +30,7 @@ export interface GardenStats {
   stale: number
 }
 
-export function gardenStats(data: RepoData, now: number): GardenStats {
+export function repoStats(data: RepoData, now: number): RepoStats {
   const commits = Object.values(data.commits)
   let first = Infinity
   let last = -Infinity
@@ -66,7 +66,7 @@ export function gardenStats(data: RepoData, now: number): GardenStats {
 export type Side = 'a' | 'b'
 
 export interface BattleRow {
-  key: keyof Omit<GardenStats, 'name'>
+  key: keyof Omit<RepoStats, 'name'>
   label: string
   /** what winning this row means */
   hint: string
@@ -85,13 +85,13 @@ interface Measure {
 
 /** The face-off, in the order shown. */
 export const MEASURES: ReadonlyArray<Measure> = [
-  { key: 'branches', label: 'branches', hint: 'bushier: more live branches', better: 'more' },
-  { key: 'people', label: 'people', hint: 'more gardeners in the loaded commits (bots left out)', better: 'more' },
+  { key: 'branches', label: 'branches', hint: 'busier: more live branches', better: 'more' },
+  { key: 'people', label: 'people', hint: 'more people in the loaded commits (bots left out)', better: 'more' },
   { key: 'perWeek', label: 'commits / week', hint: 'busier: loaded commits per week of the loaded window', better: 'more' },
   { key: 'merges', label: 'merges', hint: 'more merge commits: work flowing back together', better: 'more' },
   { key: 'lastCommitDays', label: 'last commit', hint: 'fresher: the newest commit is more recent', better: 'less' },
-  { key: 'weeds', label: 'weeds', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
-  { key: 'thorny', label: 'thorns', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
+  { key: 'weeds', label: 'cleanup', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
+  { key: 'thorny', label: 'diverged', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
   { key: 'stale', label: 'stale', hint: `livelier: fewer branches quiet for ${STALE_DAYS}+ days`, better: 'less' },
 ]
 
@@ -106,7 +106,7 @@ export interface Battle {
   winner: Side | null
 }
 
-export function battle(a: GardenStats, b: GardenStats): Battle {
+export function battle(a: RepoStats, b: RepoStats): Battle {
   const score: Record<Side, number> = { a: 0, b: 0 }
   const rows = MEASURES.map((m): BattleRow => {
     const va = a[m.key]

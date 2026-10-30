@@ -2,48 +2,48 @@
 
 /*
  * Colours come from the active theme (src/theme/themes.ts), never from this file. The theme sets
- * the --garden-* properties on <html> (src/theme/applyTheme.ts at runtime, and before the first
+ * the --ui-* properties on <html> (src/theme/applyTheme.ts at runtime, and before the first
  * paint the defaults and boot script that vite.config.ts injects into index.html), and the
- * Tailwind tokens below read them, so bg-garden-panel/95, text-garden-accent and friends follow
+ * Tailwind tokens below read them, so bg-ui-panel/95, text-ui-accent and friends follow
  * every theme switch with no change to the components.
  */
 @theme {
-  --color-garden-bg: var(--garden-canvas);
-  --color-garden-panel: var(--garden-panel);
-  --color-garden-border: var(--garden-border);
-  --color-garden-text: var(--garden-text);
-  --color-garden-muted: var(--garden-muted);
-  --color-garden-accent: var(--garden-accent);
-  --color-garden-accent-text: var(--garden-accent-text);
-  --color-garden-hover: var(--garden-hover);
-  --color-garden-field: var(--garden-field);
-  --color-garden-raised: var(--garden-raised);
-  --color-garden-text-dim: var(--garden-text-dim);
-  --color-garden-warn: var(--garden-warn);
-  --color-garden-danger: var(--garden-danger);
-  --color-garden-success: var(--garden-success);
+  --color-ui-bg: var(--ui-canvas);
+  --color-ui-panel: var(--ui-panel);
+  --color-ui-border: var(--ui-border);
+  --color-ui-text: var(--ui-text);
+  --color-ui-muted: var(--ui-muted);
+  --color-ui-accent: var(--ui-accent);
+  --color-ui-accent-text: var(--ui-accent-text);
+  --color-ui-hover: var(--ui-hover);
+  --color-ui-field: var(--ui-field);
+  --color-ui-raised: var(--ui-raised);
+  --color-ui-text-dim: var(--ui-text-dim);
+  --color-ui-warn: var(--ui-warn);
+  --color-ui-danger: var(--ui-danger);
+  --color-ui-success: var(--ui-success);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --shadow-soft: var(--garden-shadow);
+  --shadow-soft: var(--ui-shadow);
 }
 
 html, body, #root { height: 100%; margin: 0; }
 html { overscroll-behavior: none; }
-body { background: var(--color-garden-bg); color: var(--color-garden-text); font-family: var(--font-sans); overflow: hidden; }
+body { background: var(--color-ui-bg); color: var(--color-ui-text); font-family: var(--font-sans); overflow: hidden; }
 #root { position: relative; }
 
 /* Quiet scrollbars for panel lists */
-.garden-scroll { scrollbar-width: thin; scrollbar-color: var(--color-garden-border) transparent; }
-.garden-scroll::-webkit-scrollbar { width: 8px; }
-.garden-scroll::-webkit-scrollbar-track { background: transparent; }
-.garden-scroll::-webkit-scrollbar-thumb { background: var(--color-garden-border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+.ui-scroll { scrollbar-width: thin; scrollbar-color: var(--color-ui-border) transparent; }
+.ui-scroll::-webkit-scrollbar { width: 8px; }
+.ui-scroll::-webkit-scrollbar-track { background: transparent; }
+.ui-scroll::-webkit-scrollbar-thumb { background: var(--color-ui-border); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 
 /* force-graph adds .clickable on the canvas over a node, link or the background whenever the
-   matching click handler is set (Garden sets all three; labels are hit-tested from the latter two) */
+   matching click handler is set (RepoGraph sets all three; labels are hit-tested from the latter two) */
 .force-graph-container canvas { display: block; }
 .force-graph-container canvas.clickable { cursor: pointer; }
 .force-graph-container .graph-tooltip { display: none; }
 
-:focus-visible { outline: 1px solid var(--color-garden-accent); outline-offset: 1px; }
+:focus-visible { outline: 1px solid var(--color-ui-accent); outline-offset: 1px; }
 
 /* A theme switch recolours everything in one step (src/theme/applyTheme.ts sets this for that restyle). */
 :root[data-theme-switching] *,

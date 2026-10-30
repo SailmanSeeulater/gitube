@@ -1,4 +1,4 @@
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import type { Theme } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 import { PrRingPaths } from './PrGlyph'
@@ -18,7 +18,7 @@ type GlyphKind =
   | 'pr'
   | 'pr-station'
 
-/** The spikes Garden draws around a thorny tip (drawThorns), as an SVG path around (9, 9). */
+/** The spikes RepoGraph draws around a thorny tip (drawThorns), as an SVG path around (9, 9). */
 const THORN_PATH = Array.from({ length: 9 }, (_, i) => {
   const a = (i / 9) * Math.PI * 2 + 0.3
   const half = (Math.PI / 9) * 0.55
@@ -32,7 +32,7 @@ const LEGEND_PR: Pick<PrMark, 'review' | 'checks' | 'draft'> = { review: 'approv
 const LEGEND_PR_UNKNOWN: Pick<PrMark, 'review' | 'checks' | 'draft'> = { review: 'unknown', checks: 'unknown', draft: false }
 
 /**
- * The canvas glyphs, drawn in the default branch's colour (the accent) as Garden paints them, in the
+ * The canvas glyphs, drawn in the default branch's colour (the accent) as RepoGraph paints them, in the
  * active theme (metro stations in its station colour, run markers in its runMark, and so on).
  * prKnown: the pull request glyphs show review and checks colours, as the canvas does once known.
  */
@@ -41,7 +41,7 @@ function Glyph({ kind, theme, prKnown }: { kind: GlyphKind; theme: Theme; prKnow
   const branch = theme.derived.defaultBranchColour
   const prMark = prKnown ? LEGEND_PR : LEGEND_PR_UNKNOWN
   switch (kind) {
-    // metro mode: the station glyphs Garden draws on the straight map
+    // metro mode: the station glyphs RepoGraph draws on the straight map
     case 'station':
       return (
         <svg {...common}>
@@ -72,7 +72,7 @@ function Glyph({ kind, theme, prKnown }: { kind: GlyphKind; theme: Theme; prKnow
           <line x1="0" y1="14" x2="18" y2="4" stroke={branch} strokeWidth="1.6" strokeDasharray="3 2" />
         </svg>
       )
-    // the break Garden draws across a line where skeleton view hides commits (see strokeRunBars):
+    // the break RepoGraph draws across a line where skeleton view hides commits (see strokeRunBars):
     // a cut in the background colour (here the panel's) under two bars
     case 'run':
       return (
@@ -146,7 +146,7 @@ const ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
   { kind: 'fork', label: 'fork', hint: 'two or more children' },
   { kind: 'merge', label: 'merge', hint: 'two or more parents' },
   { kind: 'root', label: 'root', hint: 'history cut off here' },
-  { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
+  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
@@ -155,7 +155,7 @@ const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string 
   { kind: 'origin', label: 'root', hint: 'history cut off here (dashed lead-in)' },
   { kind: 'muted', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
   { kind: 'run', label: '+N hidden', hint: 'commits collapsed in skeleton view; the count shows beside the line when zoomed in enough' },
-  { kind: 'thorn', label: 'thorns', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see weeds)' },
+  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const PR_HALVES =
@@ -179,7 +179,7 @@ export interface LegendProps {
 
 export default function Legend({ hasPrs = false, prKnown = false }: LegendProps) {
   const theme = useTheme()
-  const layout = useGardenStore((s) => s.layoutMode)
+  const layout = useAppStore((s) => s.layoutMode)
   const base = layout === 'metro' ? METRO_ITEMS : ITEMS
   const prItem = { kind: PR_KINDS[layout], label: 'pull request', hint: prKnown ? PR_HINT.known : PR_HINT.unknown }
   const items = hasPrs ? [...base, prItem] : base
@@ -189,11 +189,11 @@ export default function Legend({ hasPrs = false, prKnown = false }: LegendProps)
         {items.map((item) => (
           <li key={item.kind} className="flex items-center gap-2" title={item.hint}>
             <Glyph kind={item.kind} theme={theme} prKnown={prKnown} />
-            <span className="text-[12px] text-garden-text-dim">{item.label}</span>
+            <span className="text-[12px] text-ui-text-dim">{item.label}</span>
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[11px] leading-snug text-garden-muted">
+      <p className="mt-2 text-[11px] leading-snug text-ui-muted">
         colour = branch that reaches a commit first. only live refs are shown; deleted branches are invisible to the API.
       </p>
     </div>

@@ -18,7 +18,7 @@ function themeBoot(): Plugin {
   let fileName = `assets/theme-boot-${hash}.js`
   let url = `/${fileName}`
   return {
-    name: 'repo-garden:theme-boot',
+    name: 'gitube:theme-boot',
     configResolved(config) {
       fileName = `${config.build.assetsDir}/theme-boot-${hash}.js`
       url = `${config.base}${fileName}`

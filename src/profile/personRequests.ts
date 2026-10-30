@@ -50,7 +50,7 @@ export function startRequest(store: RequestStore, key: string): () => void {
 
 /**
  * Says when a request needs a live refetch: the same login asked for again (Grow on the person on
- * show, or an error card's "press Grow again"), unless a fetch already in flight answers it. A new
+ * show, or an error card's "press Go again"), unless a fetch already in flight answers it. A new
  * login needs none: its own query reads the cache first. PersonApp hands it each commit's
  * requestKey; the first is the mount's, which its query fetches by itself.
  */

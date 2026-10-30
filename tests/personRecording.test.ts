@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { EventData } from '../src/analytics/umami'
-import { gardenFileName } from '../src/export/gardenFile'
+import { exportFileName } from '../src/export/repoFile'
 import { saveLifePoster, type PosterDeps } from '../src/profile/lifePoster'
 import {
   LAPSE_FPS,
@@ -27,7 +27,7 @@ import {
   type LapsePlay,
 } from '../src/profile/lifeTimelapse'
 import { githubDay } from '../src/profile/timeline'
-import { useGardenStore } from '../src/store/useGardenStore'
+import { useAppStore } from '../src/store/useAppStore'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
 import { LINES_VIEW } from '../src/profile/lifeViews'
@@ -36,7 +36,7 @@ import { recordingCtx } from './helpers/recordingCtx'
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-/** The caption's year: the repo garden's time-lapse date type. */
+/** The caption's year: repo mode's time-lapse date type. */
 const HUD_YEAR_FONT = '600 22px Inter, ui-sans-serif, system-ui, sans-serif'
 /** The shortest play, so a whole recording stays quick to paint. */
 const LENGTH: LapseLength = LAPSE_LENGTHS[0]
@@ -58,7 +58,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 /** The tracker, stubbed as tests/umami.test.ts does. */
@@ -114,7 +114,7 @@ function record(g: Grown) {
       progress: progress.current,
       year: typeof year === 'string' ? year : undefined,
       strokes: rec.calls('lineTo').length,
-      credited: texts.includes(`${g.profile.login} · repo-garden`),
+      credited: texts.includes(`${g.profile.login} · gitube`),
     })
     rec.clear()
     if (tick.next === 'save') break
@@ -173,7 +173,7 @@ describe('a recording of a life', () => {
   it('throws the recording away when the toggle hides the names under it: no file, no event', async () => {
     const umamiTrack = stubTracker()
     const downloads: string[] = []
-    const kit = { downloadBlob: (_blob: Blob, fileName: string) => void downloads.push(fileName), gardenFileName }
+    const kit = { downloadBlob: (_blob: Blob, fileName: string) => void downloads.push(fileName), exportFileName }
     const progress = { current: 1 }
     openLifeTimelapse(progress, noop)
     umamiTrack.mockClear()
@@ -224,7 +224,7 @@ describe('a recording of a life', () => {
 describe("Phase 5's events", () => {
   it('sends timelapse-play, export webm and poster-export, none with a name, with a token or without', async () => {
     for (const token of ['', FAKE_TOKEN]) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker()
       const fetchSpy = vi.fn()
       vi.stubGlobal('fetch', fetchSpy)
@@ -232,7 +232,7 @@ describe("Phase 5's events", () => {
       const kit = {
         canvasToPng: async () => new Blob(['png']),
         downloadBlob: (_blob: Blob, fileName: string) => void downloads.push(fileName),
-        gardenFileName,
+        exportFileName,
       }
       const deps: Partial<PosterDeps> = {
         loadKit: async () => kit,

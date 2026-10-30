@@ -117,7 +117,7 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
-/** Two crossed blades: the garden battle. */
+/** Two crossed blades: the vs. */
 export function SwordsIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -225,7 +225,7 @@ export function StopIcon(props: IconProps) {
   )
 }
 
-/** A ring of spikes: the thorns Garden draws on tips far apart from the default branch. */
+/** A ring of spikes: the thorns RepoGraph draws on tips far apart from the default branch. */
 export function ThornIcon(props: IconProps) {
   const spikes = Array.from({ length: 7 }, (_, i) => {
     const a = (i / 7) * Math.PI * 2 - Math.PI / 2

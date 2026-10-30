@@ -1,6 +1,6 @@
 /**
  * The router (src/App.tsx, src/subject.ts) and RepoApp's deltas from the old App body, so "repo mode is unchanged"
- * has a guard: what a page address opens, that a ?repo= link renders the repo garden and a ?user=
+ * has a guard: what a page address opens, that a ?repo= link renders repo mode and a ?user=
  * link the person-mode slot, and that RepoApp's Grow hands a login over before anything of repo
  * mode is reset, fetched or counted (checked on RepoApp's source, as prMarks.placement does).
  */
@@ -12,15 +12,15 @@ import App from '../src/App'
 import { subjectOf } from '../src/subject'
 import repoApp from '../src/RepoApp.tsx?raw'
 
-// the repo garden's canvas (force-graph) needs a window as it loads; the markup checked here has none
-vi.mock('../src/components/Garden', () => ({ default: () => null }))
+// repo mode's canvas (force-graph) needs a window as it loads; the markup checked here has none
+vi.mock('../src/components/RepoGraph', () => ({ default: () => null }))
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 describe('subjectOf', () => {
-  it('opens the repo garden for no link, a repo link, or anything that is not a user', () => {
+  it('opens repo mode for no link, a repo link, or anything that is not a user', () => {
     for (const search of ['', '?repo=expressjs/express', '?repo=expressjs/express&user=octocat&view=lines', '?user=login', '?user=-x', '?user=a/b', '?view=lines', '?by=octocat']) {
       expect(subjectOf(search), search).toEqual({ kind: 'repo' })
     }
@@ -41,7 +41,7 @@ describe('App', () => {
     return renderToStaticMarkup(h(QueryClientProvider, { client }, h(App)))
   }
 
-  it('renders the repo garden for a repo link, and the person-mode slot for a user link', () => {
+  it('renders repo mode for a repo link, and the person-mode slot for a user link', () => {
     const repo = render('?repo=expressjs/express')
     expect(repo).toContain('aria-label="GitHub repository or user"')
     expect(repo).toContain('value="expressjs/express"')

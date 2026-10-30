@@ -8,7 +8,7 @@ import { DOT_PITCH, DOT_WIDTH, PR_RING_METRO_CUT, PR_RING_MIN_DETAIL_PX, TRACK_A
 import { TIP_RING_PX } from './useLabelPlacer'
 import { LABEL_PLACER_DEFAULTS } from './labelPlacement'
 import { METRO_MIN_ZOOM, metroStationRadius } from './metroView'
-import { nodeRadius } from './gardenUtils'
+import { nodeRadius } from './graphUtils'
 import type { PrMark } from '../types'
 
 const ZOOMS = [METRO_MIN_ZOOM, 0.7, 1, 1.5, 2.5, 4, 8]

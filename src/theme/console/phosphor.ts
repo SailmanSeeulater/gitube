@@ -46,7 +46,7 @@ export const PHOSPHOR: PhosphorPalette = {
 /** Every other stack while one is selected, at this alpha, whatever the theme. */
 export const PHOSPHOR_DIM_ALPHA = 0.3
 
-/** The screen's LifeInk: base's garden ink kept, every colour the screen's green and the dimming the screen's. */
+/** The screen's LifeInk: base's other fields kept, every colour the screen's green and the dimming the screen's. */
 export function phosphorInk(base: LifeInk): LifeInk {
   const p = PHOSPHOR
   return {

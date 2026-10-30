@@ -7,7 +7,7 @@ import { subjectOf, type Subject } from './subject'
 import { writeUserShare } from './share/shareUrl'
 import { personAppChunk } from './lazy/parts'
 import { LazySlot, lazyPart } from './components/LazyPart'
-import { useGardenStore } from './store/useGardenStore'
+import { useAppStore } from './store/useAppStore'
 import { applyTheme } from './theme/applyTheme'
 import { readStoredThemeId } from './theme/storage'
 import { THEME_STORAGE_KEY } from './theme/themes'
@@ -17,7 +17,7 @@ import { useTheme } from './theme/useTheme'
 const PersonApp = lazyPart(personAppChunk)
 
 /** Person mode's placeholder while it loads, and its reload notice if it cannot be loaded. */
-const PERSON_FRAME = 'flex h-full w-full items-center justify-center bg-garden-bg px-4'
+const PERSON_FRAME = 'flex h-full w-full items-center justify-center bg-ui-bg px-4'
 
 export default function App() {
   const [subject, setSubject] = useState<Subject>(() => subjectOf(typeof window === 'undefined' ? '' : window.location.search))
@@ -33,7 +33,7 @@ export default function App() {
     const onStorage = (event: StorageEvent) => {
       if (event.key !== null && event.key !== THEME_STORAGE_KEY) return
       const themeId = readStoredThemeId()
-      if (useGardenStore.getState().themeId !== themeId) useGardenStore.setState({ themeId })
+      if (useAppStore.getState().themeId !== themeId) useAppStore.setState({ themeId })
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -44,7 +44,7 @@ export default function App() {
   // as Grow on the same repo is, and leaves the address bar, and the view it names, alone.
   const toUser = useCallback(
     (login: string) => {
-      useGardenStore.getState().resetForNewRepo()
+      useAppStore.getState().resetForNewRepo()
       if (subject.kind === 'user' && subject.login.toLowerCase() === login.toLowerCase()) {
         setSubject({ ...subject, request: subject.request + 1 })
         return
@@ -61,7 +61,7 @@ export default function App() {
 
   // RepoApp's own share link effect writes ?repo= once it has the repo.
   const toRepo = useCallback((initial: RepoInitial) => {
-    useGardenStore.getState().resetForNewRepo()
+    useAppStore.getState().resetForNewRepo()
     setRepoMount((mount) => mount + 1)
     setSubject({ kind: 'repo', initial })
   }, [])

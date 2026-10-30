@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
 import { track } from '../analytics/umami'
 import { preload } from '../lazy/chunk'
 import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import { getTheme } from '../theme/themes'
 import { DownloadIcon, KeyIcon, PaletteIcon, SproutIcon } from './icons'
 import { LazySlot, lazyPart } from './LazyPart'
@@ -14,7 +14,7 @@ const preloadThemePicker = () => preload(themePickerChunk)
 const preloadExportMenu = () => preload(exportMenuChunk)
 
 /** The drop-downs' box, for their placeholder while they load (each sets its own width). */
-const DROPDOWN_FRAME = 'self-end rounded-xl border border-garden-border bg-garden-panel/95 px-3 py-2.5 shadow-soft backdrop-blur'
+const DROPDOWN_FRAME = 'self-end rounded-xl border border-ui-border bg-ui-panel/95 px-3 py-2.5 shadow-soft backdrop-blur'
 
 export interface TopBarProps {
   value: string
@@ -51,8 +51,8 @@ export default function TopBar({
   onOpenFile,
   besidePanel,
 }: TopBarProps) {
-  const token = useGardenStore((s) => s.token)
-  const setToken = useGardenStore((s) => s.setToken)
+  const token = useAppStore((s) => s.token)
+  const setToken = useAppStore((s) => s.setToken)
 
   // The token is committed to the store (and so to the query key) on Enter or blur, not on
   // every keystroke, so a half-typed token never starts a fetch that fails with 401.
@@ -67,8 +67,8 @@ export default function TopBar({
 
   // The theme picker, the save menu and the token panel drop down from the bar in the same place:
   // one at a time.
-  const themeId = useGardenStore((s) => s.themeId)
-  const setThemeId = useGardenStore((s) => s.setThemeId)
+  const themeId = useAppStore((s) => s.themeId)
+  const setThemeId = useAppStore((s) => s.setThemeId)
   const [themeOpen, setThemeOpen] = useState(false)
   const themeButtonRef = useRef<HTMLButtonElement | null>(null)
   const themeSlotRef = useRef<HTMLDivElement | null>(null)
@@ -101,9 +101,9 @@ export default function TopBar({
   // this hangs on themeOpen alone, and a theme synced from another tab while it is shut is ignored.
   useEffect(() => {
     if (!themeOpen) return
-    const opened = useGardenStore.getState().themeId
+    const opened = useAppStore.getState().themeId
     return () => {
-      const theme = useGardenStore.getState().themeId
+      const theme = useAppStore.getState().themeId
       if (theme !== opened) track('theme-switch', { theme })
     }
   }, [themeOpen])
@@ -153,7 +153,7 @@ export default function TopBar({
     if (!dirty) return
     // Enter commits and then blurs, which commits again before a re-render: the store tells whether
     // this one adds a token. The event carries nothing of it, and clearing it sends nothing.
-    const added = draft.trim() !== '' && draft.trim() !== useGardenStore.getState().token
+    const added = draft.trim() !== '' && draft.trim() !== useAppStore.getState().token
     setToken(draft)
     if (added) track('token-added')
   }
@@ -184,8 +184,8 @@ export default function TopBar({
         besidePanel ? 'max-w-[max(240px,calc(100vw-336px))]' : 'max-w-[calc(100vw-2rem)]'
       }`}
     >
-      <div className="flex min-w-0 items-center gap-1 rounded-xl border border-garden-border bg-garden-panel/95 p-1.5 text-[13px] shadow-soft backdrop-blur">
-        <span className="pl-1.5 text-garden-muted" aria-hidden>
+      <div className="flex min-w-0 items-center gap-1 rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[13px] shadow-soft backdrop-blur">
+        <span className="pl-1.5 text-ui-muted" aria-hidden>
           <SproutIcon size={15} />
         </span>
         <input
@@ -200,15 +200,15 @@ export default function TopBar({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="w-[280px] min-w-0 max-w-[55vw] shrink bg-transparent px-2 py-1 text-garden-text outline-none placeholder:text-garden-muted"
+          className="w-[280px] min-w-0 max-w-[55vw] shrink bg-transparent px-2 py-1 text-ui-text outline-none placeholder:text-ui-muted"
         />
         <button
           type="button"
           onClick={onSubmit}
           disabled={busy}
-          className="rounded-lg bg-garden-accent/15 px-3 py-1 font-medium text-garden-accent transition-colors hover:bg-garden-accent/25 disabled:cursor-progress disabled:opacity-60"
+          className="rounded-lg bg-ui-accent/15 px-3 py-1 font-medium text-ui-accent transition-colors hover:bg-ui-accent/25 disabled:cursor-progress disabled:opacity-60"
         >
-          {busy ? 'growing' : 'Grow'}
+          {busy ? 'loading' : 'Go'}
         </button>
         <button
           type="button"
@@ -217,11 +217,11 @@ export default function TopBar({
           aria-label="GitHub token"
           title={token ? 'Token set — click to edit' : 'Add a GitHub token (optional)'}
           className={`relative rounded-lg p-1.5 transition-colors ${
-            tokenOpen ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:bg-garden-hover hover:text-garden-text'
+            tokenOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
           }`}
         >
           <KeyIcon size={15} />
-          {token && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-garden-accent" aria-hidden />}
+          {token && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-ui-accent" aria-hidden />}
         </button>
         <button
           ref={themeButtonRef}
@@ -235,7 +235,7 @@ export default function TopBar({
           aria-label="Colour theme"
           title={`Theme: ${getTheme(themeId).name}`}
           className={`rounded-lg p-1.5 transition-colors ${
-            themeOpen ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:bg-garden-hover hover:text-garden-text'
+            themeOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
           }`}
         >
           <PaletteIcon size={15} />
@@ -252,7 +252,7 @@ export default function TopBar({
           aria-label="Save or open"
           title="Save the graph or its data, or open a saved file"
           className={`rounded-lg p-1.5 transition-colors ${
-            exportOpen ? 'bg-garden-hover text-garden-accent' : 'text-garden-muted hover:bg-garden-hover hover:text-garden-text'
+            exportOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
           }`}
         >
           <DownloadIcon size={15} />
@@ -300,7 +300,7 @@ export default function TopBar({
       )}
 
       {tokenOpen && (
-        <div className="flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-1.5 rounded-xl border border-garden-border bg-garden-panel/95 p-2.5 text-[12px] shadow-soft backdrop-blur">
+        <div className="flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-1.5 rounded-xl border border-ui-border bg-ui-panel/95 p-2.5 text-[12px] shadow-soft backdrop-blur">
           <div className="flex items-center gap-1.5">
             <input
               type="password"
@@ -313,10 +313,10 @@ export default function TopBar({
               autoComplete="off"
               autoFocus
               spellCheck={false}
-              className="min-w-0 flex-1 rounded-lg bg-garden-field px-2 py-1 font-mono text-garden-text outline-none placeholder:font-sans placeholder:text-garden-muted"
+              className="min-w-0 flex-1 rounded-lg bg-ui-field px-2 py-1 font-mono text-ui-text outline-none placeholder:font-sans placeholder:text-ui-muted"
             />
             {dirty ? (
-              <span className="shrink-0 px-1 text-garden-accent" aria-live="polite">
+              <span className="shrink-0 px-1 text-ui-accent" aria-live="polite">
                 Enter to save
               </span>
             ) : (
@@ -324,14 +324,14 @@ export default function TopBar({
                 <button
                   type="button"
                   onClick={clearToken}
-                  className="rounded-lg px-2 py-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text"
+                  className="rounded-lg px-2 py-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
                 >
                   clear
                 </button>
               )
             )}
           </div>
-          <p className="leading-snug text-garden-muted">
+          <p className="leading-snug text-ui-muted">
             saved when you press Enter or leave the field. stored only in this browser (localStorage) and sent only to
             api.github.com. unlocks 5000 requests/hour and private repos.
           </p>

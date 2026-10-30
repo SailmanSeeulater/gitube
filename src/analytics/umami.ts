@@ -16,7 +16,7 @@
  * MAX_QUEUED_EVENTS of them) and are sent once it has loaded; if it fails to load they are dropped.
  * Unless initAnalytics adds it, track() is a no-op.
  */
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 
 export const UMAMI_HOST = 'https://stats.latesailor.dev'
 /** Where pageviews count; the tracker ignores every other hostname (localhost included). */
@@ -25,7 +25,7 @@ export const MAX_VALUE_LENGTH = 50
 /** How many events wait for the tracker while it loads; the first ones are kept, the rest dropped. */
 export const MAX_QUEUED_EVENTS = 20
 /** The global the tracker's data-before-send attribute names. */
-export const BEFORE_SEND_GLOBAL = 'repoGardenBeforeSend'
+export const BEFORE_SEND_GLOBAL = 'gitubeBeforeSend'
 
 /** The complete list of custom events; nothing else is sent. */
 export type AnalyticsEvent =
@@ -85,7 +85,7 @@ interface Context {
 function currentContext(): Context {
   let token = ''
   try {
-    token = useGardenStore.getState().token
+    token = useAppStore.getState().token
   } catch {
     // no store: treat it as tokenless, but the value checks below still run
   }

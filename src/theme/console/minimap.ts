@@ -88,7 +88,7 @@ export const MINIMAP_PALETTE: MinimapPalette = {
 /** Every other line while one is selected, at this alpha, whatever the theme. */
 export const MINIMAP_DIM_ALPHA = 0.4
 
-/** The editor's LifeInk: base's garden ink kept, every colour the editor's and the dimming the editor's. */
+/** The editor's LifeInk: base's other fields kept, every colour the editor's and the dimming the editor's. */
 export function minimapInk(base: LifeInk): LifeInk {
   const p = MINIMAP_PALETTE
   return {

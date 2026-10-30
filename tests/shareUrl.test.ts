@@ -27,7 +27,7 @@ describe('share links', () => {
     }
   })
 
-  it('carries a garden battle as &vs, and reads it back', () => {
+  it('carries a vs as &vs, and reads it back', () => {
     const vite = { owner: 'vitejs', repo: 'vite' }
     expect(writeShareState({ repo: express, branch: null, person: null, vs: vite })).toBe('?repo=expressjs/express&vs=vitejs/vite')
     expect(readShareState('?repo=expressjs/express&vs=vitejs/vite')).toEqual({ repo: express, branch: null, person: null, vs: vite })

@@ -13,7 +13,7 @@ import {
   type AnalyticsEvent,
   type EventData,
 } from '../src/analytics/umami'
-import { useGardenStore, type LayoutMode } from '../src/store/useGardenStore'
+import { useAppStore, type LayoutMode } from '../src/store/useAppStore'
 import { THEME_IDS } from '../src/theme/themes'
 import type { PersonView } from '../src/share/shareUrl'
 import type { GitHubFetchError, ViewMode } from '../src/types'
@@ -122,7 +122,7 @@ function expectNoLeak(json: string, token: string): void {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useGardenStore.setState({ token: '' })
+  useAppStore.setState({ token: '' })
 })
 
 describe('track', () => {
@@ -214,7 +214,7 @@ describe('track', () => {
     track('grow', { mode: 'repo', repo: long, login: 'octocat' })
     expect(umamiTrack).toHaveBeenLastCalledWith('grow', { mode: 'repo', repo: long.slice(0, 50), login: 'octocat' })
 
-    useGardenStore.setState({ token: CLASSIC })
+    useAppStore.setState({ token: CLASSIC })
     track('grow', { mode: 'repo', repo: 'acme/secret', login: 'alice', token: true })
     expect(umamiTrack).toHaveBeenLastCalledWith('grow', { mode: 'repo', token: true })
     track('grow', { repo: 'acme/secret', login: 'alice' })
@@ -224,7 +224,7 @@ describe('track', () => {
   it('keeps every payload the app sends, a public repo named in the address bar included', () => {
     const search = '?repo=expressjs/express&branch=main&by=alice'
     for (const token of ['', CLASSIC]) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker(search)
       for (const event of ALL_EVENTS) {
         for (const data of APP_EVENTS[event]) {
@@ -249,7 +249,7 @@ describe('track', () => {
 describe('privacy', () => {
   it('never sends the token, any piece of it, or the query string', () => {
     for (const token of [CLASSIC, FINE_GRAINED, HEX40, OPAQUE]) {
-      useGardenStore.setState({ token })
+      useAppStore.setState({ token })
       const umamiTrack = stubTracker(SEARCH)
       for (const event of ALL_EVENTS) track(event, { ...hostileData(token), count: 3, mode: 'repo' } as EventData)
       expect(umamiTrack).toHaveBeenCalledTimes(ALL_EVENTS.length)
@@ -284,9 +284,9 @@ describe('privacy', () => {
   it('reads the token as it is when the event is sent', () => {
     const umamiTrack = stubTracker()
     track('grow', { repo: 'acme/garden' })
-    useGardenStore.setState({ token: OPAQUE })
+    useAppStore.setState({ token: OPAQUE })
     track('grow', { repo: 'acme/garden' })
-    useGardenStore.setState({ token: '' })
+    useAppStore.setState({ token: '' })
     track('grow', { repo: 'acme/garden' })
     expect(umamiTrack.mock.calls).toEqual([['grow', { repo: 'acme/garden' }], ['grow'], ['grow', { repo: 'acme/garden' }]])
   })
@@ -348,7 +348,7 @@ describe('beforeSend', () => {
 
   it('sanitizes event data as track does, and leaves payloads without it alone', () => {
     vi.stubGlobal('window', { location: { search: SEARCH } })
-    useGardenStore.setState({ token: CLASSIC })
+    useAppStore.setState({ token: CLASSIC })
     const out = beforeSend('event', {
       url: `https://repogarden.latesailor.dev/${SEARCH}`,
       referrer: `https://repogarden.latesailor.dev/?repo=acme/other`,
@@ -530,7 +530,7 @@ describe('events tracked before the tracker has loaded', () => {
   async function freshModule() {
     vi.resetModules()
     const umami = await import('../src/analytics/umami')
-    const { useGardenStore: store } = await import('../src/store/useGardenStore')
+    const { useAppStore: store } = await import('../src/store/useAppStore')
     return { ...umami, store }
   }
 

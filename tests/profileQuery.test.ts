@@ -1,6 +1,6 @@
 /**
  * Person mode's profile query (src/profile/useProfileData.ts): its key, its query function, and the
- * retry and network rules it shares with the repo garden's query, observed through TanStack's
+ * retry and network rules it shares with repo mode's query, observed through TanStack's
  * QueryObserver with the app's defaults, as tests/offline-network-mode.test.ts does for repos.
  * GitHub is replayed from the recordings (tests/helpers/profileReplay.ts).
  */
@@ -90,7 +90,7 @@ describe('profileQueryKey', () => {
 })
 
 describe('profileQueryFn', () => {
-  it('runs in the network mode the repo garden runs in', () => {
+  it('runs in the network mode repo mode runs in', () => {
     expect(PROFILE_QUERY_NETWORK_MODE).toBe(REPO_QUERY_NETWORK_MODE)
     expect(profileQueryOptions('octocat', deps().deps).networkMode).toBe(REPO_QUERY_NETWORK_MODE)
   })

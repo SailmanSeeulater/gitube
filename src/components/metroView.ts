@@ -1,5 +1,5 @@
 /**
- * Pure helpers for Garden's metro ("straight") mode: turn a MetroLayout (lane units) into what the
+ * Pure helpers for RepoGraph's metro ("straight") mode: turn a MetroLayout (lane units) into what the
  * canvas draws (graph units, centred on the origin), and the camera, tween and dimming rules that
  * go with it. No DOM, no React (strokeRunBars only draws on the canvas context it is handed).
  */
@@ -7,7 +7,7 @@ import { linkKey } from '../graph/contributors'
 import type { MetroLayout, MetroOptions, MetroStationKind } from '../graph/metro'
 import type { ThemeDerived } from '../theme/themes'
 import type { ViewMode } from '../types'
-import type { FitBbox, FitPadding } from './gardenUtils'
+import type { FitBbox, FitPadding } from './graphUtils'
 
 /** Graph units per lane (the layout's unit). Lines, stations and diagonals all scale with it. */
 export const METRO_SCALE = 28

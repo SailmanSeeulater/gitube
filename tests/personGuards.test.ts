@@ -32,7 +32,7 @@ import {
   grow,
   kepanoProfile,
   paintView,
-  setGarden,
+  setApp,
   setPerson,
   withPrivate,
   type Grown,
@@ -89,7 +89,7 @@ beforeAll(async () => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos', hover: null, selected: null, hidden: new Set(), search: '' })
-  setGarden({ panelOpen: true, rate: null, token: '', themeId: theme.id })
+  setApp({ panelOpen: true, rate: null, token: '', themeId: theme.id })
 })
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -143,7 +143,7 @@ function states(g: Grown, c: Case): Array<Partial<PersonState>> {
 }
 
 function personApp(c: Case, view: PersonView | null = null): string {
-  setGarden({ token: c.token })
+  setApp({ token: c.token })
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(c.profile.login, c.token), { profile: c.profile, cachedAt: null })
   return renderToStaticMarkup(

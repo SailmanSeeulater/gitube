@@ -6,7 +6,7 @@ import { buildTimeline } from './graph/timeline'
 import { findWeeds, type WeedReport } from './graph/weeds'
 import { healthItems, repoHealth } from './graph/health'
 import { countPulls, prMarks } from './graph/pulls'
-import type { GardenTimelapse } from './components/Garden'
+import type { RepoGraphTimelapse } from './components/RepoGraph'
 import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
 import { releaseAudio, readSound, unlockAudio } from './audio/context'
@@ -18,16 +18,16 @@ import { track } from './analytics/umami'
 import { useRepoAnalytics } from './analytics/useRepoAnalytics'
 import { useRepoData } from './hooks/useRepoData'
 import { usePulls } from './hooks/usePulls'
-import { useGardenStore, type LayoutMode } from './store/useGardenStore'
+import { useAppStore, type LayoutMode } from './store/useAppStore'
 import { useTheme } from './theme/useTheme'
-import Garden from './components/Garden'
+import RepoGraph from './components/RepoGraph'
 import TopBar from './components/TopBar'
 import Panel from './components/Panel'
 import StatusStrip from './components/StatusStrip'
 import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
 import NodeInspector, { type InspectorPulls } from './components/NodeInspector'
-import { staleBranchNames } from './components/gardenUtils'
+import { staleBranchNames } from './components/graphUtils'
 import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
 import { useMetroView } from './components/useMetroView'
 
@@ -36,13 +36,13 @@ const PANEL_INSET = 324
 
 // loaded when first opened (see lazy/parts.ts)
 const TimelapseBar = lazyPart(timelapseChunk)
-const GardenBattle = lazyPart(battleChunk)
+const VsView = lazyPart(battleChunk)
 
 /** The time-lapse controls' placeholder while they load, where they will be (and the status strip was). */
 const TIMELAPSE_FRAME =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 px-3 py-2 shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 px-3 py-2 shadow-soft backdrop-blur'
 /** The battle's placeholder: the battle covers the app, so its placeholder does. */
-const BATTLE_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-garden-bg'
+const BATTLE_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-ui-bg'
 
 /** GitHub owner and repo names are case-insensitive. */
 function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
@@ -68,7 +68,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const [repoRef, setRepoRef] = useState<RepoRef | null>(initialShare.repo)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
-  /** A garden opened from a saved file; it stands in for fetched data until the next Grow. */
+  /** A repo opened from a saved file; it stands in for fetched data until the next Grow. */
   const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   /** a part of the app that loads on demand could not be fetched, even on its retry: offer a reload */
@@ -76,29 +76,29 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
 
-  const viewMode = useGardenStore((s) => s.viewMode)
-  const layoutMode = useGardenStore((s) => s.layoutMode)
-  const hiddenBranches = useGardenStore((s) => s.hiddenBranches)
-  const staleDays = useGardenStore((s) => s.staleDays)
-  const inspectorNodeId = useGardenStore((s) => s.inspectorNodeId)
-  const setInspectorNodeId = useGardenStore((s) => s.setInspectorNodeId)
-  const selectedBranch = useGardenStore((s) => s.selectedBranch)
-  const setSelectedBranch = useGardenStore((s) => s.setSelectedBranch)
-  const selectedContributor = useGardenStore((s) => s.selectedContributor)
-  const setSelectedContributor = useGardenStore((s) => s.setSelectedContributor)
-  const setPanelTab = useGardenStore((s) => s.setPanelTab)
-  const setPanelOpen = useGardenStore((s) => s.setPanelOpen)
-  const clearSelection = useGardenStore((s) => s.clearSelection)
-  const resetForNewRepo = useGardenStore((s) => s.resetForNewRepo)
-  const panelOpen = useGardenStore((s) => s.panelOpen)
+  const viewMode = useAppStore((s) => s.viewMode)
+  const layoutMode = useAppStore((s) => s.layoutMode)
+  const hiddenBranches = useAppStore((s) => s.hiddenBranches)
+  const staleDays = useAppStore((s) => s.staleDays)
+  const inspectorNodeId = useAppStore((s) => s.inspectorNodeId)
+  const setInspectorNodeId = useAppStore((s) => s.setInspectorNodeId)
+  const selectedBranch = useAppStore((s) => s.selectedBranch)
+  const setSelectedBranch = useAppStore((s) => s.setSelectedBranch)
+  const selectedContributor = useAppStore((s) => s.selectedContributor)
+  const setSelectedContributor = useAppStore((s) => s.setSelectedContributor)
+  const setPanelTab = useAppStore((s) => s.setPanelTab)
+  const setPanelOpen = useAppStore((s) => s.setPanelOpen)
+  const clearSelection = useAppStore((s) => s.clearSelection)
+  const resetForNewRepo = useAppStore((s) => s.resetForNewRepo)
+  const panelOpen = useAppStore((s) => s.panelOpen)
   const theme = useTheme()
 
   const fetched = useRepoData(repoRef)
-  // a garden battle: the challenger grows beside the repo on show (a share link may name one)
+  // a vs: the challenger grows beside the repo on show (a share link may name one)
   const [battleRef, setBattleRef] = useState<RepoRef | null>(initialShare.vs ?? null)
   const challenger = useRepoData(battleRef)
   // The battle's code loads as soon as a battle is named, a share link's included, while the repo
-  // data is still on its way. Its overlay mounts once the code is in instead of suspending: a garden
+  // data is still on its way. Its overlay mounts once the code is in instead of suspending: a map
   // read from the repo cache would otherwise wait out Suspense's 300 ms fallback throttle as well.
   const battleCode = useChunk(battleChunk, battleRef !== null)
   const { error, isFetching, refetch } = fetched
@@ -210,14 +210,14 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
 
   // ---- time-lapse ----
   const [timelapseOpen, setTimelapseOpen] = useState(false)
-  /** 0..1; the controls write it every frame and Garden reads it in every paint, without renders */
+  /** 0..1; the controls write it every frame and RepoGraph reads it in every paint, without renders */
   const timelapseProgress = useRef(1)
   // when each shown node and stem appears; skeleton links are dated through the full graph
   const timeline = useMemo(() => {
     if (!timelapseOpen || !data || !graph) return null
     return buildTimeline(graph, viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden))
   }, [timelapseOpen, data, graph, viewMode, effectiveHidden])
-  const gardenTimelapse = useMemo<GardenTimelapse | null>(
+  const graphTimelapse = useMemo<RepoGraphTimelapse | null>(
     () => (timeline && data ? { timeline, progress: timelapseProgress, title: `${data.owner}/${data.repo}` } : null),
     [timeline, data],
   )
@@ -225,7 +225,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     // The music box was left on and its code is not in yet: start audio in this click, as WebKit
     // allows only within a gesture, and the controls may mount after a fetch (see audio/context).
     if (readSound() && !timelapseChunk.peek()) unlockAudio()
-    // the garden goes back to its first commit at once, while the controls may still be loading
+    // the map goes back to its first commit at once, while the controls may still be loading
     timelapseProgress.current = 0
     setTimelapseOpen(true)
     track('timelapse-play')
@@ -240,7 +240,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     closeTimelapse()
     setChunkFailed(true)
   }, [closeTimelapse])
-  // a different repo starts with the whole garden on show
+  // a different repo starts with the whole map on show
   useEffect(() => closeTimelapse(), [data, closeTimelapse])
   // left for person mode while the controls were loading: free the audio openTimelapse started
   useEffect(() => () => releaseAudio(), [])
@@ -259,12 +259,12 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   useEffect(() => {
     drawnLayoutRef.current = drawnLayout
   }, [drawnLayout])
-  const gardenShownRef = useRef(false)
-  const holdGarden = metroWanted && !metroLayout && metroEngine.status !== 'failed' && !gardenShownRef.current
-  const showGarden = graph !== null && !holdGarden
+  const graphShownRef = useRef(false)
+  const holdGraph = metroWanted && !metroLayout && metroEngine.status !== 'failed' && !graphShownRef.current
+  const showGraph = graph !== null && !holdGraph
   useEffect(() => {
-    gardenShownRef.current = showGarden
-  }, [showGarden])
+    graphShownRef.current = showGraph
+  }, [showGraph])
   // The engine could not be loaded: the switch goes back to the layout on the canvas and the reload
   // card says why. Not saved, so the saved layout stays metro for the reload; picking metro again
   // tries again, under a new URL (see lazy/chunk.ts). The state is read live, not as this render
@@ -274,7 +274,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   useEffect(() => {
     if (!metroWanted || metroChunk.state().status !== 'failed') return
     const shown = drawnLayoutRef.current
-    useGardenStore.setState({ layoutMode: shown === 'metro' ? 'organic' : shown })
+    useAppStore.setState({ layoutMode: shown === 'metro' ? 'organic' : shown })
     setChunkFailed(true)
   }, [metroWanted, metroEngine.status])
 
@@ -431,9 +431,9 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       const image = kit.composeGraphImage(canvas, theme, {
         title: `${data.owner}/${data.repo}`,
         detail: parts.join(' · '),
-        credit: `repo-garden · ${day}`,
+        credit: `gitube · ${day}`,
       })
-      kit.downloadBlob(await kit.canvasToPng(image), kit.gardenFileName(data, 'png'))
+      kit.downloadBlob(await kit.canvasToPng(image), kit.exportFileName(data, 'png'))
       setExportError(null)
       track('export', { format: 'png' })
     } catch (err) {
@@ -445,7 +445,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     if (!data) return
     const kit = await loadExporters()
     if (!kit) return
-    kit.downloadBlob(new Blob([kit.serializeGarden(data)], { type: 'application/json' }), kit.gardenFileName(data, 'json'))
+    kit.downloadBlob(new Blob([kit.serializeRepoFile(data)], { type: 'application/json' }), kit.exportFileName(data, 'json'))
     track('export', { format: 'json' })
   }, [data, loadExporters])
 
@@ -454,7 +454,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       const kit = await loadExporters()
       if (!kit) return
       try {
-        const saved = kit.parseGardenFile(await file.text())
+        const saved = kit.parseRepoFile(await file.text())
         resetForNewRepo()
         setOpened({ data: saved.data, savedAt: saved.savedAt })
         // no fetch while a file is open; Grow (the input now names the repo) loads it live
@@ -464,7 +464,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         setFileError(null)
         track('export', { format: 'garden-file' })
       } catch (err) {
-        setFileError(err instanceof kit.GardenFileError ? err.message : 'the file could not be read.')
+        setFileError(err instanceof kit.RepoFileError ? err.message : 'the file could not be read.')
       }
     },
     [resetForNewRepo, loadExporters],
@@ -525,15 +525,15 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   }, [clearSelection, closeTimelapse])
 
   const showEmpty = !graph && !isFetching && !error && !invalidUrl && fileError === null
-  // also while a first garden waits for the metro engine (see layouts)
-  const showGrowing = (!graph && isFetching && repoRef !== null) || (graph !== null && holdGarden)
+  // also while a first map waits for the metro engine (see layouts)
+  const showGrowing = (!graph && isFetching && repoRef !== null) || (graph !== null && holdGraph)
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">
+    <div className="relative h-full w-full overflow-hidden bg-ui-bg text-ui-text">
       {/* The canvas stops short of the side panel so zoom-to-fit never hides nodes behind it. */}
       <div ref={canvasHostRef} className="absolute inset-y-0 left-0" style={{ right: graph && panelOpen ? PANEL_INSET : 0 }}>
-        {graph && showGarden && (
-          <Garden
+        {graph && showGraph && (
+          <RepoGraph
             graph={graph}
             palette={palette}
             theme={theme}
@@ -543,7 +543,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
             onBackgroundClick={handleBackgroundClick}
             metro={metro}
             focus={focus}
-            timelapse={gardenTimelapse}
+            timelapse={graphTimelapse}
             thorns={weeds?.thorns ?? null}
             prMarks={timelapseOpen ? null : marks}
           />
@@ -553,8 +553,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       {showEmpty && <EmptyState onPick={pickExample} />}
       {showGrowing && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-[13px] text-garden-muted">
-            growing {shownOwner}/{shownRepo}…
+          <p className="animate-pulse text-[13px] text-ui-muted">
+            loading {shownOwner}/{shownRepo}…
           </p>
         </div>
       )}
@@ -604,12 +604,12 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           frame={TIMELAPSE_FRAME}
           onFailed={timelapseFailed}
           fallback={
-            // the garden is back at its first commit and the status strip is gone: offer a way out
+            // the map is back at its first commit and the status strip is gone: offer a way out
             <div className={`${TIMELAPSE_FRAME} flex items-center gap-3`}>
-              <p role="status" className="animate-pulse text-[12px] text-garden-muted">
+              <p role="status" className="animate-pulse text-[12px] text-ui-muted">
                 loading the time-lapse…
               </p>
-              <button type="button" onClick={closeTimelapse} className="text-[12px] font-medium text-garden-accent hover:underline">
+              <button type="button" onClick={closeTimelapse} className="text-[12px] font-medium text-ui-accent hover:underline">
                 cancel
               </button>
             </div>
@@ -652,8 +652,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       {battleRef &&
         data &&
         (battleCode.status === 'ready' ? (
-          <LazySlot frame={BATTLE_FRAME} label="setting up the battle" onFailed={battleFailed}>
-            <GardenBattle
+          <LazySlot frame={BATTLE_FRAME} label="setting up vs" onFailed={battleFailed}>
+            <VsView
               a={data}
               b={challenger.data}
               bRef={battleRef}
@@ -666,7 +666,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           </LazySlot>
         ) : (
           // its code is still on the way (a failure drops the battle: see battleFailed)
-          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up the battle" />
+          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up vs" />
         ))}
     </div>
   )

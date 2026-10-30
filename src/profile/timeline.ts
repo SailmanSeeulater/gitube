@@ -541,7 +541,7 @@ function laneSignature({ lane, activity }: BuiltLane): string {
 
 /**
  * The lanes' order: by root instant; on one instant, public before private, public lanes by
- * nameWithOwner. The order shows (the panel's rows, the garden's depth rows and twin seeds, a day's
+ * nameWithOwner. The order shows (the panel's rows, the views' tracks and twin seeds, a day's
  * repo list), and a private repo's name may be hidden, so private lanes on one instant never compare
  * names: they go by laneSignature, compared as text rather than hashed, so nothing collides and the
  * order is the same whatever order the repos came in. Only private lanes alike in all of it fall back

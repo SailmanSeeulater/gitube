@@ -32,7 +32,7 @@ import {
   grow,
   kepanoProfile,
   paint,
-  setGarden,
+  setApp,
   setPerson,
   textOf,
   type Grown,
@@ -52,7 +52,7 @@ beforeAll(async () => {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos' })
-  setGarden({ panelOpen: true, rate: null, token: '', themeId: dark.id })
+  setApp({ panelOpen: true, rate: null, token: '', themeId: dark.id })
 })
 
 /** Every number a call was given or a property was set to. */
@@ -99,7 +99,7 @@ function status(g: Grown, hasToken: boolean): string {
 
 /** PersonApp on the server, with profile already in the query cache under the key its tier gives it. */
 function personApp(profile: ProfileData, token: string, theme: Theme): string {
-  setGarden({ token, themeId: theme.id })
+  setApp({ token, themeId: theme.id })
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(profileQueryKey(profile.login, token), { profile, cachedAt: null })
   return renderToStaticMarkup(

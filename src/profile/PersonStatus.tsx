@@ -1,6 +1,6 @@
 import type { ProfileData } from '../types'
-import { useGardenStore } from '../store/useGardenStore'
-import { formatClock, relativeTime } from '../components/gardenUtils'
+import { useAppStore } from '../store/useAppStore'
+import { formatClock, relativeTime } from '../components/graphUtils'
 import { PlayIcon } from '../components/icons'
 import type { LifeTimeline } from './timeline'
 import { cutShort } from './PersonLegend'
@@ -21,9 +21,9 @@ export interface PersonStatusProps {
 }
 
 const shell =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-garden-border bg-garden-panel/95 text-[12px] shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 text-[12px] shadow-soft backdrop-blur'
 
-const warnChip = 'rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1.5 py-px text-[11px] text-garden-warn'
+const warnChip = 'rounded-md border border-ui-warn/40 bg-ui-warn/10 px-1.5 py-px text-[11px] text-ui-warn'
 
 /**
  * The status strip once a profile is on show: the button that opens the time-lapse, its repos, its
@@ -34,7 +34,7 @@ const warnChip = 'rounded-md border border-garden-warn/40 bg-garden-warn/10 px-1
  */
 export default function PersonStatus({ profile, timeline, cachedAt, hasToken, onRefresh, onAddToken, onTimelapse }: PersonStatusProps) {
   // the core budget as the latest response put it; GraphQL points never land here
-  const rate = useGardenStore((s) => s.rate)
+  const rate = useAppStore((s) => s.rate)
   const repos = timeline.lanes.length
   // years from GitHub's day keys, read as written
   const from = timeline.start.slice(0, 4)
@@ -58,32 +58,32 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
         <button
           type="button"
           onClick={onTimelapse}
-          title="Replay this life growing from its start, and record it as a video"
-          className="-ml-1.5 flex items-center gap-1 rounded-md bg-garden-accent/15 px-1.5 py-px text-[11px] font-medium text-garden-accent hover:bg-garden-accent/25"
+          title="Replay this life from its start, and record it as a video"
+          className="-ml-1.5 flex items-center gap-1 rounded-md bg-ui-accent/15 px-1.5 py-px text-[11px] font-medium text-ui-accent hover:bg-ui-accent/25"
         >
           <PlayIcon size={11} />
-          watch it grow
+          replay
         </button>
       )}
-      <span className="text-garden-text-dim">
+      <span className="text-ui-text-dim">
         {repos} repo{repos === 1 ? '' : 's'}
       </span>
-      <span className="text-garden-border">·</span>
-      <span className="text-garden-text-dim" title={`${timeline.start} to ${timeline.today}, in GitHub's days`}>
+      <span className="text-ui-border">·</span>
+      <span className="text-ui-text-dim" title={`${timeline.start} to ${timeline.today}, in GitHub's days`}>
         {from === to ? from : `${from}–${to}`}
       </span>
       {contributions !== null && (
         <>
-          <span className="text-garden-border">·</span>
-          <span className="text-garden-muted" title="GitHub's contribution calendar, summed over the years shown">
+          <span className="text-ui-border">·</span>
+          <span className="text-ui-muted" title="GitHub's contribution calendar, summed over the years shown">
             {contributions} contribution{contributions === 1 ? '' : 's'}
           </span>
         </>
       )}
       {landed > 0 && (
         <>
-          <span className="text-garden-border">·</span>
-          <span className="text-garden-muted" title="pull requests of theirs merged into repos they do not own">
+          <span className="text-ui-border">·</span>
+          <span className="text-ui-muted" title="pull requests of theirs merged into repos they do not own">
             {landed} pr{landed === 1 ? '' : 's'} landed in {landedRepos} repo{landedRepos === 1 ? '' : 's'}
           </span>
         </>
@@ -91,7 +91,7 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
       {note && (
         <span className={`flex items-center gap-1.5 ${warnChip}`} title={note.title}>
           {note.text}
-          <button type="button" onClick={onRefresh} className="text-garden-accent hover:underline">
+          <button type="button" onClick={onRefresh} className="text-ui-accent hover:underline">
             try again
           </button>
         </span>
@@ -103,11 +103,11 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
       )}
       {cachedAt !== null && (
         <span
-          className="flex items-center gap-1.5 rounded-md border border-garden-border px-1.5 py-px text-[11px] text-garden-text-dim"
+          className="flex items-center gap-1.5 rounded-md border border-ui-border px-1.5 py-px text-[11px] text-ui-text-dim"
           title={`Shown from this browser's cache (fetched ${relativeTime(cachedAt)} at ${formatClock(cachedAt)}), so it used no GitHub requests.`}
         >
           cached {relativeTime(cachedAt)}
-          <button type="button" onClick={onRefresh} className="text-garden-accent hover:underline">
+          <button type="button" onClick={onRefresh} className="text-ui-accent hover:underline">
             refresh
           </button>
         </span>
@@ -117,13 +117,13 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
           type="button"
           onClick={onAddToken}
           title="With a token, person mode reads the commits GitHub counted, day by day, the contribution calendar and the first pull request and issue (GitHub's GraphQL API), and the hourly limit goes from 60 requests to 5000."
-          className="text-[11px] text-garden-accent hover:underline"
+          className="text-[11px] text-ui-accent hover:underline"
         >
           add a token for commits
         </button>
       )}
       {remaining !== null && cachedAt === null && (
-        <span className="text-garden-muted" title="GitHub API requests remaining this hour">
+        <span className="text-ui-muted" title="GitHub API requests remaining this hour">
           {remaining} requests left
         </span>
       )}

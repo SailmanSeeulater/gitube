@@ -13,13 +13,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it } from 'vitest'
 import PersonApp, { panelCoversTokenField } from '../src/PersonApp'
 import personAppSource from '../src/PersonApp.tsx?raw'
-import { formatClock } from '../src/components/gardenUtils'
+import { formatClock } from '../src/components/graphUtils'
 import { profileQueryKey, type ProfileResult } from '../src/profile/useProfileData'
 import { usePersonStore } from '../src/profile/usePersonStore'
 import { LIFE_VIEWS } from '../src/profile/lifeViews'
 import type { PersonView } from '../src/share/shareUrl'
 import { GitHubFetchError, type FetchProgress, type ProfileData, type ProfileRepo } from '../src/types'
-import { FAKE_TOKEN, setGarden, setPerson, textOf } from './helpers/personScene'
+import { FAKE_TOKEN, setApp, setPerson, textOf } from './helpers/personScene'
 
 const noop = () => {}
 const RESET = '2024-06-15T21:05:00Z'
@@ -101,7 +101,7 @@ interface Cached {
  * first fetch under way. Without retryOnMount a failed query shows its error rather than retrying.
  */
 function personApp(login: string, token: string, cached: Cached = {}, view: PersonView | null = null): string {
-  setGarden({ token })
+  setApp({ token })
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false, retryOnMount: false } } })
   const key = profileQueryKey(login, token)
   if (cached.profile) client.setQueryData<ProfileResult>(key, { profile: cached.profile, cachedAt: cached.cachedAt ?? null })
@@ -145,28 +145,29 @@ const PROGRESS: FetchProgress = {
 beforeEach(() => {
   usePersonStore.getState().resetFor('nobody')
   setPerson({ tab: 'repos' })
-  setGarden({ panelOpen: true, rate: null, token: '', progress: null })
+  setApp({ panelOpen: true, rate: null, token: '', progress: null })
 })
 
 describe('loading', () => {
-  it('grows a first fetch with its login, and the strip says the stage', () => {
+  it('loads a first fetch with its login, and the strip says the stage', () => {
     const html = personApp('Ghost-X', '', { fetching: true })
     const text = textOf(html)
-    expect(text).toContain('growing Ghost-X…')
+    expect(text).toContain('loading Ghost-X…')
     expect(text).toContain('starting')
-    expect(text).toContain('growing') // the Grow button, busy
+    // the Go button, busy: 'loading' twice, once over the canvas and once on the button
+    expect(text.match(/\bloading\b/g)).toHaveLength(2)
     expect(card(html)).toBe('')
     expect(html).not.toContain('<aside')
     expect(html).not.toContain('<canvas')
   })
 
   it('keeps the profile on show through a refetch, with the progress and the core budget in the strip', () => {
-    setGarden({ progress: PROGRESS })
+    setApp({ progress: PROGRESS })
     const html = personApp('octo', '', { profile: PUBLIC, fetching: true })
     const text = textOf(html)
     expect(html).toContain('aria-label="life lines of octo: 2 repos')
     expect(html).toContain('<aside')
-    expect(text).not.toContain('growing octo…')
+    expect(text).not.toContain('loading octo…')
     expect(text).toContain('listing repos')
     expect(text).toContain('2 requests')
     expect(text).toContain(`54 left · resets ${formatClock(RESET)}`)
@@ -235,7 +236,7 @@ describe('a fetch that failed', () => {
   it('says the network failed (offline included) or the fetch was cancelled, and to grow again', () => {
     const offline = card(personApp('octo', '', { error: new GitHubFetchError('Network error while looking up octo: fetch failed', 'network') }))
     expect(textOf(offline)).toContain("couldn't reach GitHub")
-    expect(textOf(offline)).toContain('press Grow again')
+    expect(textOf(offline)).toContain('press Go again')
     const cancelled = card(personApp('octo', '', { error: new GitHubFetchError('Fetch aborted while looking up octo', 'aborted') }))
     expect(textOf(cancelled)).toContain('fetch cancelled')
     for (const html of [offline, cancelled]) expect(buttons(html)).toEqual([])
@@ -244,7 +245,7 @@ describe('a fetch that failed', () => {
   it('shows no card while the next fetch runs', () => {
     const html = personApp('octo', '', { error: new GitHubFetchError('Network error', 'network'), fetching: true })
     expect(card(html)).toBe('')
-    expect(textOf(html)).toContain('growing octo…')
+    expect(textOf(html)).toContain('loading octo…')
   })
 
   it('leaves the profile on show after a failed refetch, under a card that can be closed', () => {
@@ -358,10 +359,10 @@ describe('very old and very young lives', () => {
 
 describe('the request counter and the token nudge', () => {
   it('shows the core budget left for a live fetch, in either tier, and none for a cached copy', () => {
-    setGarden({ rate: { limit: 60, remaining: 51, resetAt: RESET } })
+    setApp({ rate: { limit: 60, remaining: 51, resetAt: RESET } })
     expect(textOf(personApp('octo', '', { profile: PUBLIC }))).toContain('51 requests left')
     expect(textOf(personApp('octo', '', { profile: PUBLIC, cachedAt: '2024-06-15T18:00:00Z' }))).not.toContain('requests left')
-    setGarden({ rate: { limit: 5000, remaining: 4990, resetAt: RESET } })
+    setApp({ rate: { limit: 5000, remaining: 4990, resetAt: RESET } })
     expect(textOf(personApp('helper', FAKE_TOKEN, { profile: VISITOR }))).toContain('4990 requests left')
   })
 
@@ -375,7 +376,7 @@ describe('the request counter and the token nudge', () => {
 
   it('opens the token field from every nudge through one path, which keeps it clear of the panel', () => {
     const code = personAppSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1')
-    expect(code).toContain('if (open && panelCoversTokenField(window.innerWidth)) useGardenStore.getState().setPanelOpen(false)')
+    expect(code).toContain('if (open && panelCoversTokenField(window.innerWidth)) useAppStore.getState().setPanelOpen(false)')
     expect(code).toContain('const openToken = useCallback(() => showToken(true), [showToken])')
     expect(code).toContain('const toggleToken = useCallback(() => showToken(!tokenOpen), [showToken, tokenOpen])')
     expect(code.match(/setTokenOpen\(true\)/g)).toBeNull()
@@ -409,12 +410,12 @@ describe('narrow windows', () => {
     expect(seen).toBeGreaterThanOrEqual(3)
     expect(wide).toEqual([])
     // and the page itself clips what lies past its edges
-    expect(personAppSource).toContain('<div className="relative h-full w-full overflow-hidden bg-garden-bg text-garden-text">')
+    expect(personAppSource).toContain('<div className="relative h-full w-full overflow-hidden bg-ui-bg text-ui-text">')
   })
 
   it('keeps the panel collapsible, and the canvas clear of it while it is open', () => {
     expect(personApp('octo', '', { profile: PUBLIC })).toContain('aria-label="Collapse panel"')
-    setGarden({ panelOpen: false })
+    setApp({ panelOpen: false })
     const folded = personApp('octo', '', { profile: PUBLIC })
     expect(folded).toContain('aria-label="Open panel"')
     expect(folded).not.toContain('<aside')

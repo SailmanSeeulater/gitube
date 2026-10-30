@@ -112,13 +112,13 @@ export default function ThemePicker({ id, value, onChange, onClose, buttonRef }:
       onMouseDown={(event) => {
         if (!(event.target as Element).closest('[role="option"]')) event.preventDefault()
       }}
-      className="garden-scroll max-h-[calc(100vh-5.5rem)] w-[232px] self-end overflow-y-auto rounded-xl border border-garden-border bg-garden-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
+      className="ui-scroll max-h-[calc(100vh-5.5rem)] w-[232px] self-end overflow-y-auto rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
     >
       {GROUPS.map((group) => {
         const labelId = `${id}-${group.mode}`
         return (
           <div key={group.mode} role="group" aria-labelledby={labelId}>
-            <div id={labelId} className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-wide text-garden-muted">
+            <div id={labelId} className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-wide text-ui-muted">
               {group.label}
             </div>
             {ORDERED.filter((theme) => theme.mode === group.mode).map((theme) => {
@@ -136,7 +136,7 @@ export default function ThemePicker({ id, value, onChange, onClose, buttonRef }:
                   title={theme.blurb}
                   onClick={() => choose(theme)}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 transition-colors ${
-                    selected ? 'bg-garden-accent/10 text-garden-accent' : 'text-garden-text hover:bg-garden-hover'
+                    selected ? 'bg-ui-accent/10 text-ui-accent' : 'text-ui-text hover:bg-ui-hover'
                   }`}
                 >
                   <Swatch theme={theme} />

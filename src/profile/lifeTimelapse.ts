@@ -31,7 +31,7 @@ export const LAPSE_FPS = 30
  */
 export const LAPSE_MIN_TAKE_MS = 400
 
-/** The caption's type: the repo garden's LABEL_FONT, copied so person mode takes no new name from the first download. */
+/** The caption's type: repo mode's LABEL_FONT, copied so person mode takes no new name from the first download. */
 const HUD_FONT = 'Inter, ui-sans-serif, system-ui, sans-serif'
 
 /** A play under way: where it started from, when, how long a full play takes, and whether it records. */
@@ -110,7 +110,7 @@ export function lapseDate(day: string, locale?: string): string {
 }
 
 /**
- * The caption, drawn on the canvas so recordings carry it, as the repo garden's time-lapse does:
+ * The caption, drawn on the canvas so recordings carry it, as repo mode's time-lapse does:
  * the year the clock has reached big at the top right with the repos so far under it, the person
  * at the bottom right, and the progress along the bottom edge. In the view's CSS px, under the
  * device transform the frame came in with; each text stroked in the halo colour first.
@@ -137,7 +137,7 @@ export function paintLapseHud(ctx: CanvasRenderingContext2D, view: LifeViewport,
   ctx.fillStyle = ink.muted
   text(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`, W - 18, 58)
   ctx.font = `11px ${HUD_FONT}`
-  text(`${title} · repo-garden`, W - 14, H - 14)
+  text(`${title} · gitube`, W - 14, H - 14)
   ctx.globalAlpha = 0.85
   ctx.fillStyle = ink.accent
   ctx.fillRect(0, H - 3, W * p, 3)
@@ -160,7 +160,7 @@ export function closeLifeTimelapse(progress: { current: number }, close: () => v
 /** The exporters (export/exporters) a recording needs: the download and the file name. */
 export interface LapseKit {
   downloadBlob(blob: Blob, fileName: string): void
-  gardenFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
+  exportFileName(data: { owner: string; repo: string }, ext: string, now?: Date, kind?: string): string
 }
 
 /**
@@ -169,7 +169,7 @@ export interface LapseKit {
  * Nothing is counted when the download fails; the error is passed on.
  */
 export function downloadLifeRecording(video: Blob, type: VideoType, login: string, kit: LapseKit, now: Date = new Date()): void {
-  kit.downloadBlob(video, kit.gardenFileName({ owner: login, repo: 'life' }, type.ext, now, 'timelapse'))
+  kit.downloadBlob(video, kit.exportFileName({ owner: login, repo: 'life' }, type.ext, now, 'timelapse'))
   track('export', { format: 'webm' })
 }
 
@@ -290,6 +290,6 @@ export class LapseRecorder {
  * carries; anything else in its own words.
  */
 export function lapseSaveError(err: unknown): { chunkFailed: boolean; message: string } {
-  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of repo-garden that saves videos" }
+  if (isChunkLoadError(err)) return { chunkFailed: true, message: "couldn't load the part of gitube that saves videos" }
   return { chunkFailed: false, message: err instanceof Error ? err.message : String(err) }
 }

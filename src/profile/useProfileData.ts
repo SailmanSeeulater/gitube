@@ -13,7 +13,7 @@ import type { RateInfo } from '../api/http'
 import { loadProfile } from '../api/profile'
 import { browserProfileStore, type ProfileStore, type ProfileTier } from '../api/profileCache'
 import { shouldRetryRepoQuery, toFetchError } from '../hooks/useRepoData'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import type { FetchProgress, GitHubFetchError, ProfileData } from '../types'
 
 export interface ProfileResult {
@@ -38,7 +38,7 @@ export interface UseProfileDataResult {
 }
 
 /**
- * The repo garden's REPO_QUERY_NETWORK_MODE (hooks/useRepoData.ts), for the same reason: offline,
+ * Repo mode's REPO_QUERY_NETWORK_MODE (hooks/useRepoData.ts), for the same reason: offline,
  * the fetch fails fast with a 'network' error card instead of pausing in silence. A copy rather than
  * an import, which would be one more name the first download exports; a test keeps them equal.
  */
@@ -87,7 +87,7 @@ export function profileQueryFn(login: string, deps: ProfileQueryDeps): (ctx: { s
         // private repo name must not reach the page that way, so anything slashed goes.
         const message = progress.message.replace(SLASHED, '…')
         deps.setProgress(message === progress.message ? progress : { ...progress, message })
-        // core requests only (GraphQL points never reach it): the budget the repo garden spends too
+        // core requests only (GraphQL points never reach it): the budget repo mode spends too
         if (progress.rateLimitRemaining !== null) {
           deps.noteRate({ remaining: progress.rateLimitRemaining, limit: null, resetAt: progress.rateLimitResetAt })
         }
@@ -119,9 +119,9 @@ function sharedProfileStore(): ProfileStore | null {
  * fetched in this browser within a day is shown instead, at no API cost, until refetch asks GitHub.
  */
 export function useProfileData(login: string): UseProfileDataResult {
-  const token = useGardenStore((s) => s.token)
-  const setProgress = useGardenStore((s) => s.setProgress)
-  const noteRate = useGardenStore((s) => s.noteRate)
+  const token = useAppStore((s) => s.token)
+  const setProgress = useAppStore((s) => s.setProgress)
+  const noteRate = useAppStore((s) => s.noteRate)
   /** set by refetch: the next run skips the cache */
   const liveRef = useRef(false)
 

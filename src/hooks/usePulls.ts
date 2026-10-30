@@ -5,7 +5,7 @@ import { pullsChunk } from '../lazy/parts'
 import { branchSignature, needsLookup, withLookup } from '../graph/pulls'
 import { remainingNow, type RateInfo } from '../api/http'
 import { GitHubFetchError, type PullIndex, type PullSummary, type RepoData } from '../types'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import { toFetchError } from './useRepoData'
 
 /** An automatic lookup (a tip opened in the inspector, a row selected) waits this long for the selection to settle. */
@@ -102,9 +102,9 @@ export function resetWakeDelay(resetAt: string | null, now: number = Date.now())
  * the network code loaded lazily. Kept 5 minutes, never written to the repo cache or saved files.
  */
 export function usePulls(data: RepoData | null | undefined, enabled: boolean): PullsView {
-  const token = useGardenStore((s) => s.token)
-  const noteRate = useGardenStore((s) => s.noteRate)
-  const rate = useGardenStore((s) => s.rate)
+  const token = useAppStore((s) => s.token)
+  const noteRate = useAppStore((s) => s.noteRate)
+  const rate = useAppStore((s) => s.rate)
   const queryClient = useQueryClient()
   const key = useMemo(() => pullsQueryKey(data, token), [data, token])
   const keyRef = useRef(key)
@@ -126,7 +126,7 @@ export function usePulls(data: RepoData | null | undefined, enabled: boolean): P
       } catch {
         throw new GitHubFetchError("couldn't load the pull request part of the app (reload the page to try again)", 'network')
       }
-      const budget = useGardenStore.getState().rate
+      const budget = useAppStore.getState().rate
       return part.fetchPullIndex({ owner: data.owner, repo: data.repo }, data, {
         token: token || undefined,
         signal,

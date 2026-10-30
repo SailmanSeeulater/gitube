@@ -20,12 +20,12 @@ export interface PersonInspectorProps {
 }
 
 const shell =
-  'absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-garden-border bg-garden-panel/95 p-3 text-[13px] shadow-soft backdrop-blur'
+  'absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel/95 p-3 text-[13px] shadow-soft backdrop-blur'
 
 /** A card that only follows the hover lets the pointer through: opened under it, it would take the hover and close, again and again. */
 const hoverShell = `${shell} pointer-events-none`
 
-const badge = 'rounded bg-garden-hover px-1.5 py-px text-[10px] uppercase tracking-wide text-garden-muted'
+const badge = 'rounded bg-ui-hover px-1.5 py-px text-[10px] uppercase tracking-wide text-ui-muted'
 
 /** Spans and repos listed before the rest are summed up. */
 const MAX_ROWS = 5
@@ -75,7 +75,7 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
     <div role={pinned ? 'dialog' : undefined} aria-label={pinned ? 'Repo details' : undefined} className={pinned ? shell : hoverShell}>
       <div className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />
-        <Name shown={shown} className="font-medium text-garden-text" />
+        <Name shown={shown} className="font-medium text-ui-text" />
         {kinds.map((kind) => (
           <span key={kind} className={badge}>
             {kind}
@@ -83,35 +83,35 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
         ))}
         <span className="flex-1" />
         {pinned && (
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-garden-muted hover:bg-garden-hover hover:text-garden-text">
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text">
             <CloseIcon />
           </button>
         )}
       </div>
 
-      <p className="mt-1.5 text-[12px] text-garden-muted">
-        <span className="text-garden-text-dim">{lane.language ?? 'no language'}</span>
+      <p className="mt-1.5 text-[12px] text-ui-muted">
+        <span className="text-ui-text-dim">{lane.language ?? 'no language'}</span>
         {' · born '}
         {lane.born}
         {!lane.isOwn && ` · first contributed ${lane.root}`}
         {lane.startDay < lane.rootDay && ` · backdated commits from ${lane.start}`}
       </p>
 
-      <p className="mt-1.5 text-[12px] text-garden-muted">
+      <p className="mt-1.5 text-[12px] text-ui-muted">
         {plural(active.length, 'active span')}, {plural(activeDays, 'day')} in all
         {lane.isArchived ? ` · archived, last active ${lane.lastActive}` : last.kind === 'dormant' ? ` · quiet since ${last.from}` : ''}
       </p>
-      <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] tabular-nums text-garden-text-dim">
-        {active.length > listed.length && <li className="text-garden-muted">+{active.length - listed.length} earlier</li>}
+      <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[11px] tabular-nums text-ui-text-dim">
+        {active.length > listed.length && <li className="text-ui-muted">+{active.length - listed.length} earlier</li>}
         {listed.map((span) => (
           <li key={span.fromDay}>
             {span.from === span.to ? span.from : `${span.from} – ${span.to}`}
-            {graphql && lane.detailed && <span className="text-garden-muted"> · {plural(span.commits, 'commit')}</span>}
+            {graphql && lane.detailed && <span className="text-ui-muted"> · {plural(span.commits, 'commit')}</span>}
           </li>
         ))}
       </ul>
 
-      <p className="mt-1.5 text-[12px] text-garden-text-dim">
+      <p className="mt-1.5 text-[12px] text-ui-text-dim">
         {!graphql
           ? uncounted
           : lane.detailed
@@ -119,20 +119,20 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
             : 'GitHub counted no commits to it: see what the data leaves out, in the panel'}
       </p>
       {!graphql && (
-        <p className="mt-0.5 text-[12px] text-garden-muted">
+        <p className="mt-0.5 text-[12px] text-ui-muted">
           {plural(recent, 'push', 'pushes')}
           {recentFrom ? ` since ${recentFrom}` : ' lately'}
         </p>
       )}
       {lane.landed.length > 0 && (
-        <p className="mt-0.5 text-[12px] text-garden-text-dim" title="pull requests of theirs merged into this repo, by the day they were merged">
+        <p className="mt-0.5 text-[12px] text-ui-text-dim" title="pull requests of theirs merged into this repo, by the day they were merged">
           {plural(lane.landed.length, 'pr')} landed
           {lane.landed.length === 1 ? ` on ${lane.landed[0]}` : ` · first ${lane.landed[0]} · last ${lane.landed[lane.landed.length - 1]}`}
         </p>
       )}
 
       <div className="mt-2.5 flex items-center justify-between text-[12px]">
-        <span className="text-garden-muted">
+        <span className="text-ui-muted">
           {plural(lane.stars, 'star')}
           {' · '}
           {plural(lane.forks, 'fork')}
@@ -143,7 +143,7 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
             href={`https://github.com/${lane.repo}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-garden-accent hover:underline"
+            className="flex items-center gap-1 text-ui-accent hover:underline"
           >
             open on GitHub <ExternalIcon size={12} />
           </a>
@@ -173,17 +173,17 @@ function DayCard({ day, milestone, profile, timeline, days, name }: {
     <div className={hoverShell}>
       <p className="flex items-center gap-2">
         {/* a day number is days since 1970-01-01 of GitHub's day: read in UTC, it is that day */}
-        <span className="font-mono text-garden-text">{detail.key}</span>
-        <span className="text-[12px] text-garden-muted">{WEEKDAYS[new Date(detail.day * 86_400_000).getUTCDay()]}</span>
+        <span className="font-mono text-ui-text">{detail.key}</span>
+        <span className="text-[12px] text-ui-muted">{WEEKDAYS[new Date(detail.day * 86_400_000).getUTCDay()]}</span>
       </p>
 
       {graphql ? (
-        <p className="mt-1.5 text-[12px] text-garden-text-dim">
+        <p className="mt-1.5 text-[12px] text-ui-text-dim">
           {detail.count !== null ? plural(detail.count, 'contribution') : 'not in the contribution calendar'}
         </p>
       ) : (
         !detail.known && (
-          <p className="mt-1.5 text-[12px] text-garden-muted">
+          <p className="mt-1.5 text-[12px] text-ui-muted">
             no day detail before {recentFrom ?? 'the last 30 days'}
             {profile.fallback ? `: ${GRAPHQL_FAILED}` : ' without a token'}
           </p>
@@ -194,39 +194,39 @@ function DayCard({ day, milestone, profile, timeline, days, name }: {
         <ul className="mt-1.5 flex flex-col gap-0.5 text-[12px]">
           {listed.map((row) => (
             <li key={repoKey(row.repo)} className="flex items-center justify-between gap-2">
-              <Name shown={name(row.repo)} className="text-garden-text-dim" />
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-garden-muted">
+              <Name shown={name(row.repo)} className="text-ui-text-dim" />
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-ui-muted">
                 {row.unit === 'commits' ? plural(row.n, 'commit') : plural(row.n, 'push', 'pushes')}
               </span>
             </li>
           ))}
-          {repos.length > listed.length && <li className="text-[11px] text-garden-muted">+{repos.length - listed.length} more</li>}
+          {repos.length > listed.length && <li className="text-[11px] text-ui-muted">+{repos.length - listed.length} more</li>}
         </ul>
       )}
       {detail.landed.length > 0 && (
         <ul className="mt-1.5 flex flex-col gap-0.5 text-[12px]">
           {detail.landed.slice(0, MAX_ROWS).map((row) => (
             <li key={repoKey(row.repo)} className="flex items-center justify-between gap-2">
-              <Name shown={name(row.repo)} className="text-garden-text-dim" />
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-garden-accent">{plural(row.n, 'pr')} landed</span>
+              <Name shown={name(row.repo)} className="text-ui-text-dim" />
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-ui-accent">{plural(row.n, 'pr')} landed</span>
             </li>
           ))}
-          {detail.landed.length > MAX_ROWS && <li className="text-[11px] text-garden-muted">+{detail.landed.length - MAX_ROWS} more</li>}
+          {detail.landed.length > MAX_ROWS && <li className="text-[11px] text-ui-muted">+{detail.landed.length - MAX_ROWS} more</li>}
         </ul>
       )}
       {listed.length === 0 && detail.landed.length === 0 && detail.known && (!graphql || (detail.count ?? 0) > 0) && (
-        <p className="mt-1 text-[12px] text-garden-muted">
+        <p className="mt-1 text-[12px] text-ui-muted">
           {graphql ? 'no commits to a repo listed here: issues, pull requests, reviews or private work' : 'no public pushes'}
         </p>
       )}
 
       {rooted.length > 0 && (
-        <div className="mt-1.5 text-[12px] text-garden-muted">
+        <div className="mt-1.5 text-[12px] text-ui-muted">
           {rooted.length === 1 ? 'rooted this day:' : `${rooted.length} rooted this day:`}
           <ul className="mt-0.5 flex flex-col gap-0.5">
             {rooted.slice(0, MAX_ROWS).map((lane) => (
               <li key={repoKey(lane.repo)}>
-                <Name shown={name(lane.repo)} className="text-garden-text-dim" />
+                <Name shown={name(lane.repo)} className="text-ui-text-dim" />
               </li>
             ))}
             {rooted.length > MAX_ROWS && <li className="text-[11px]">+{rooted.length - MAX_ROWS} more</li>}
@@ -235,15 +235,15 @@ function DayCard({ day, milestone, profile, timeline, days, name }: {
       )}
 
       {detail.milestones.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1 border-t border-garden-border pt-2 text-[12px]">
+        <ul className="mt-2 flex flex-col gap-1 border-t border-ui-border pt-2 text-[12px]">
           {detail.milestones.map((index) => {
             const m = timeline.milestones[index]
             if (!m) return null
             const repo = shownMilestoneRepo(m, name)
             return (
-              <li key={index} className={index === milestone ? 'text-garden-accent' : 'text-garden-text'}>
+              <li key={index} className={index === milestone ? 'text-ui-accent' : 'text-ui-text'}>
                 {m.label}
-                {repo && <Name shown={repo} className="text-garden-muted" />}
+                {repo && <Name shown={repo} className="text-ui-muted" />}
               </li>
             )
           })}

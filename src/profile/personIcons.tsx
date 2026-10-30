@@ -41,7 +41,7 @@ export function ShownRepoName({ shown }: { shown: ShownName }) {
     <>
       <span className="truncate">{shown.text}</span>
       {shown.locked && (
-        <span className="shrink-0 text-garden-muted" title="private repo">
+        <span className="shrink-0 text-ui-muted" title="private repo">
           <LockIcon size={12} />
         </span>
       )}

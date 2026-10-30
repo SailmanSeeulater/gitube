@@ -1,5 +1,5 @@
 /**
- * The repo garden's analytics events that follow fetches rather than clicks: grow, fetch-error and
+ * Repo mode's analytics events that follow fetches rather than clicks: grow, fetch-error and
  * pr-overlay. The click events are sent where the click is handled. See analytics/umami.ts.
  *
  * grow counts requests, not fetches: Grow, refresh and a share link each ask for a repo, and the
@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { RepoRef } from '../api/parseRepoUrl'
 import type { GitHubFetchError, PullIndex, RepoData } from '../types'
 import type { PullsStatus } from '../hooks/usePulls'
-import { useGardenStore } from '../store/useGardenStore'
+import { useAppStore } from '../store/useAppStore'
 import { track, type EventData } from './umami'
 
 /** Branch counts in coarse buckets: enough to see what size of repo people grow. */
@@ -34,7 +34,7 @@ export function growEventData(data: Pick<RepoData, 'owner' | 'repo' | 'branches'
   return event
 }
 
-/** The fetched repo on show (never a garden opened from a file), as useRepoData has it. */
+/** The fetched repo on show (never a repo opened from a file), as useRepoData has it. */
 export interface RepoOnShow {
   data: Pick<RepoData, 'owner' | 'repo' | 'branches'> | undefined
   /** when it was fetched; changes with every fetch, a refresh's included */
@@ -172,7 +172,7 @@ export function useRepoAnalytics(input: RepoAnalyticsInput): (ref: RepoRef) => v
   const [analytics] = useState(() => new RepoAnalytics(input, input.initialRepo ?? null))
   useEffect(() => {
     const state = { data, fetchedAt, cachedAt, isFetching, error, pullsStatus, pullsIndex, prMarkCount }
-    for (const [event, eventData] of analytics.observe(state, useGardenStore.getState().token !== '')) track(event, eventData)
+    for (const [event, eventData] of analytics.observe(state, useAppStore.getState().token !== '')) track(event, eventData)
   }, [analytics, data, fetchedAt, cachedAt, isFetching, error, pullsStatus, pullsIndex, prMarkCount])
   return useCallback((ref: RepoRef) => analytics.noteGrow(ref), [analytics])
 }
