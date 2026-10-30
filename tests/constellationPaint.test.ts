@@ -154,7 +154,7 @@ const starOf = (s: Scene, key: string): LifeStar => s.layout.stars[indexOf(s, ke
 
 /** Every colour the theme lets the constellation draw with: its ink and its language colours. */
 function allowedColours(s: Scene): Set<string> {
-  const { garden: _garden, dimAlpha: _alpha, ...flat } = s.ink
+  const { dimAlpha: _alpha, ...flat } = s.ink
   const allowed = new Set<string>(Object.values(flat))
   for (const colour of [...Object.values(languagePalette(s.timeline, s.theme)), s.theme.fallback]) allowed.add(colour)
   return allowed

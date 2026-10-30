@@ -16,7 +16,7 @@ export interface PersonStatusProps {
   onRefresh: () => void
   /** opens the token form */
   onAddToken: () => void
-  /** opens the time-lapse (the strip gives way to its controls); omitted while there is no garden */
+  /** opens the time-lapse (the strip gives way to its controls); omitted while there is no view to grow */
   onTimelapse?: () => void
 }
 

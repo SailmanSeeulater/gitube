@@ -1,6 +1,6 @@
 /**
- * Person mode's repo labels, for every view. Each repo's anchor (a plant's head, a line's start, a
- * star) is a node for the repo garden's LabelPlacer (labelPlacement.ts), so names settle beside
+ * Person mode's repo labels, for every view. Each repo's anchor (a line's start, a star, a stack's
+ * head) is a node for repo mode's LabelPlacer (labelPlacement.ts), so names settle beside
  * their anchors without covering each other or an anchor, appear once the camera rests, fade and
  * crossfade, and the hovered and the selected repo show theirs on a plate (the hovered one's also
  * lists the hidden names round it). It wraps the placer itself, not the useLabelPlacer hook, which
@@ -8,21 +8,18 @@
  * and names, taking over the spots of the one before while the view is the same.
  *
  * A set knows its repos only by key and importance; each frame the view says where every anchor
- * is (or that it has none: hidden, not sown yet) and which boxes labels keep off. The garden's own
- * anchors and order are gardenLabelItems and gardenAnchor.
+ * is (or that it has none: hidden, not sown yet) and which boxes labels keep off.
  *
  * Every text is a ShownName from the view's RepoNamer and is measured as it is shown, so no drawn
  * label, plate or box width carries a hidden private name or its length. A locked name keeps room
  * for its lock in every width.
  */
-import { BLOOM_SCALE } from '../components/gardenPaint'
 import { endEllipsis } from '../components/gardenUtils'
 import { LabelPlacer, type LabelSpec } from '../components/labelPlacement'
 import { measureLabel } from '../components/useLabelPlacer'
 import type { LifeTimeline } from './timeline'
-import type { LifeGardenLayout, LifeInk, LifeViewport, PlantGeom, RepoNamer, ShownName } from './lifeTypes'
-import { horizonY } from './lifeGeometry'
-import { drawLock, grownShare, headAt } from './lifeGardenPaint'
+import type { LifeInk, LifeViewport, RepoNamer, ShownName } from './lifeTypes'
+import { drawLock } from './drawLock'
 
 /**
  * The font labels are drawn in: the one measureLabel measures with (useLabelPlacer.ts), so a drawn
@@ -48,14 +45,13 @@ type Measure = (text: string) => number
 type LaneItems = ReadonlyArray<{ lane: number }>
 
 /**
- * The names the labels show, index-aligned with a view's items (a garden layout stands for its
- * plants): each lane's repo through the namer, without the owner when that is the person (their own
- * repos), which every label would otherwise repeat.
+ * The names the labels show, index-aligned with a view's items: each lane's repo through the namer,
+ * without the owner when that is the person (their own repos), which every label would otherwise
+ * repeat.
  */
-export function labelNames(items: LaneItems | { plants: LaneItems }, timeline: Pick<LifeTimeline, 'lanes'>, name: RepoNamer, login: string): ShownName[] {
+export function labelNames(items: LaneItems, timeline: Pick<LifeTimeline, 'lanes'>, name: RepoNamer, login: string): ShownName[] {
   const own = `${login.toLowerCase()}/`
-  const list: LaneItems = 'plants' in items ? items.plants : items
-  return list.map((item) => {
+  return items.map((item) => {
     const shown = name(timeline.lanes[item.lane].repo)
     const text = shown.text.toLowerCase().startsWith(own) ? shown.text.slice(own.length) : shown.text
     return text === shown.text ? shown : { text, locked: shown.locked }
@@ -102,30 +98,6 @@ export interface LifeLabelFrame {
   forced: readonly number[]
   /** the hovered item, whose plate also lists the hidden names round it; -1 for none */
   explore: number
-}
-
-/** The garden's repos for a label set: the tallest plants' names first, then the most starred. */
-export function gardenLabelItems(layout: Pick<LifeGardenLayout, 'plants'>): LifeLabelItems {
-  const plants = layout.plants
-  const order = Int32Array.from(plants.keys()).sort((a, b) => plants[b].height - plants[a].height || plants[b].bloom - plants[a].bloom || a - b)
-  return { keys: plants.map((plant) => plant.key), order }
-}
-
-/** A plant's label anchor: its head as grown by the time-lapse's day, r its flower's reach. */
-export function gardenAnchor(layout: Pick<LifeGardenLayout, 'plants'>, geoms: ReadonlyArray<PlantGeom>, i: number, at: number | null, out: Float32Array): boolean {
-  const plant = layout.plants[i]
-  const g = geoms[i]
-  if (plant === undefined || g === undefined) return false
-  const [x, y] = headAt(g, grownShare(plant, at))
-  out[0] = x
-  out[1] = y
-  out[2] = g.tipR * BLOOM_SCALE
-  return true
-}
-
-/** The ground under the horizon, which labels keep off in every view. */
-export function groundKeepOut(view: LifeViewport): Float32Array {
-  return Float32Array.of(0, horizonY(view) - 1, view.width, view.height)
 }
 
 /**

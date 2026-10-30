@@ -1,6 +1,6 @@
 /**
- * What person mode's three views (PROFILE_SPEC.md section 5: the life garden, life lines and the
- * constellation) have in common, so one canvas host, one painter, one set of labels, one time-lapse
+ * What person mode's views (PROFILE_SPEC.md section 5: life lines, the constellation and the
+ * console views) have in common, so one canvas host, one painter, one set of labels, one time-lapse
  * and one poster serve them all: the time axis they share, what each of their repos must say about
  * itself, and the scene a view hands the painter (lifePaint.ts's makeViewPaint).
  *
@@ -19,7 +19,7 @@ import { horizonY } from './lifeGeometry'
 import { dayNumber, type LifeMilestone, type LifeTimeline } from './timeline'
 import type { LifeCamera, LifeHover, LifeInk, LifeViewport } from './lifeTypes'
 
-/** The time axis every view shares, in world x. LifeGardenLayout satisfies it. */
+/** The time axis every view shares, in world x. */
 export interface LifeAxis {
   /** day numbers: world x 0 is startDay */
   startDay: number
@@ -66,7 +66,7 @@ export function axisOf(timeline: LifeTimeline): LifeAxis {
   }
 }
 
-/** What the host, the labels, the time-lapse and the panel's focus need of any view's repo. LifePlant satisfies it. */
+/** What the host, the labels, the time-lapse and the panel's focus need of any view's repo. */
 export interface LifeViewItem {
   /** index in timeline.lanes */
   lane: number
@@ -129,7 +129,7 @@ export interface LifeScene<L extends LifeViewModel, G> {
 /** One of person mode's views: its id (the share link's view), its name, its layout and its scene. */
 export interface LifeViewDef<L extends LifeViewModel = any, G = any> {
   id: PersonView
-  /** 'life garden', 'life lines' or 'constellation': the canvas is labelled "<title> of <login>: N repos, Y to Z" */
+  /** 'life lines', 'constellation' or a console view's id: the canvas is labelled "<title> of <login>: N repos, Y to Z" */
   title: string
   /** pure and deterministic: the same timeline gives the same layout */
   layout(timeline: LifeTimeline, source: ProfileData['source']): L

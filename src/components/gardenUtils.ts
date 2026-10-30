@@ -342,13 +342,11 @@ export type TimeForce = {
 }
 
 /**
- * Weak force mapping commit date to a position along one axis over [-span/2, span/2]: 'x' puts
- * older commits left (organic), 'y' puts them at the bottom so the garden grows upward (the
- * canvas y axis points down). Uses date rank rather than raw timestamps so a long-tail history
- * does not squash recent commits into one column. Mirrors d3's forceX/forceY:
- * v += (target - position) * strength * alpha.
+ * Weak force mapping commit date to an x position over [-span/2, span/2], older commits to the
+ * left. Uses date rank rather than raw timestamps so a long-tail history does not squash recent
+ * commits into one column. Mirrors d3's forceX: vx += (target - x) * strength * alpha.
  */
-export function createTimeForce(getSpan: () => number, initialStrength: number = 0.03, axis: 'x' | 'y' = 'x'): TimeForce {
+export function createTimeForce(getSpan: () => number, initialStrength: number = 0.03): TimeForce {
   let nodes: ReadonlyArray<TimeForceNode> = []
   let fractions = new Float64Array(0)
   let strength = initialStrength
@@ -360,15 +358,9 @@ export function createTimeForce(getSpan: () => number, initialStrength: number =
     const k = strength * alpha
     for (let i = 0; i < count; i++) {
       const node = nodes[i]
-      if (axis === 'x') {
-        const x = node.x
-        if (x === undefined || Number.isNaN(x)) continue
-        node.vx = (node.vx ?? 0) + ((fractions[i] - 0.5) * span - x) * k
-      } else {
-        const y = node.y
-        if (y === undefined || Number.isNaN(y)) continue
-        node.vy = (node.vy ?? 0) + ((0.5 - fractions[i]) * span - y) * k
-      }
+      const x = node.x
+      if (x === undefined || Number.isNaN(x)) continue
+      node.vx = (node.vx ?? 0) + ((fractions[i] - 0.5) * span - x) * k
     }
   }) as TimeForce
 
@@ -396,27 +388,6 @@ export function createTimeForce(getSpan: () => number, initialStrength: number =
     return force
   }
 
-  return force
-}
-
-/** A d3-style force pulling every node towards x = 0: keeps the garden layout upright, not wide. */
-export function createCentringForce(strength: number): TimeForce {
-  let nodes: ReadonlyArray<TimeForceNode> = []
-  let k = strength
-  const force = ((alpha: number) => {
-    for (const node of nodes) {
-      const x = node.x
-      if (x === undefined || Number.isNaN(x)) continue
-      node.vx = (node.vx ?? 0) - x * k * alpha
-    }
-  }) as TimeForce
-  force.initialize = (next) => {
-    nodes = next
-  }
-  force.strength = (value) => {
-    k = value
-    return force
-  }
   return force
 }
 

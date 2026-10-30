@@ -1,5 +1,5 @@
 /**
- * The phosphor view (a green-phosphor CRT, each repo a stack of blocks): its layout is the garden's
+ * The phosphor view (a green-phosphor CRT, each repo a stack of blocks): its layout is each lane's
  * roots and heights, pure and deterministic (the same repos in any order give the same layout); its
  * hit test finds every drawn stack at its label anchor and skips hidden and unsown ones; its painter
  * draws a hidden or unsown stack not at all, grows stacks with the time-lapse, draws no repo name,
@@ -12,7 +12,7 @@ import { layoutPhosphor, type PhosphorLayout } from '../src/profile/phosphorLayo
 import { BLOCK_PX, PITCH_PX, blocksAt, headSide, headTop, phosphorGeom, type PhosphorGeom } from '../src/profile/phosphorGeometry'
 import { hitPhosphor } from '../src/profile/phosphorHit'
 import { paintPhosphor, phosphorAnchor, phosphorKeepOut, phosphorLabelOrder } from '../src/profile/phosphorPaint'
-import { layoutLifeGarden } from '../src/profile/lifeGardenLayout'
+import { laneHeights } from '../src/profile/lifeMeasures'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
 import { languageColour, languagePalette, lifeInk } from '../src/profile/lifeInk'
 import { buildLifeTimeline, dayAt, type LifeTimeline } from '../src/profile/timeline'
@@ -194,16 +194,16 @@ beforeAll(async () => {
 })
 
 describe('the layout', () => {
-  it("stands each stack at its root, as tall as the garden's plant, once per lane, the tallest painted first", () => {
+  it("stands each stack at its root, as tall as its lane's height, once per lane, the tallest painted first", () => {
     const timeline = buildLifeTimeline(RICH, NOW)
     const layout = layoutPhosphor(timeline, 'graphql')
-    const garden = layoutLifeGarden(timeline, 'graphql')
+    const heights = laneHeights(timeline, 'graphql')
     expect(layout.stacks).toHaveLength(RICH.repos.length)
     for (const [i, stack] of layout.stacks.entries()) {
       const lane = timeline.lanes[stack.lane]
       expect(stack.x).toBe(lane.rootDay - timeline.startDay + 0.5)
       expect(stack.startDay).toBe(lane.startDay)
-      expect(stack.height).toBe(garden.plants[garden.byKey.get(stack.key)!].height)
+      expect(stack.height).toBe(heights[stack.lane])
       expect(layout.byKey.get(stack.key)).toBe(i)
       if (i > 0) expect(layout.stacks[i - 1].height).toBeGreaterThanOrEqual(stack.height)
     }

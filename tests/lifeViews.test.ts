@@ -13,7 +13,7 @@ import type { EventData } from '../src/analytics/umami'
 import panelSource from '../src/components/Panel.tsx?raw'
 import personPanelSource from '../src/profile/PersonPanel.tsx?raw'
 import { ViewSwitch } from '../src/profile/PersonPanel'
-import { CONSTELLATION_VIEW, GARDEN_VIEW, LIFE_VIEWS, LINES_VIEW, VIEW_OPTIONS, switchView } from '../src/profile/lifeViews'
+import { CONSTELLATION_VIEW, LIFE_VIEWS, LINES_VIEW, VIEW_OPTIONS, switchView } from '../src/profile/lifeViews'
 import { axisOf } from '../src/profile/lifeView'
 import { horizonY } from '../src/profile/lifeGeometry'
 import { languagePalette } from '../src/profile/lifeInk'
@@ -29,10 +29,10 @@ import { HELIX_PALETTE } from '../src/theme/console/helix'
 import type { ProfileData } from '../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, type Grown } from './helpers/personScene'
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
+const VIEWS: PersonView[] = ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 const theme = getTheme('obsidian')
 /** The views that paint the theme... */
-const LIFE_ONLY: PersonView[] = ['garden', 'lines', 'constellation']
+const LIFE_ONLY: PersonView[] = ['lines', 'constellation']
 /** ...and the console views, each its own palette's colours, whatever the theme. */
 const CONSOLE_PALETTES: Partial<Record<PersonView, object>> = { phosphor: PHOSPHOR, htop: HTOP_PALETTE, gitlog: GITLOG_PALETTE, minimap: MINIMAP_PALETTE, helix: HELIX_PALETTE }
 
@@ -71,12 +71,11 @@ describe('the registry', () => {
   it('names each view by its share-link id, and offers them in order', () => {
     expect(Object.keys(LIFE_VIEWS)).toEqual(VIEWS)
     for (const view of VIEWS) expect(LIFE_VIEWS[view].id).toBe(view)
-    expect([GARDEN_VIEW.title, LINES_VIEW.title, CONSTELLATION_VIEW.title]).toEqual(['life garden', 'life lines', 'constellation'])
-    expect(LIFE_VIEWS.garden).toBe(GARDEN_VIEW)
+    expect([LINES_VIEW.title, CONSTELLATION_VIEW.title]).toEqual(['life lines', 'constellation'])
     expect(LIFE_VIEWS.lines).toBe(LINES_VIEW)
     expect(LIFE_VIEWS.constellation).toBe(CONSTELLATION_VIEW)
     expect(VIEW_OPTIONS.map((o) => o.value)).toEqual(VIEWS)
-    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
+    expect(VIEW_OPTIONS.map((o) => o.label)).toEqual(['lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
   })
 })
 
@@ -85,18 +84,18 @@ describe('switchView', () => {
     useGardenStore.setState({ token: '' })
     const umamiTrack = stubTracker()
     const set = vi.fn()
-    let current: PersonView = 'garden'
-    for (const next of ['lines', 'lines', 'constellation', 'garden', 'garden', 'constellation'] as PersonView[]) {
+    let current: PersonView = 'helix'
+    for (const next of ['lines', 'lines', 'constellation', 'helix', 'helix', 'constellation'] as PersonView[]) {
       switchView(current, next, (view) => {
         set(view)
         current = view
       })
     }
-    expect(set.mock.calls).toEqual([['lines'], ['constellation'], ['garden'], ['constellation']])
+    expect(set.mock.calls).toEqual([['lines'], ['constellation'], ['helix'], ['constellation']])
     expect(umamiTrack.mock.calls).toEqual([
       ['view-switch', { view: 'lines' }],
       ['view-switch', { view: 'constellation' }],
-      ['view-switch', { view: 'garden' }],
+      ['view-switch', { view: 'helix' }],
       ['view-switch', { view: 'constellation' }],
     ])
   })
@@ -113,7 +112,7 @@ describe('switchView', () => {
     for (const token of ['', 'ghp_' + 'R8vK2mW5qT9xL3nB7cJ4hF6dS1aG0eY2uI8o']) {
       useGardenStore.setState({ token })
       const umamiTrack = stubTracker()
-      switchView('garden', 'lines', () => {})
+      switchView('helix', 'lines', () => {})
       expect(umamiTrack.mock.calls).toEqual([['view-switch', { view: 'lines' }]])
     }
   })
@@ -136,7 +135,7 @@ describe('the switcher', () => {
       expect((tree.props as Props)['role']).toBe('radiogroup')
       expect((tree.props as Props)['aria-label']).toBe('View')
       const buttons = buttonsOf(tree)
-      expect(buttons.map((b) => b.props.children)).toEqual(['garden', 'lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
+      expect(buttons.map((b) => b.props.children)).toEqual(['lines', 'constellation', 'phosphor', 'htop', 'git log', 'minimap', 'helix'])
       expect(buttons.map((b) => b.props['aria-checked'])).toEqual(VIEWS.map((v) => v === value))
       for (const b of buttons) (b.props.onClick as () => void)()
       expect(onChange.mock.calls).toEqual(VIEWS.map((v) => [v]))
@@ -145,7 +144,7 @@ describe('the switcher', () => {
   })
 
   it('waits while a recording runs', () => {
-    const buttons = buttonsOf(ViewSwitch({ value: 'garden', onChange: () => {}, disabled: true }))
+    const buttons = buttonsOf(ViewSwitch({ value: 'lines', onChange: () => {}, disabled: true }))
     expect(buttons.every((b) => b.props.disabled === true)).toBe(true)
   })
 
@@ -263,10 +262,8 @@ describe("each view's scene", () => {
       for (const t of THEMES) {
         const g = grow(kepano, KEPANO_NOW, t)
         const ink = def.ink!(g.ink)
-        const { garden, dimAlpha, ...rest } = ink
-        // the garden's ink is the theme's (no console view draws with it); every colour the shared pieces read is the
-        // console's, and so is the dimming of the repos a selection leaves out
-        expect(garden, `${view} ${t.id}`).toBe(g.ink.garden)
+        const { dimAlpha, ...rest } = ink
+        // every colour the shared pieces read is the console's, and so is the dimming of the repos a selection leaves out
         expect(dimAlpha).toBeGreaterThan(0)
         expect(dimAlpha).toBeLessThan(1)
         for (const [name, value] of Object.entries(rest)) expect(colours.has(value), `${view} ${t.id} ${name}: ${value}`).toBe(true)

@@ -32,7 +32,7 @@ export interface PersonPanelProps {
   onPoster?: () => void
   /** a poster is on its way */
   posterBusy?: boolean
-  /** the view on show (the garden when left out), which the legend explains */
+  /** the view on show (life lines when left out), which the legend explains */
   view?: PersonView
   /** switches the view (lifeViews.ts's switchView); no switcher without it */
   onView?: (view: PersonView) => void
@@ -147,7 +147,7 @@ export interface RepoRowProps {
   colour: string
   selected: boolean
   hidden: boolean
-  /** the pointer is over its plant on the canvas */
+  /** the pointer is over it on the canvas */
   hovered: boolean
   onSelect: () => void
   onToggleHidden: () => void
@@ -241,7 +241,7 @@ export default function PersonPanel({
   theme,
   onPoster,
   posterBusy = false,
-  view = 'garden',
+  view = 'lines',
   onView,
   viewLocked = false,
 }: PersonPanelProps) {
@@ -334,7 +334,7 @@ export default function PersonPanel({
           title={
             viewLocked
               ? 'Waits until the recording ends, so a video shows one view.'
-              : "garden: repos grown as plants. lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row. " +
+              : "lines: each repo a line through time, like a tube map. constellation: each repo a star in its language's row. " +
                 'phosphor, htop, git log, minimap and helix: the same life on a terminal screen, in its own colours whatever the theme'
           }
         >

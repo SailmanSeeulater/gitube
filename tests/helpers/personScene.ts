@@ -1,23 +1,24 @@
 /**
  * Person mode end to end, for tests: profiles replayed from the recordings through the real
- * fetchers, the life garden grown from one the way PersonApp grows it (timeline, layout, colours,
- * namer, fitted camera) and painted on a recording context by LifeGarden's own painter
- * (makeLifePaint) with its labels, any view of it the same way (growView, paintView: the view's
- * layout of the same timeline, painted by makeViewPaint), and the stores set so react-dom/server
+ * fetchers, a life grown from one the way PersonApp grows it (timeline, colours, namer, fitted
+ * camera, and life lines, the default view, laid out) and painted on a recording context by the
+ * view's own painter (makeViewPaint) with its labels, any other view of it the same way (growView,
+ * paintView: the view's layout of the same timeline), and the stores set so react-dom/server
  * renders what a test asked for.
  */
 import { fetchProfileRest } from '../../src/api/profile'
 import { fetchProfileGraphql } from '../../src/api/profileGraphql'
 import { buildDayIndex, type DayIndex } from '../../src/profile/dayIndex'
 import { fitLifeCamera } from '../../src/profile/lifeCamera'
-import { layoutLifeGarden } from '../../src/profile/lifeGardenLayout'
-import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP, plantGeom } from '../../src/profile/lifeGeometry'
+import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP } from '../../src/profile/lifeGeometry'
+import { layoutLifeLines, type LifeLinesLayout } from '../../src/profile/lifeLinesLayout'
+import { linesGeom, type LinesGeom } from '../../src/profile/lifeLinesGeometry'
 import { languageColour, languagePalette, lifeInk } from '../../src/profile/lifeInk'
-import { makeLifePaint, makeViewPaint, type LifePaintOptions, type LifePaintState, type LifePainter, type ViewPaintOptions } from '../../src/profile/lifePaint'
+import { makeViewPaint, type LifePaintState, type LifePainter, type ViewPaintOptions } from '../../src/profile/lifePaint'
 import { viewInk, type LifeViewDef, type LifeViewModel } from '../../src/profile/lifeView'
-import { LIFE_VIEWS } from '../../src/profile/lifeViews'
+import { LIFE_VIEWS, LINES_VIEW } from '../../src/profile/lifeViews'
 import type { PersonView } from '../../src/share/shareUrl'
-import type { LifeCamera, LifeGardenLayout, LifeInk, LifeViewport, PlantGeom, RepoNamer } from '../../src/profile/lifeTypes'
+import type { LifeCamera, LifeInk, LifeViewport, RepoNamer } from '../../src/profile/lifeTypes'
 import { isRevealed, privateRepoKeys, repoKey, repoNamer } from '../../src/profile/privacy'
 import { buildLifeTimeline, type LifeTimeline } from '../../src/profile/timeline'
 import type { LifeLabelSet } from '../../src/profile/useLifeLabels'
@@ -61,13 +62,14 @@ export function withPrivate(profile: ProfileData, names: readonly string[], stal
   return { ...profile, repos }
 }
 
-/** The plot PersonApp's canvas gives the garden on a laptop screen, in LifeGarden's frame. */
+/** The plot PersonApp's canvas gives a view on a laptop screen, in the canvas's frame. */
 export const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
 
 export interface Grown {
   profile: ProfileData
   timeline: LifeTimeline
-  layout: LifeGardenLayout
+  /** life lines' layout, the default view's */
+  layout: LifeLinesLayout
   days: DayIndex
   theme: Theme
   ink: LifeInk
@@ -76,13 +78,13 @@ export interface Grown {
   name: RepoNamer
   camera: LifeCamera
   view: LifeViewport
-  geoms: PlantGeom[]
+  geoms: LinesGeom
 }
 
-/** The life garden as PersonApp grows it from profile, with names revealed only for revealFor's login. */
+/** A life as PersonApp grows it from profile, laid out as life lines, with names revealed only for revealFor's login. */
 export function grow(profile: ProfileData, now: number, theme: Theme, revealFor: string | null = null, view: LifeViewport = VIEW): Grown {
   const timeline = buildLifeTimeline(profile, now)
-  const layout = layoutLifeGarden(timeline, profile.source)
+  const layout = layoutLifeLines(timeline, profile.source)
   const palette = languagePalette(timeline, theme)
   const privateKeys = privateRepoKeys(profile)
   const camera = fitLifeCamera(layout.days, view)
@@ -98,7 +100,7 @@ export function grow(profile: ProfileData, now: number, theme: Theme, revealFor:
     name: repoNamer(privateKeys, isRevealed(revealFor, profile.login)),
     camera,
     view,
-    geoms: layout.plants.map((plant) => plantGeom(plant, camera, view)),
+    geoms: linesGeom(layout, camera, view),
   }
 }
 
@@ -121,11 +123,11 @@ export function quietCtx(width: number, height: number): CanvasRenderingContext2
   }) as unknown as CanvasRenderingContext2D
 }
 
-/** LifeGarden's painter for g, as LifeGarden makes it, with the store's state held as given and every measured text kept. */
+/** Life lines' painter for g, as the canvas makes it, with the store's state held as given and every measured text kept. */
 export function painterFor(
   g: Grown,
   state: Partial<LifePaintState> = {},
-  over: Partial<LifePaintOptions> = {},
+  over: Partial<ViewPaintOptions<LifeLinesLayout>> = {},
 ): { painter: LifePainter; measured: string[] } {
   const measured: string[] = []
   const measure = (text: string) => {
@@ -133,7 +135,7 @@ export function painterFor(
     return text.length * 6.5
   }
   const now: LifePaintState = { hidden: new Set(), hover: null, selected: null, ...state }
-  const painter = makeLifePaint({
+  const painter = makeViewPaint(LINES_VIEW.scene, {
     layout: g.layout,
     timeline: g.timeline,
     ink: g.ink,
@@ -148,8 +150,8 @@ export function painterFor(
 }
 
 /**
- * One frame as LifeGarden paints it, by its own painter: the garden, then its labels once they have
- * settled (the frames before go to a quiet context), with the hovered and selected plants on plates.
+ * One frame of life lines as the canvas paints it, by its own painter: the view, then its labels once
+ * they have settled (the frames before go to a quiet context), with the hovered and selected repos on plates.
  * progress is the time-lapse's (0..1), off when left out.
  */
 export function paint(g: Grown, over: Partial<LifePaintState> & { progress?: number } = {}): Painted {
@@ -207,7 +209,7 @@ export function viewPainterFor(
 }
 
 /**
- * One frame of a view as LifeView paints it, by its own painter, as paint() does the garden's: the
+ * One frame of a view as LifeView paints it, by its own painter, as paint() does life lines': the
  * view, then its labels once they have settled, with the hovered and selected repos on plates.
  * progress is the time-lapse's (0..1), off when left out.
  */

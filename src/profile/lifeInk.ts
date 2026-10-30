@@ -1,5 +1,5 @@
 /**
- * The life garden's colours, all read off the active theme, so every theme works with no extra work.
+ * Person mode's colours, all read off the active theme, so every theme works with no extra work.
  * A theme switch is a redraw, never a relayout: callers memoise these on the theme.
  *
  * Languages are coloured the way branches are (assignPalette): the dominant language takes the
@@ -9,7 +9,6 @@
  */
 import type { Theme } from '../theme/themes'
 import { blendHex } from '../theme/colour'
-import { gardenInk } from '../components/gardenPaint'
 import { assignPalette } from '../graph/color'
 import type { LifeTimeline } from './timeline'
 import type { LifeInk } from './lifeTypes'
@@ -27,9 +26,8 @@ export function lifeInk(theme: Theme): LifeInk {
     fallback: theme.fallback,
     rootRing: theme.rootRing,
     eraBand: blendHex(theme.text, theme.canvas, ERA_BAND_ALPHA),
-    horizon: d.gardenRoot,
-    dry: d.gardenWilt,
-    garden: gardenInk(theme),
+    horizon: d.horizon,
+    dry: d.dry,
     hoverRing: d.hoverRing,
     inspectedRing: d.inspectedRing,
     textHalo: d.textHalo,

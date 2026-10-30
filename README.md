@@ -1,13 +1,17 @@
 # repo-garden
 
-Paste a GitHub repo and see how its branches fork and merge, drawn as an
-Obsidian-style node graph. Paste a GitHub login instead and see that person's
-whole coding life ([person mode](#person-mode)).
+Paste a GitHub repo and see how its branches fork and merge, drawn as a metro
+map (or, in the organic layout, an Obsidian-style node graph). Paste a GitHub
+login instead and see that person's whole coding life
+([person mode](#person-mode)).
 
-[![Andrej Karpathy's coding life as a garden: one plant per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-garden.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=garden)
+[![Andrej Karpathy's coding life as life lines: one line per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-lines.jpg)](https://repogarden.latesailor.dev/?user=karpathy&view=lines)
 
-<sub>Andrej Karpathy's fifteen years on GitHub as a [garden](https://repogarden.latesailor.dev/?user=karpathy&view=garden): each plant a repo, rooted where it began, a bloom for its stars. Repo mode, more people and every view in the [gallery](#gallery).</sub>
+<sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://repogarden.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant. Repo mode, more people and every view in the [gallery](#gallery).</sub>
 
+- **Metro** (the default layout) lays every branch on its own straight lane,
+  like a tube map, with forks and merges as interchanges. **Organic** lets
+  the same graph settle under free force physics instead.
 - **Skeleton view** keeps branch tips, fork points, merge commits and roots, and
   collapses straight runs of commits into one edge with a `+N` badge.
 - **Full view** shows every fetched commit.
@@ -24,8 +28,8 @@ whole coding life ([person mode](#person-mode)).
   `review:approved` and the like narrow the branch list. A repo without pull
   requests looks exactly as before.
 - **Person mode**: a login (`octocat`, `@octocat` or `github.com/octocat`)
-  grows one user's repos over time, as a garden, life lines or a
-  constellation, or in five console looks (phosphor, htop, git log, minimap,
+  grows one user's repos over time, as life lines or a constellation, or in
+  five console looks (phosphor, htop, git log, minimap,
   helix),
   with its own time-lapse, poster and share link.
 - Everything runs in the browser against the GitHub API (REST, plus GraphQL
@@ -43,8 +47,8 @@ than its commit count.
 <table>
   <tr>
     <td colspan="2">
-      <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-repo.jpg" alt="vuejs/core in repo mode: 83 branches forking off main as a node graph"></a>
-      <br><b>repo mode</b> · <code>vuejs/core</code>, skeleton view in the organic layout: 83 branches forking off <code>main</code>, mostly the core team's fix and vapor branches, with Renovate's dependency branches clustered by the tip. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
+      <a href="https://repogarden.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-metro.jpg" alt="vuejs/core in repo mode as a metro map: branches on straight lanes forking off main"></a>
+      <br><b>repo mode</b> · <code>vuejs/core</code> as a metro map, the default layout: the newest end of 83 branches, each on its own lane off <code>main</code>, with the fix branches fanning out near the tip and thorns on the ones far behind it. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
     </td>
   </tr>
   <tr>
@@ -137,8 +141,8 @@ They are never cached or saved.
 ## Person mode
 
 Type a GitHub login where a repo goes (`octocat`, `@octocat`, or a
-`github.com/octocat` link), or open `?user=octocat`, with `&view=garden`,
-`&view=lines`, `&view=constellation`, `&view=phosphor`, `&view=htop`,
+`github.com/octocat` link), or open `?user=octocat`, with `&view=lines`,
+`&view=constellation`, `&view=phosphor`, `&view=htop`,
 `&view=gitlog`, `&view=minimap` or `&view=helix` to pick the view. It grows one user's
 coding life: when each repo was born, when it was busy, when it went quiet,
 which languages led when, and their milestones (joining GitHub, the first
@@ -149,20 +153,18 @@ shows "that's an organization" (a bot's, "that's a bot"), and its repos still
 grow as `owner/repo`. A user with no repos to show gets a note saying so,
 with "add a token" when a token would show more.
 
-Eight views, picked in the side panel (the life views on its first row, the
+Seven views, picked in the side panel (the life views on its first row, the
 console views on its second), paint the same life on one canvas and share the
 panel, the inspector (hover a repo or a day), the theme, the
 time-lapse and the poster:
 
-- **garden** (the default): time runs left to right along a horizon. Each repo
-  is a plant rooted where the person's part in it starts (its birth for their
-  own repos, their first counted day, with a ring at its root, for one they
-  only contributed to). Its height is the commits GitHub counted, or without a
-  token how long it was active; leaves mark its active spans, a bloom its
-  stars. Archived repos are dry, forks are cuttings.
-- **lines**: each repo is a line along the time axis, thick while active and
-  thin while dormant, with milestones as stations and the leading language of
-  each stretch as bands behind.
+- **lines** (the default): time runs left to right. Each repo is a line from
+  where the person's part in it starts (its birth for their own repos, their
+  first counted day, with a hollow start, for one they only contributed to),
+  thick while active and thin while dormant, thicker for more commits with a
+  token. Milestones are stations, the leading language of each stretch shows
+  as bands behind, archived repos end at a terminus and forks branch in.
+  A link from before the life garden was retired (`&view=garden`) opens lines.
 - **constellation**: each repo is a star, placed by when the person's part in
   it starts (across) and its language (down), sized by activity, glowing by
   stars, with faint links between repos active in the same months.
@@ -171,8 +173,8 @@ The console views keep their own terminal colours whatever the theme (the
 labels, the time-lapse caption and the poster follow them):
 
 - **phosphor**: a green CRT screen with scanlines; each repo is a stack of
-  blocks rising where the person's part in it starts, as tall as a garden
-  plant, its head brighter for stars.
+  blocks rising where the person's part in it starts, taller the busier it
+  was, its head brighter for stars.
 - **htop**: a system monitor; each repo is a numbered row whose meter is lit
   where it was active, brighter for busier stretches.
 - **git log**: like `git log --graph`; each repo is a branch forking off the
@@ -323,7 +325,7 @@ The repo garden sends these:
 | Event | Data | Sent when |
 |---|---|---|
 | `grow` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | the repo on show was grown or refreshed (Grow, an example chip, opening a share link, the refresh button in the status strip or the inspector) and its data arrived, from GitHub or the cache: once per request. Not for a battle challenger, a token change, a background refetch or an opened file; a request that fails sends `fetch-error` instead |
-| `layout-switch` | `layout`: `organic`, `metro` or `garden` | another layout is picked in the side panel |
+| `layout-switch` | `layout`: `metro` or `organic` | another layout is picked in the side panel |
 | `theme-switch` | `theme`: the theme's id (`obsidian`, `paper`, ...) | once when the theme picker closes on a different theme than it opened with, naming that one; themes tried on the way do not count |
 | `view-mode` | `view`: `skeleton` or `full` | another view is picked in the side panel |
 | `timelapse-play` | none | the time-lapse is opened |
@@ -339,7 +341,7 @@ Person mode sends these (`src/profile/analytics.ts` has the `grow` rules):
 | Event | Data | Sent when |
 |---|---|---|
 | `grow` | `mode: 'person'`, `source`: `rest` or `graphql` (the tier that filled the profile, so `rest` after a GraphQL fallback), `cached`, `token` (whether the profile was fetched with a token, read from the fetch result, not the token set now); `login` only for a live fetch without a token | the person on show was grown or refreshed (a login typed in either input, the same one again included, a `?user=` link, refresh or "try again" in the status strip) and the profile arrived, from GitHub or the cache: once per request. Not for a token change, a background refetch or a view switch; a request that fails sends nothing |
-| `view-switch` | `view`: `garden`, `lines`, `constellation`, `phosphor`, `htop`, `gitlog`, `minimap` or `helix` | another view is picked in the side panel |
+| `view-switch` | `view`: `lines`, `constellation`, `phosphor`, `htop`, `gitlog`, `minimap` or `helix` | another view is picked in the side panel |
 | `timelapse-play` | none | the time-lapse is opened ("watch it grow") |
 | `export` | `format: 'webm'`, also when Safari records mp4 | a time-lapse recording is saved; the only `export` person mode sends |
 | `poster-export` | none | a poster is saved (the panel's poster button, or Save image in the top bar), after its download; a save that fails sends nothing |

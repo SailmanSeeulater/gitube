@@ -8,7 +8,6 @@ import { DOT_PITCH, DOT_WIDTH, PR_RING_METRO_CUT, PR_RING_MIN_DETAIL_PX, TRACK_A
 import { TIP_RING_PX } from './useLabelPlacer'
 import { LABEL_PLACER_DEFAULTS } from './labelPlacement'
 import { METRO_MIN_ZOOM, metroStationRadius } from './metroView'
-import { BLOOM_SCALE } from './gardenPaint'
 import { nodeRadius } from './gardenUtils'
 import type { PrMark } from '../types'
 
@@ -27,15 +26,6 @@ describe('where the ring goes', () => {
         // the old ring: outer + 2.5 px, 1.5 px wide
         close(prRingOuterEdge(R, w), outer + 2.5 * px + (1.5 * px) / 2)
       }
-    }
-  })
-
-  it('garden: its outer edge is the petals’ reach', () => {
-    for (const zoom of [0.3, ...ZOOMS]) {
-      const px = 1 / zoom
-      const reach = (nodeRadius(4) + 2) * BLOOM_SCALE
-      const { R, w } = prRingFor('garden', reach, px)
-      close(prRingOuterEdge(R, w), reach)
     }
   })
 

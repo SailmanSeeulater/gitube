@@ -8,8 +8,7 @@
  * "a pull request here". Below PR_RING_MIN_DETAIL_PX everything is colour-only.
  *
  * The ring takes the place of what the tip already draws there (organic: its outer ring; metro: the
- * station outline; garden: just inside the petals' reach), so the tip's footprint and the label
- * placer's discs stay as they are.
+ * station outline), so the tip's footprint and the label placer's discs stay as they are.
  *
  * Geometry (prRingArcs) is pure; drawPrRing paints it on the canvas, and PrGlyph.tsx as SVG.
  */
@@ -120,8 +119,6 @@ export const PR_RING_LAYOUT = {
    * (PR_RING_METRO_CUT), then the ring just outside it; its outer edge stays r + 1.9 px
    */
   metro: { offsetPx: 1.1, widthPx: 1.6 },
-  /** garden tip: just inside the petals, so the outer edge is their reach */
-  garden: { offsetPx: -1.25, widthPx: 2.5 },
 } as const
 
 /**
@@ -150,7 +147,7 @@ const NO_DASH: number[] = []
 /**
  * Paints the ring at (x, y) at the context's current globalAlpha (the node's), leaving alpha, line
  * cap and dash as they were. neutral: the colour of a half not looked up yet, the outline the tip
- * draws without a pull request (organic: the branch colour; metro and garden: the station colour).
+ * draws without a pull request (organic: the branch colour; metro: the station colour).
  */
 export function drawPrRing(
   ctx: CanvasRenderingContext2D,

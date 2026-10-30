@@ -1,6 +1,6 @@
 /**
  * Person mode's time-lapse (PROFILE_SPEC.md section 6, "Time-lapse and export"): the view on
- * show (garden, lines or constellation) grown from the timeline's start (the account's creation, or
+ * show (any of them) grown from the timeline's start (the account's creation, or
  * earlier backdated work) to today on the life clock (timeline.ts), with play, scrub and a silent
  * video recording of the canvas.
  *
@@ -21,7 +21,7 @@ import type { LifeInk, LifeViewport } from './lifeTypes'
 export const LAPSE_LENGTHS = [10, 20, 40, 60] as const
 export type LapseLength = (typeof LAPSE_LENGTHS)[number]
 export const LAPSE_DEFAULT_LENGTH: LapseLength = 20
-/** A recording lingers this long on the grown garden before it saves. */
+/** A recording lingers this long on the grown view before it saves. */
 export const LAPSE_HOLD_MS = 1500
 /** Frames a second the recorder captures. */
 export const LAPSE_FPS = 30
@@ -60,7 +60,7 @@ function clamp01(p: number): number {
 /**
  * One frame of a play at performance time now, paced by the wall clock, so dropped frames never
  * slow it down: progress runs from `from` to 1 over lengthS seconds for a full play. At 1 a play
- * stops; a recording goes on for LAPSE_HOLD_MS on the grown garden, then saves.
+ * stops; a recording goes on for LAPSE_HOLD_MS on the grown view, then saves.
  */
 export function lapseTick(play: LapsePlay, now: number): LapseTick {
   const progress = Math.min(1, clamp01(play.from) + Math.max(0, now - play.startedAt) / (play.lengthS * 1000))
@@ -87,11 +87,11 @@ export function lapseDay(timeline: Pick<LifeTimeline, 'clock' | 'startDay' | 'to
 
 /**
  * The caption at a progress, counting the repos drawn as every view decides them: a view's items
- * (a garden's plants, say) are sown on their first day, so the count is the same whichever is on show.
+ * (its lines or stars, say) are sown on their first day, so the count is the same whichever is on show.
  */
 export function lapseCaption(
   timeline: LifeTimeline,
-  layout: { plants: ReadonlyArray<{ key: string; startDay: number }> },
+  items: ReadonlyArray<{ key: string; startDay: number }>,
   progress: number,
   hidden: ReadonlySet<string>,
 ): LapseCaption {
@@ -99,7 +99,7 @@ export function lapseCaption(
   const at = dayAt(timeline.clock, p)
   const day = lapseDay(timeline, p)
   let sown = 0
-  for (const plant of layout.plants) if (!(plant.startDay > at) && !hidden.has(plant.key)) sown++
+  for (const item of items) if (!(item.startDay > at) && !hidden.has(item.key)) sown++
   return { day, year: day.slice(0, 4), sown }
 }
 
@@ -151,7 +151,7 @@ export function openLifeTimelapse(progress: { current: number }, open: () => voi
   track('timelapse-play')
 }
 
-/** Closes it, leaving the whole garden on show; counts nothing. */
+/** Closes it, leaving the whole view on show; counts nothing. */
 export function closeLifeTimelapse(progress: { current: number }, close: () => void): void {
   close()
   progress.current = 1

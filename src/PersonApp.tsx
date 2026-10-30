@@ -117,8 +117,8 @@ export function viewLayouts(timeline: LifeTimeline, source: ProfileData['source'
 }
 
 /**
- * Person mode (?user=): one GitHub user's coding life as a garden, life lines or a constellation
- * (the panel's view switcher), with the side panel, the inspector, the status strip and the privacy
+ * Person mode (?user=): one GitHub user's coding life as life lines, a constellation or a console
+ * view (the panel's view switcher), with the side panel, the inspector, the status strip and the privacy
  * toggle, the time-lapse (with its recording), the poster (from the panel or the top bar's "Save
  * image") and the copy-link button, all shared by the three views. Every repo name on show goes
  * through one namer, so a private repo's name is hidden until the toggle reveals it for this login;
@@ -131,7 +131,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const [tokenOpen, setTokenOpen] = useState(false)
   // The view on show, first the link's: a new login keeps it (App passes no view for one), and the
   // panel's switcher changes it (switchView, which counts it).
-  const [view, setView] = useState<PersonView>(() => linkedView ?? 'garden')
+  const [view, setView] = useState<PersonView>(() => linkedView ?? 'lines')
   const pickView = useCallback((next: PersonView) => switchView(view, next, setView), [view])
   const inputRef = useRef<HTMLInputElement | null>(null)
   /** the canvas wrapper: the time-lapse records the canvas inside it */
@@ -200,7 +200,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const lapseProgress = useRef(1)
   // one identity while it is on: the painter is made per value
   // live while playing, recording or scrubbing: a paused time-lapse stops repainting (a new object
-  // each time it changes, so the garden takes up a new painter and wakes its loop)
+  // each time it changes, so the canvas takes up a new painter and wakes its loop)
   const [lapseLive, setLapseLive] = useState(true)
   const lifeLapse = useMemo(
     () => (lapseOpen && profile ? { progress: lapseProgress, title: profile.login, live: lapseLive } : null),

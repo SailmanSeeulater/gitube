@@ -1,18 +1,17 @@
 /**
- * The time axis every person-mode view shares (lifeView.ts, lifeAxis.ts): axisOf gives the garden
- * layout's years, language eras and milestones exactly; the garden with no plants draws exactly what
- * lifeAxis draws alone, call for call, so the views' axes are the garden's; the year bands are the
- * garden's only; the clock hides milestones it has not reached; and axisHover finds a milestone
- * marker, the day under the pointer, or nothing off the life and off the canvas.
+ * The time axis every person-mode view shares (lifeView.ts, lifeAxis.ts): axisOf gives life lines'
+ * years, language eras and milestones exactly; the year bands are drawn only when a view asks; the
+ * clock hides milestones it has not reached; and axisHover finds a milestone marker, the day under
+ * the pointer, or nothing off the life and off the canvas.
  */
 import { beforeAll, describe, expect, it } from 'vitest'
 import { getTheme } from '../src/theme/themes'
-import { paintLifeGarden } from '../src/profile/lifeGardenPaint'
-import { paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from '../src/profile/lifeAxis'
+import { LIFE_YEAR_FONT, paintAxisBackdrop, paintAxisMilestones, paintCanvasFill, paintDayGuide, type LifeAxisPaint } from '../src/profile/lifeAxis'
+import { MONO_FONT } from '../src/components/gardenUtils'
 import { axisHover, axisOf, onCanvas, MILESTONE_HIT_PX } from '../src/profile/lifeView'
 import { horizonY } from '../src/profile/lifeGeometry'
 import { dayAt, dayNumber } from '../src/profile/timeline'
-import type { LifeGardenLayout, LifeHover } from '../src/profile/lifeTypes'
+import type { LifeHover } from '../src/profile/lifeTypes'
 import { KEPANO_NOW, VIEW, grow, kepanoProfile, type Grown } from './helpers/personScene'
 import { recordingCtx, type RecordingCtx } from './helpers/recordingCtx'
 
@@ -28,44 +27,8 @@ function axisPaint(over: Partial<LifeAxisPaint> = {}): LifeAxisPaint {
   return { axis: axisOf(g.timeline), timeline: g.timeline, camera: g.camera, view: g.view, ink: g.ink, colourOf: g.colourOf, hover: null, at: null, ...over }
 }
 
-/** g's garden with no plants, drawn by paintLifeGarden. */
-function bareGarden(hover: LifeHover, at: number | null): RecordingCtx {
-  const layout: LifeGardenLayout = { ...g.layout, plants: [], byKey: new Map() }
-  const rec = recordingCtx(VIEW.width * 2, VIEW.height * 2)
-  paintLifeGarden(rec.ctx, {
-    layout,
-    timeline: g.timeline,
-    geoms: [],
-    camera: g.camera,
-    view: g.view,
-    ink: g.ink,
-    colourOf: g.colourOf,
-    leafOf: (colour) => colour,
-    hidden: new Set(),
-    hover,
-    selected: null,
-    at,
-  })
-  return rec
-}
-
-/** lifeAxis alone, in the order the garden calls it (with its one globalAlpha reset between plants and milestones). */
-function axisAlone(hover: LifeHover, at: number | null): RecordingCtx {
-  const rec = recordingCtx(VIEW.width * 2, VIEW.height * 2)
-  const a = axisPaint({ hover, at })
-  paintCanvasFill(rec.ctx, g.ink)
-  rec.ctx.save()
-  rec.ctx.globalAlpha = 1
-  paintAxisBackdrop(rec.ctx, a, { yearBands: true })
-  rec.ctx.globalAlpha = 1
-  paintAxisMilestones(rec.ctx, a)
-  paintDayGuide(rec.ctx, a)
-  rec.ctx.restore()
-  return rec
-}
-
 describe('axisOf', () => {
-  it("is the garden layout's axis, field for field", () => {
+  it("is life lines' axis, field for field", () => {
     const axis = axisOf(g.timeline)
     const { startDay, todayDay, days, years, languages, milestones } = g.layout
     expect(axis).toEqual({ startDay, todayDay, days, years, languages, milestones })
@@ -89,20 +52,8 @@ describe('axisOf', () => {
 })
 
 describe('the shared axis', () => {
-  const hovers = (): Array<[string, LifeHover]> => [
-    ['nothing hovered', null],
-    ['a day hovered', { kind: 'day', day: g.timeline.startDay + 400, milestone: null }],
-    ['a milestone hovered', { kind: 'day', day: dayNumber(g.timeline.milestones[0].day), milestone: 0 }],
-  ]
-
-  it('is drawn by the garden with no plants exactly as lifeAxis draws it alone', () => {
-    for (const [label, hover] of hovers()) {
-      for (const at of [null, dayAt(g.timeline.clock, 0.5)]) {
-        const garden = bareGarden(hover, at)
-        expect(garden.log.length, label).toBeGreaterThan(20)
-        expect(garden.log, `${label} at ${at}`).toEqual(axisAlone(hover, at).log)
-      }
-    }
+  it("draws year labels in repo mode's mono font", () => {
+    expect(LIFE_YEAR_FONT).toBe(`10px ${MONO_FONT}`)
   })
 
   it('fills the whole backing store first, under its own save and restore', () => {
@@ -116,7 +67,7 @@ describe('the shared axis', () => {
     expect(rec.calls('restore')).toHaveLength(1)
   })
 
-  it("bands alternate years only when asked (the garden's sky), and draws the years, today and the ribbon either way", () => {
+  it("bands alternate years only when asked (phosphor's sky), and draws the years, today and the ribbon either way", () => {
     const banded = recordingCtx()
     paintAxisBackdrop(banded.ctx, axisPaint(), { yearBands: true })
     const plain = recordingCtx()

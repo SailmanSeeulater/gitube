@@ -11,11 +11,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { viewLayouts } from '../src/PersonApp'
 import personAppSource from '../src/PersonApp.tsx?raw'
 import ErrorCard from '../src/components/ErrorCard'
-import { petalAngles } from '../src/components/gardenLook'
 import { formatClock } from '../src/components/gardenUtils'
 import * as icons from '../src/components/icons'
 import PersonInspector, { inspectorCard } from '../src/profile/PersonInspector'
-import PersonLegend, { GRAPHQL_FAILED, LEGEND_BLOOM_PETALS, LEGEND_WILTED_PETALS, dataLimits } from '../src/profile/PersonLegend'
+import PersonLegend, { GRAPHQL_FAILED, dataLimits } from '../src/profile/PersonLegend'
 import PersonPanel, { RepoRow, onRepoRowKey, type RepoRowProps } from '../src/profile/PersonPanel'
 import PersonStatus from '../src/profile/PersonStatus'
 import { LINKS_PER_STAR } from '../src/profile/constellationLayout'
@@ -191,13 +190,13 @@ function inspector(profile: ProfileData, revealed = false): string {
   return renderToStaticMarkup(h(PersonInspector, { profile, timeline, days, colourOf, name }))
 }
 
-/** The legend of a view; the life garden's when view is left out. */
+/** The legend of a view; life lines' when view is left out. */
 function legend(profile: ProfileData, view?: PersonView): string {
   const { timeline, keys } = setup(profile)
   return renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: keys.size > 0, view }))
 }
 
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
+const VIEWS: PersonView[] = ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 
 function status(profile: ProfileData, over: { cachedAt?: string | null; hasToken?: boolean } = {}): string {
   const { timeline } = setup(profile)
@@ -519,18 +518,18 @@ describe('PersonLegend', () => {
   it('explains the glyphs the profile has, and its languages', () => {
     /** The glyph grid's labels. */
     const labels = (html: string) => [...html.matchAll(/<span class="text-\[12px\] text-garden-text-dim">([^<]*)<\/span>/g)].map((m) => m[1])
-    expect(labels(legend(TOKEN))).toEqual(['stars', 'no stars', 'active span', 'archived', 'fork', 'milestone', 'contributed', 'seedling', 'private repo'])
-    expect(labels(legend(PUBLIC))).toEqual(['stars', 'no stars', 'active span', 'archived', 'fork', 'milestone'])
+    expect(labels(legend(TOKEN))).toEqual(['active run', 'dormant', 'start', 'contributed', 'fork', 'archived', 'station', 'milestone', 'seedling', 'private repo'])
+    expect(labels(legend(PUBLIC))).toEqual(['active run', 'dormant', 'start', 'fork', 'archived', 'station', 'milestone'])
     const token = textOf(legend(TOKEN))
-    expect(token).toContain('height: the commits GitHub counted')
+    expect(token).toContain('thicker: more commits in a run.')
     for (const language of ['TypeScript', 'Go', 'no language']) expect(token).toContain(language)
-    expect(textOf(legend(PUBLIC))).toContain('height: how long it was active')
+    expect(textOf(legend(PUBLIC))).toContain('thick while active, thin while dormant.')
+    expect(textOf(legend(PUBLIC))).not.toContain('thicker: more commits')
   })
 
   it("words the limits by the view's own measure, in every tier", () => {
     /** What a repo is measured by in each view: with counted commits, and in their place without them. */
     const MEASURES: Record<PersonView, { counted: string; uncounted: string }> = {
-      garden: { counted: "a plant's height", uncounted: "a plant's height is how long the repo was active" },
       lines: { counted: "a line's thickness", uncounted: 'every line is drawn one thickness, and its thick run is how long the repo was active' },
       constellation: { counted: "a star's size", uncounted: "a star's size is how long the repo was active" },
       phosphor: { counted: "a stack's height", uncounted: "a stack's height is how long the repo was active" },
@@ -552,19 +551,19 @@ describe('PersonLegend', () => {
         [PUBLIC, rest],
         [FALLBACK, fallback],
       ] as const) {
-        // no other view's measure, and only the measure differs from the garden's limits
+        // no other view's measure, and only the measure differs from life lines' limits
         for (const other of VIEWS) if (other !== view) expect(limits.join(' '), `${view} ${profile.source}`).not.toContain(MEASURES[other].counted)
-        const garden = dataLimits(profile, 'garden')
-        expect(limits.filter((limit, i) => limit !== garden[i]), `${view} ${profile.source}`).toHaveLength(view === 'garden' ? 0 : 1)
-        // the view's legend lists them, and no plant outside the garden
+        const lines = dataLimits(profile, 'lines')
+        expect(limits.filter((limit, i) => limit !== lines[i]), `${view} ${profile.source}`).toHaveLength(view === 'lines' ? 0 : 1)
+        // the view's legend lists them, and no plant anywhere: the life garden is gone
         const html = legend(profile, view)
         for (const limit of limits) expect(textOf(html), `${view} ${profile.source}`).toContain(limit)
-        if (view !== 'garden') expect(html, `${view} ${profile.source}`).not.toContain('plant')
+        expect(html, `${view} ${profile.source}`).not.toContain('plant')
       }
     }
-    // left out, the view is the life garden
-    expect(dataLimits(PUBLIC)).toEqual(dataLimits(PUBLIC, 'garden'))
-    expect(dataLimits(TOKEN)).toEqual(dataLimits(TOKEN, 'garden'))
+    // left out, the view is life lines
+    expect(dataLimits(PUBLIC)).toEqual(dataLimits(PUBLIC, 'lines'))
+    expect(dataLimits(TOKEN)).toEqual(dataLimits(TOKEN, 'lines'))
   })
 
   it("shows each language in the colour the view paints it: the theme's in a life view, a console view's own, none on phosphor or the helix", () => {
@@ -782,7 +781,7 @@ describe('PersonInspector', () => {
     const other = inspector(TOKEN)
     expect(other).not.toContain('role="dialog"')
     expect(textOf(other)).toContain('first contributed 2021-07-04')
-    // the selected repo's own plant: still the pinned card
+    // the selected repo itself: still the pinned card
     hoverRepo('me/open')
     expect(inspector(TOKEN)).toContain('role="dialog"')
   })
@@ -1087,7 +1086,7 @@ describe("PersonApp's layouts", () => {
     const defs = Object.fromEntries(VIEWS.map((view) => [view, counted(LIFE_VIEWS[view])])) as Record<PersonView, ReturnType<typeof counted>>
     const layoutOf = viewLayouts(timeline, profile.source)
     const first = new Map(VIEWS.map((view) => [view, layoutOf(defs[view])]))
-    for (const view of ['constellation', 'garden', 'constellation', 'lines', 'garden', 'constellation'] as PersonView[]) {
+    for (const view of ['constellation', 'helix', 'constellation', 'lines', 'helix', 'constellation'] as PersonView[]) {
       expect(layoutOf(defs[view]), view).toBe(first.get(view))
     }
     for (const view of VIEWS) {
@@ -1128,10 +1127,5 @@ describe('copies kept equal to what they copy', () => {
       expect(renderToStaticMarkup(h(copy))).toBe(renderToStaticMarkup(h(original)))
       expect(renderToStaticMarkup(h(copy, { size: 11 }))).toBe(renderToStaticMarkup(h(original, { size: 11 })))
     }
-  })
-
-  it("puts the legend's petals where petalAngles does", () => {
-    expect(LEGEND_BLOOM_PETALS).toEqual(petalAngles('bloom', 0.1))
-    expect(LEGEND_WILTED_PETALS).toEqual(petalAngles('wilted', 0.5))
   })
 })

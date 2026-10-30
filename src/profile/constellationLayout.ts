@@ -17,8 +17,8 @@
  * cannot confirm a guess at a private repo's name.
  */
 import type { ProfileData } from '../types'
-import { hash01 } from '../components/gardenLook'
-import { bloomOfStars } from './lifeGardenLayout'
+import { hash01 } from './hash01'
+import { starSignal } from './lifeMeasures'
 import { repoKey } from './privacy'
 import { dayNumber, type Lane, type LifeTimeline, type Span } from './timeline'
 import { axisOf, type LifeViewItem, type LifeViewModel } from './lifeView'
@@ -65,7 +65,7 @@ export interface LifeStar extends LifeViewItem {
   band: number
   /** 0..1: the lane's weight against the heaviest, square-rooted; 0 for a seedling */
   size: number
-  /** 0..1: bloomOfStars(stars), as the garden's heads */
+  /** 0..1: starSignal(stars), as phosphor's head blocks */
   glow: number
   /** archived: drawn dry */
   dry: boolean
@@ -386,7 +386,7 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
       y: band.y0 + ((band.y1 - band.y0) * (slots.slot[i] + 0.5 + offset)) / slotCount(band.count),
       band: bandOf[i],
       size: seedling[i] || heaviest <= 0 ? 0 : Math.sqrt(weights[i] / heaviest),
-      glow: bloomOfStars(lane.stars),
+      glow: starSignal(lane.stars),
       dry: lane.isArchived,
       twin: lane.isFork,
       visiting: !lane.isOwn,

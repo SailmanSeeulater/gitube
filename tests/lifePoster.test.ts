@@ -1,8 +1,8 @@
 /**
  * The life poster (PROFILE_SPEC.md section 6 and Phase 5): which three milestones it shows and in
  * what order, its years, the avatar's URL and how it loads (an <img> with CORS, never fetch()), the
- * frame on a recording context (texts, the clipped avatar or its placeholder, the garden in its
- * plot, the lock, theme colours only), the garden painted off screen fully grown with no hover or
+ * frame on a recording context (texts, the clipped avatar or its placeholder, the view in its
+ * plot, the lock, theme colours only), the view painted off screen fully grown with no hover or
  * selection, and saving it: one PNG named after the login, then poster-export with no data, nothing
  * sent on a failure. Private names stay hidden in everything it draws or measures until revealed.
  */
@@ -36,6 +36,7 @@ import { PRIVATE_REPO_LABEL, repoKey, repoNamer } from '../src/profile/privacy'
 import type { LifeMilestone } from '../src/profile/timeline'
 import { LIFE_LABEL_FONT } from '../src/profile/useLifeLabels'
 import { usePersonStore } from '../src/profile/usePersonStore'
+import { LINES_VIEW } from '../src/profile/lifeViews'
 import { useGardenStore } from '../src/store/useGardenStore'
 import { THEMES, getTheme, type Theme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
@@ -382,11 +383,12 @@ describe('paintPosterFrame', () => {
   })
 })
 
-// ---------- the garden off screen ----------
+// ---------- the view off screen (life lines) ----------
 
 function posterGarden(g: Grown, hidden: ReadonlySet<string> = new Set(), measured: string[] = []): PosterGarden {
   return {
     layout: g.layout,
+    view: LINES_VIEW,
     timeline: g.timeline,
     ink: g.ink,
     colourOf: g.colourOf,
@@ -421,7 +423,7 @@ const countCalls = (log: readonly CtxEntry[], name: string) => log.filter((e) =>
 const drawnTexts = (log: readonly CtxEntry[]) =>
   log.flatMap((e) => (e.kind === 'call' && (e.name === 'fillText' || e.name === 'strokeText') ? [String(e.args[0])] : []))
 
-/** One frame by LifeGarden's painter in the poster's viewport, fitted. */
+/** One frame by life lines' painter in the poster's viewport, fitted. */
 function referenceFrame(g: Grown, state: Parameters<typeof painterFor>[1], progress?: number): RecordingCtx {
   const { painter } = painterFor(g, state, { timelapse: progress === undefined ? null : { progress: { current: progress } } })
   const rec = gardenRec()
@@ -435,7 +437,7 @@ describe('paintPosterGarden', () => {
     setPerson({ hover: null, selected: null, hidden: new Set() })
   })
 
-  it('paints the garden fully grown, until its labels settle', () => {
+  it('paints the view fully grown, until its labels settle', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     const rec = gardenRec()
     paintPosterGarden(rec.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
@@ -443,9 +445,9 @@ describe('paintPosterGarden', () => {
     expect(frames).toBeGreaterThan(1)
     expect(frames).toBeLessThan(400)
     const last = lastFrame(rec)
-    const stems = countCalls(last, 'quadraticCurveTo')
-    expect(stems).toBe(countCalls(referenceFrame(g, {}).log, 'quadraticCurveTo'))
-    expect(stems).toBeGreaterThan(countCalls(referenceFrame(g, {}, 0.5).log, 'quadraticCurveTo'))
+    const strokes = countCalls(last, 'lineTo')
+    expect(strokes).toBe(countCalls(referenceFrame(g, {}).log, 'lineTo'))
+    expect(strokes).toBeGreaterThan(countCalls(referenceFrame(g, {}, 0.5).log, 'lineTo'))
     // the labels are drawn, fully faded in
     const labels = last.filter((e): e is Extract<CtxEntry, { kind: 'call' }> => e.kind === 'call' && e.name === 'fillText' && e.style.font === LIFE_LABEL_FONT)
     expect(labels.length).toBeGreaterThan(5)
@@ -463,7 +465,7 @@ describe('paintPosterGarden', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     const plain = gardenRec()
     paintPosterGarden(plain.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
-    const key = g.layout.plants[0].key
+    const key = g.layout.lines[0].key
     const hover = { kind: 'repo' as const, key }
     setPerson({ hover, selected: key })
     const held = gardenRec()
@@ -480,15 +482,15 @@ describe('paintPosterGarden', () => {
     const g = grow(kepano, KEPANO_NOW, theme)
     const all = gardenRec()
     paintPosterGarden(all.ctx, POSTER_GARDEN_VIEW, posterGarden(g))
-    // the plant with the most stem parts
-    const plant = [...g.layout.plants].sort((a, b) => b.parts.length - a.parts.length)[0]
+    // the line with the most parts
+    const line = [...g.layout.lines].sort((a, b) => b.parts.length - a.parts.length)[0]
     const without = gardenRec()
-    paintPosterGarden(without.ctx, POSTER_GARDEN_VIEW, posterGarden(g, new Set([plant.key])))
-    // its stem parts and leaves (both curves) go, as the painter leaves them out for the eye
-    const curves = countCalls(lastFrame(without), 'quadraticCurveTo')
-    expect(curves).toBe(countCalls(referenceFrame(g, { hidden: new Set([plant.key]) }).log, 'quadraticCurveTo'))
-    expect(curves).toBeLessThanOrEqual(countCalls(lastFrame(all), 'quadraticCurveTo') - plant.parts.length)
-    const label = g.timeline.lanes[plant.lane].repo.replace(/^kepano\//i, '')
+    paintPosterGarden(without.ctx, POSTER_GARDEN_VIEW, posterGarden(g, new Set([line.key])))
+    // its parts go, as the painter leaves them out for the eye
+    const strokes = countCalls(lastFrame(without), 'lineTo')
+    expect(strokes).toBe(countCalls(referenceFrame(g, { hidden: new Set([line.key]) }).log, 'lineTo'))
+    expect(strokes).toBeLessThan(countCalls(lastFrame(all), 'lineTo'))
+    const label = g.timeline.lanes[line.lane].repo.replace(/^kepano\//i, '')
     expect(drawnTexts(lastFrame(without))).not.toContain(label)
   })
 
@@ -516,7 +518,7 @@ describe('paintPosterGarden', () => {
 // ---------- composing and saving ----------
 
 function inputOf(g: Grown, hidden: ReadonlySet<string> = new Set()): PosterInput {
-  return { profile: g.profile, timeline: g.timeline, layout: g.layout, theme: g.theme, colourOf: g.colourOf, name: g.name, hidden }
+  return { profile: g.profile, timeline: g.timeline, layout: g.layout, view: LINES_VIEW, theme: g.theme, colourOf: g.colourOf, name: g.name, hidden }
 }
 
 interface Rig {

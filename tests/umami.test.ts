@@ -31,7 +31,7 @@ const OPAQUE = 'Zq7Wm3Kx9Pt2Lv5Rn8Hy4Jc6'
 /** A share link's query string: a repo, a branch and a contributor, any of them private with a token. */
 const SEARCH = '?repo=acme/secret&branch=x&by=alice'
 
-const LAYOUTS = Object.keys({ organic: 1, metro: 1, garden: 1 } satisfies Record<LayoutMode, 1>)
+const LAYOUTS = Object.keys({ organic: 1, metro: 1 } satisfies Record<LayoutMode, 1>)
 const VIEWS = Object.keys({ skeleton: 1, full: 1 } satisfies Record<ViewMode, 1>)
 const FETCH_ERROR_CODES = Object.keys({
   not_found: 1,
@@ -69,7 +69,7 @@ const APP_EVENTS: Record<AnalyticsEvent, EventData[]> = {
   'fetch-error': FETCH_ERROR_CODES.map((code) => ({ code })),
   'poster-export': [],
   // person mode's view switcher: the view, never a name
-  'view-switch': Object.keys({ garden: 1, lines: 1, constellation: 1, phosphor: 1, htop: 1, gitlog: 1, minimap: 1, helix: 1 } satisfies Record<PersonView, 1>).map((view) => ({ view })),
+  'view-switch': Object.keys({ lines: 1, constellation: 1, phosphor: 1, htop: 1, gitlog: 1, minimap: 1, helix: 1 } satisfies Record<PersonView, 1>).map((view) => ({ view })),
 }
 const ALL_EVENTS = Object.keys(APP_EVENTS) as AnalyticsEvent[]
 

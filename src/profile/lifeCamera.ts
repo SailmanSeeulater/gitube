@@ -1,6 +1,6 @@
 /**
- * The life garden's camera: zoom and pan along the time axis only (screenX = tx + worldX * k, world x
- * in days), so plants spread apart as you zoom in and never stretch. The whole life fits at first; k
+ * Person mode's camera: zoom and pan along the time axis only (screenX = tx + worldX * k, world x
+ * in days), so repos spread apart as you zoom in and never stretch. The whole life fits at first; k
  * stays between that fit and LIFE_MAX_K, and pans stop at the life's ends. A life too short to fill
  * the plot even at LIFE_MAX_K (an account a few weeks old) is drawn at LIFE_MAX_K, centred, and the
  * camera stays put.

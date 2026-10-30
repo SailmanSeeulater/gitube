@@ -7,6 +7,9 @@ import { useGardenStore } from '../store/useGardenStore'
 import type { Theme } from '../theme/themes'
 import type { GitHubFetchError, RepoData } from '../types'
 import Garden from './Garden'
+import { useMetroView } from './useMetroView'
+import { metroChunk } from '../lazy/parts'
+import { useChunk } from '../lazy/useChunk'
 import { CloseIcon, CrownIcon, SwordsIcon } from './icons'
 
 export interface GardenBattleProps {
@@ -36,11 +39,16 @@ function formatValue(row: BattleRow, value: number): string {
   return String(Math.round(value))
 }
 
-/** One repo's half of the battle: its garden, named in the corner, crowned if it won. */
+/**
+ * One repo's half of the battle: its metro map, named in the corner, crowned if it won. Until the
+ * metro engine is in (or if it cannot be loaded) the side is laid out organic.
+ */
 function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: Theme; crowned: boolean; side: Side }) {
   const graph = useMemo(() => buildGraph(data, 'skeleton'), [data])
   const palette = useMemo(() => assignPalette(data.branches.map((b) => b.name), data.defaultBranch, theme), [data, theme])
   const thorns = useMemo(() => findWeeds(data).thorns, [data])
+  const engine = useChunk(metroChunk, true)
+  const metro = useMetroView(graph, data, 'skeleton', engine.status === 'ready' ? engine.value.metroLayout : null)
   return (
     <>
       <Garden
@@ -52,7 +60,7 @@ function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: The
         onNodeClick={noop}
         onBackgroundClick={noop}
         thorns={thorns}
-        garden
+        metro={metro}
       />
       <div
         className={`pointer-events-none absolute top-3 flex items-center gap-1.5 rounded-lg border border-garden-border bg-garden-panel/90 px-2.5 py-1 text-[13px] font-medium shadow-soft backdrop-blur ${
@@ -67,7 +75,7 @@ function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: The
 }
 
 /**
- * Two repos grown side by side as gardens, over a scoreboard of measures (see graph/battle) with a
+ * Two repos side by side as metro maps, over a scoreboard of measures (see graph/battle) with a
  * winner per measure and overall. Drawn over the whole app; Escape or the close button ends it.
  */
 export default function GardenBattle({ a, b, bRef, bFetching, bError, theme, onRetry, onClose }: GardenBattleProps) {

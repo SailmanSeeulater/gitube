@@ -1,5 +1,5 @@
 /**
- * The life garden end to end, on the recordings: kepano through the token tier (GraphQL, 2013 to
+ * Person mode end to end in its default view, life lines, on the recordings: kepano through the token tier (GraphQL, 2013 to
  * 2026) and gaearon through the tier without one (REST, 301 repos), each fetched by the real
  * fetcher, grown as PersonApp grows it, painted in all ten themes with its labels, and shown in the
  * panel, inspector, legend and status strip; then a user with no repos and an account a day old.
@@ -16,7 +16,6 @@ import PersonPanel from '../src/profile/PersonPanel'
 import PersonStatus from '../src/profile/PersonStatus'
 import { dayDetail } from '../src/profile/dayIndex'
 import { LIFE_MAX_K, fitLifeCamera, panLifeCamera, zoomLifeCamera } from '../src/profile/lifeCamera'
-import { MAX_LEAVES_PER_PLANT } from '../src/profile/lifeGardenLayout'
 import { languagePalette } from '../src/profile/lifeInk'
 import { profileQueryKey } from '../src/profile/useProfileData'
 import { usePersonStore } from '../src/profile/usePersonStore'
@@ -61,7 +60,7 @@ function numbersOf(log: CtxEntry[]): number[] {
   return log.flatMap((e) => (e.kind === 'call' ? e.args : [e.value])).filter((v): v is number => typeof v === 'number')
 }
 
-/** Paints g's garden as the canvas does, and checks what every frame must hold. */
+/** Paints g's lines as the canvas does, and checks what every frame must hold. */
 function paintsCleanly(g: Grown): void {
   const { rec } = paint(g)
   const first = rec.log.find((e) => e.kind === 'call' && /^(fill|fillRect|stroke|fillText)$/.test(e.name))
@@ -112,49 +111,45 @@ function personApp(profile: ProfileData, token: string, theme: Theme): string {
   )
 }
 
-/** What each plant shows of its lane: a bloom for stars, dry when archived, a cutting for a fork, a seedling without counted commits. */
-function expectPlantsFollowLanes(g: Grown): void {
-  expect(g.layout.plants).toHaveLength(g.timeline.lanes.length)
-  for (const plant of g.layout.plants) {
-    const lane = g.timeline.lanes[plant.lane]
-    expect(plant.key).toBe(lane.repo.toLowerCase())
-    expect(plant.tip).toBe(lane.isArchived ? 'wilted' : lane.stars > 0 ? 'bloom' : 'bud')
-    expect(plant.bloom > 0).toBe(lane.stars > 0)
-    expect(plant.dry).toBe(lane.isArchived)
-    expect(plant.cutting).toBe(lane.isFork)
-    expect(plant.visiting).toBe(!lane.isOwn)
+/** What each line shows of its lane: its stars, dry when archived, a branch stub for a fork, dotted without counted commits, its active runs. */
+function expectLinesFollowLanes(g: Grown): void {
+  expect(g.layout.lines).toHaveLength(g.timeline.lanes.length)
+  for (const line of g.layout.lines) {
+    const lane = g.timeline.lanes[line.lane]
+    expect(line.key).toBe(lane.repo.toLowerCase())
+    expect(line.stars).toBe(lane.stars)
+    expect(line.dry).toBe(lane.isArchived)
+    expect(line.branch).toBe(lane.isFork)
+    expect(line.visiting).toBe(!lane.isOwn)
     const seedling = g.profile.source === 'graphql' && !lane.detailed
-    expect(plant.seedling).toBe(seedling)
-    const active = lane.spans.filter((span) => span.kind === 'active').length
-    expect(plant.leaves).toHaveLength(seedling ? 0 : Math.min(active, MAX_LEAVES_PER_PLANT))
-    for (const leaf of plant.leaves) expect(leaf.t).toBeGreaterThanOrEqual(0)
-    expect(plant.x).toBeGreaterThanOrEqual(0)
-    expect(plant.x).toBeLessThanOrEqual(g.layout.days)
+    expect(line.seedling).toBe(seedling)
+    expect(line.parts.map((part) => part.kind)).toEqual(lane.spans.map((span) => span.kind))
+    expect(line.x).toBeGreaterThanOrEqual(0)
+    expect(line.x).toBeLessThanOrEqual(g.layout.days)
   }
 }
 
 describe('kepano, with a token (GraphQL)', () => {
-  it('grows a plant per repo, each drawn as its lane says', () => {
+  it('draws a line per repo, each as its lane says', () => {
     const g = grow(kepano, KEPANO_NOW, dark)
     expect(kepano.source).toBe('graphql')
     expect(g.timeline.start.slice(0, 4)).toBe('2013')
-    expectPlantsFollowLanes(g)
-    const tips = new Set(g.layout.plants.map((p) => p.tip))
-    expect(tips).toEqual(new Set(['bloom', 'bud', 'wilted']))
-    // the starred repos GitHub counted no commits to (forks) still bloom, as seedlings
-    expect(g.layout.plants.some((p) => p.seedling && p.tip === 'bloom')).toBe(true)
-    expect(g.layout.plants.some((p) => p.visiting)).toBe(true)
+    expectLinesFollowLanes(g)
+    expect(g.layout.lines.some((l) => l.dry)).toBe(true)
+    // the starred repos GitHub counted no commits to (forks) keep their stars, as seedlings
+    expect(g.layout.lines.some((l) => l.seedling && l.stars > 0)).toBe(true)
+    expect(g.layout.lines.some((l) => l.visiting)).toBe(true)
     expect(g.layout.years[0].year).toBe(2013)
     expect(g.layout.milestones.length).toBe(g.timeline.milestones.length)
   })
 
-  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole garden, every number finite', (_id, theme) => {
+  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole life, every number finite', (_id, theme) => {
     paintsCleanly(grow(kepano, KEPANO_NOW, theme))
   })
 
-  it('labels the plants with their names, the owner left off', () => {
+  it('labels the lines with their names, the owner left off', () => {
     const g = grow(kepano, KEPANO_NOW, light)
-    const top = g.layout.plants.findIndex((p) => p.key === 'kepano/obsidian-skills')
+    const top = g.layout.lines.findIndex((l) => l.key === 'kepano/obsidian-skills')
     const { rec } = paint(g, { hover: { kind: 'repo', key: 'kepano/obsidian-skills' } })
     const texts = rec.calls('fillText').map((c) => String(c.args[0]))
     expect(top).toBeGreaterThanOrEqual(0)
@@ -199,7 +194,7 @@ describe('kepano, with a token (GraphQL)', () => {
   it('renders in PersonApp, in a dark and a light theme', () => {
     for (const theme of [dark, light]) {
       const html = personApp(kepano, FAKE_TOKEN, theme)
-      expect(html).toContain(`aria-label="life garden of kepano: ${kepano.repos.length} repos, 2013 to 2026"`)
+      expect(html).toContain(`aria-label="life lines of kepano: ${kepano.repos.length} repos, 2013 to 2026"`)
       expect(textOf(html)).toContain('what GitHub\'s data leaves out')
       expect(textOf(html)).toMatch(/\d+ contributions/)
       expect(html).not.toContain('person mode coming soon')
@@ -208,18 +203,18 @@ describe('kepano, with a token (GraphQL)', () => {
 })
 
 describe('gaearon, without a token (REST)', () => {
-  it('grows a plant per repo, each as tall as the repo was active', () => {
+  it('draws a line per repo, each as long as the repo was active', () => {
     const g = grow(gaearon, GAEARON_NOW, light)
     expect(gaearon.source).toBe('rest')
-    expect(g.layout.plants).toHaveLength(301)
-    expectPlantsFollowLanes(g)
-    expect(g.layout.plants.some((p) => p.seedling)).toBe(false)
-    expect(new Set(g.layout.plants.map((p) => p.tip))).toEqual(new Set(['bloom', 'bud', 'wilted']))
+    expect(g.layout.lines).toHaveLength(301)
+    expectLinesFollowLanes(g)
+    expect(g.layout.lines.some((l) => l.seedling)).toBe(false)
+    expect(g.layout.lines.some((l) => l.dry)).toBe(true)
     // tier 1: one span per repo, from its creation to its last push
     for (const lane of g.timeline.lanes) expect(lane.detailed).toBe(false)
   })
 
-  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole garden, every number finite', (_id, theme) => {
+  it.each(THEMES.map((theme) => [theme.id, theme] as const))('%s: paints the whole life, every number finite', (_id, theme) => {
     paintsCleanly(grow(gaearon, GAEARON_NOW, theme))
   })
 
@@ -247,7 +242,7 @@ describe('gaearon, without a token (REST)', () => {
   it('renders in PersonApp, in a dark and a light theme', () => {
     for (const theme of [dark, light]) {
       const html = personApp(gaearon, '', theme)
-      expect(html).toContain('aria-label="life garden of gaearon: 301 repos')
+      expect(html).toContain('aria-label="life lines of gaearon: 301 repos')
       expect(textOf(html)).toContain('add a token for commits')
     }
   })
@@ -301,10 +296,10 @@ describe('a user with no repos', () => {
   const empty = made({ createdAt: '2019-03-01T18:00:00Z', milestones: [{ kind: 'joined', date: '2019-03-01T18:00:00Z', label: 'joined GitHub' }] })
   const emptyToken = { ...empty, source: 'graphql' as const, recentFrom: null, days: [{ date: '2026-10-25', count: 0 }] }
 
-  it('grows an empty garden over the years since joining, in every theme', () => {
+  it('draws an empty life over the years since joining, in every theme', () => {
     for (const profile of [empty, emptyToken]) {
       const g = grow(profile, NOW, dark)
-      expect(g.layout.plants).toEqual([])
+      expect(g.layout.lines).toEqual([])
       expect(g.layout.years.map((y) => y.year)).toEqual([2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026])
       expect(languagePalette(g.timeline, dark)).toEqual({})
       expect(g.colourOf(null)).toBe(dark.fallback)
@@ -320,7 +315,7 @@ describe('a user with no repos', () => {
     expect(textOf(panel(grow(empty, NOW, dark)))).toContain('no public repos')
     expect(textOf(panel(grow(emptyToken, NOW, dark)))).toContain('no repos')
     expect(textOf(status(grow(empty, NOW, dark), false))).toContain('0 repos')
-    expect(personApp(empty, '', light)).toContain('aria-label="life garden of sprout: 0 repos, 2019 to 2026"')
+    expect(personApp(empty, '', light)).toContain('aria-label="life lines of sprout: 0 repos, 2019 to 2026"')
   })
 })
 
@@ -336,8 +331,8 @@ describe('an account a day old', () => {
     expect(zoomLifeCamera(camera, 0.5, 300, g.layout.days, VIEW)).toEqual(camera)
     expect(zoomLifeCamera(camera, 2, 300, g.layout.days, VIEW)).toEqual(camera)
     expect(panLifeCamera(camera, 200, g.layout.days, VIEW)).toEqual(camera)
-    expect(g.layout.plants).toHaveLength(1)
-    expect(g.layout.plants[0].x).toBe(1.5)
+    expect(g.layout.lines).toHaveLength(1)
+    expect(g.layout.lines[0].x).toBe(1.5)
     for (const theme of THEMES) paintsCleanly(grow(young, NOW, theme))
   })
 
@@ -350,6 +345,6 @@ describe('an account a day old', () => {
     expect(textOf(inspector(g))).toContain('born 2026-10-25')
     setPerson({ hover: { kind: 'day', day: dayNumber('2026-10-25'), milestone: null } })
     expect(textOf(inspector(g))).toContain(dayKey(g.timeline.todayDay))
-    expect(personApp(young, '', dark)).toContain('aria-label="life garden of sprout: 1 repo, 2026"')
+    expect(personApp(young, '', dark)).toContain('aria-label="life lines of sprout: 1 repo, 2026"')
   })
 })

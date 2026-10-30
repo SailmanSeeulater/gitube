@@ -5,15 +5,14 @@
  * view, so the axis stays put when the view changes.
  *
  * Drawn in screen px under the device pixel transform, from LifeInk and the language palette only.
- * Everything after paintCanvasFill draws inside the caller's save(), with globalAlpha 1, as the
- * life garden always has.
+ * Everything after paintCanvasFill draws inside the caller's save(), with globalAlpha 1.
  */
 import type { LifeTimeline } from './timeline'
 import type { LifeCamera, LifeHover, LifeInk, LifeViewport } from './lifeTypes'
 import type { LifeAxis } from './lifeView'
 import { horizonY } from './lifeGeometry'
 
-/** Year labels: the repo garden's MONO_FONT at 10 px (pinned in tests/lifeGardenPaint.test.ts). */
+/** Year labels: repo mode's MONO_FONT at 10 px (pinned in tests/lifeAxis.test.ts). */
 export const LIFE_YEAR_FONT = '10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 /** A year label closer than this to the last one drawn is skipped. */
 const YEAR_GAP_PX = 34

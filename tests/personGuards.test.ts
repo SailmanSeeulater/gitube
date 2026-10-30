@@ -40,8 +40,8 @@ import {
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-/** person mode's three views */
-const VIEWS: PersonView[] = ['garden', 'lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
+/** person mode's views */
+const VIEWS: PersonView[] = ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 
 /**
  * kepano's repos made private: the top-starred one (a derived milestone names it), one of his own,
@@ -119,7 +119,7 @@ function markup(g: Grown, revealed: boolean): string[] {
   const { profile, timeline, days, colourOf, name, privateKeys } = g
   return [
     renderToStaticMarkup(
-      h(PersonPanel, { profile, timeline, colourOf, name, privateCount: privateKeys.size, revealed, onReveal: noop, theme, view: 'garden', onView: noop }),
+      h(PersonPanel, { profile, timeline, colourOf, name, privateCount: privateKeys.size, revealed, onReveal: noop, theme, view: 'lines', onView: noop }),
     ),
     renderToStaticMarkup(h(PersonInspector, { profile, timeline, days, colourOf, name })),
     ...VIEWS.map((view) => renderToStaticMarkup(h(PersonLegend, { profile, timeline, colourOf, theme, hasPrivate: privateKeys.size > 0, view }))),
@@ -280,15 +280,15 @@ describe('the address bar', () => {
     store.setReveal('kepano', true)
     store.setSearch(c.names[3])
     for (const current of ['', '?user=kepano', '?user=kepano&view=garden', `?repo=${c.names[0]}&branch=main&by=octocat&vs=${c.names[1]}`]) {
-      const search = personSearch('kepano', 'garden', current)
+      const search = personSearch('kepano', 'lines', current)
       expect([...new URLSearchParams(search).keys()].sort()).toEqual(['user', 'view'])
-      expect(search).toBe('?user=kepano&view=garden')
+      expect(search).toBe('?user=kepano&view=lines')
       expectNoSecret(c, search, 'the address bar')
     }
     // a view named by an incoming link passes through, whatever the store holds
     expect(personSearch('kepano', 'lines', '?user=kepano&view=lines')).toBe('?user=kepano&view=lines')
     // other parameters are not person mode's to drop
-    expect(personSearch('kepano', 'garden', '?utm_source=x')).toBe('?utm_source=x&user=kepano&view=garden')
+    expect(personSearch('kepano', 'lines', '?utm_source=x')).toBe('?utm_source=x&user=kepano&view=lines')
   })
 
   it('is written by PersonApp only through personSearch, from the login and the view it holds', () => {
@@ -296,7 +296,7 @@ describe('the address bar', () => {
     expect(personAppSource).toContain('const search = personSearch(login, view, window.location.search)')
     expect(personAppSource.match(/writeUserShare\(/g)).toHaveLength(1)
     // the view starts as the link's and is kept across logins; only the switcher changes it, through switchView
-    expect(personAppSource).toContain("useState<PersonView>(() => linkedView ?? 'garden')")
+    expect(personAppSource).toContain("useState<PersonView>(() => linkedView ?? 'lines')")
     expect(personAppSource).toContain('switchView(view, next, setView)')
   })
 })

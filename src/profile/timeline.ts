@@ -56,7 +56,7 @@ export interface Lane {
   /** the day the repo was created on GitHub */
   born: string
   /**
-   * Where the person's part in it starts, and where the views plant the lane: firstActiveAt's day,
+   * Where the person's part in it starts, and where the views place the lane: firstActiveAt's day,
    * which is createdAt's for their own repos. If firstActiveAt cannot be read: createdAt's for their
    * own repos, the first counted day for repos they only contributed to (then the other one). Lanes are ordered by firstActiveAt and counted in the era of their root;
    * commits backdated before it draw spans before it but never move it.

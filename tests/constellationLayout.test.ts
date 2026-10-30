@@ -23,7 +23,8 @@ import {
 } from '../src/profile/constellationLayout'
 import { constellationGeom } from '../src/profile/constellationGeometry'
 import { fitLifeCamera } from '../src/profile/lifeCamera'
-import { bloomOfStars, layoutLifeGarden } from '../src/profile/lifeGardenLayout'
+import { starSignal } from '../src/profile/lifeMeasures'
+import { layoutPhosphor } from '../src/profile/phosphorLayout'
 import { axisOf } from '../src/profile/lifeView'
 import { repoKey } from '../src/profile/privacy'
 import { buildLifeTimeline, dayKey, dayNumber, type Lane, type LifeTimeline } from '../src/profile/timeline'
@@ -199,7 +200,7 @@ function expectValid(layout: ConstellationLayout, timeline: LifeTimeline, source
     expect(star.x).toBe(lane.rootDay - timeline.startDay + 0.5)
     expect([star.startDay, star.endDay, star.language, star.stars]).toEqual([lane.startDay, lane.endDay, lane.language, lane.stars])
     expect([star.dry, star.twin, star.visiting, star.seedling]).toEqual([lane.isArchived, lane.isFork, !lane.isOwn, source === 'graphql' && !lane.detailed])
-    expect(star.glow).toBe(bloomOfStars(lane.stars))
+    expect(star.glow).toBe(starSignal(lane.stars))
     expect(layout.byKey.get(star.key)).toBe(i)
   })
   expect(layout.byKey.size).toBe(layout.stars.length)
@@ -433,7 +434,7 @@ describe('constellation layout: stars', () => {
     expect(busy.size).toBeGreaterThan(starOf(rich, 'me/steady').size)
     expect(starOf(rich, 'me/steady').size).toBeGreaterThan(starOf(rich, 'me/quiet').size)
     expect(starOf(rich, 'me/quiet').size).toBeGreaterThan(0)
-    expect(starOf(rich, 'me/copy')).toMatchObject({ seedling: true, size: 0, twin: true, glow: bloomOfStars(3) })
+    expect(starOf(rich, 'me/copy')).toMatchObject({ seedling: true, size: 0, twin: true, glow: starSignal(3) })
     const lanes = richTimeline.lanes
     expect(starOf(rich, 'me/steady').size).toBeCloseTo(Math.sqrt(lanes[starOf(rich, 'me/steady').lane].commits / lanes[busy.lane].commits), 12)
   })
@@ -457,18 +458,18 @@ describe('constellation layout: stars', () => {
     for (const star of layout.stars) expect(star.seedling).toBe(false)
   })
 
-  it('glows by stars on the garden blooms scale, and flags archived, forked and contributed repos', () => {
+  it('glows by stars on the shared star scale, and flags archived, forked and contributed repos', () => {
     expect(starOf(rich, 'me/busy').glow).toBe(Math.log10(901) / 4)
     expect(starOf(rich, 'me/quiet').glow).toBe(0)
-    expect(starOf(rich, 'me/old')).toMatchObject({ dry: true, glow: bloomOfStars(40) })
+    expect(starOf(rich, 'me/old')).toMatchObject({ dry: true, glow: starSignal(40) })
     expect(starOf(rich, 'them/theirs')).toMatchObject({ visiting: true, language: 'Rust' })
     expect(starOf(rich, 'me/busy')).toMatchObject({ dry: false, twin: false, visiting: false })
   })
 
-  it('places every star at the same x as the garden places its plant, so one camera serves both', () => {
-    const garden = layoutLifeGarden(richTimeline, 'graphql')
-    for (const star of rich.stars) expect(star.x).toBe(garden.plants[garden.byKey.get(star.key)!].x)
-    expect([rich.startDay, rich.days]).toEqual([garden.startDay, garden.days])
+  it('places every star at the same x as phosphor stands its stack, so one camera serves both', () => {
+    const phosphor = layoutPhosphor(richTimeline, 'graphql')
+    for (const star of rich.stars) expect(star.x).toBe(phosphor.stacks[phosphor.byKey.get(star.key)!].x)
+    expect([rich.startDay, rich.days]).toEqual([phosphor.startDay, phosphor.days])
   })
 
   it('grows a star by its share of commits over each active span with a token, and by days without', () => {
@@ -591,7 +592,7 @@ describe('constellation layout: edge cases', () => {
     const layout = layoutConstellation(timeline, 'graphql')
     expectValid(layout, timeline, 'graphql')
     expect(layout.days).toBe(1)
-    expect(layout.stars[0]).toMatchObject({ x: 0.5, seedling: true, size: 0, glow: bloomOfStars(1) })
+    expect(layout.stars[0]).toMatchObject({ x: 0.5, seedling: true, size: 0, glow: starSignal(1) })
     expect(layout.stars[0].growthDays).toEqual([dayNumber(TODAY), dayNumber(TODAY) + 1])
   })
 })
