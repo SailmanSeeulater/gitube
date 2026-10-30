@@ -65,7 +65,7 @@ export interface UseLabelPlacerArgs {
   /** draw a halo in the theme's textHalo (the canvas colour) behind label text (metro mode: lines may still pass close) */
   halo?: boolean
   /**
-   * Nodes not drawn in this frame (the time-lapse before they have grown): their labels drop and they
+   * Nodes not drawn in this frame (the time-lapse before they have been drawn): their labels drop and they
    * stop blocking others. Called every frame, so it may read state that changes without a render.
    */
   isHidden?: (nodeId: string) => boolean

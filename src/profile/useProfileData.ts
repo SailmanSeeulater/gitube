@@ -1,5 +1,5 @@
 /**
- * Person mode's data: one user's ProfileData through TanStack Query, the way useRepoData grows a
+ * Person mode's data: one user's ProfileData through TanStack Query, the way useRepoData loads a
  * repo. A profile fetched in this browser within a day is shown from the cache at no API cost
  * (api/profileCache.ts, through loadProfile), until refetch asks GitHub again.
  *

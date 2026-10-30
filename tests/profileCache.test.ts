@@ -62,19 +62,19 @@ describe('profile cache', () => {
   })
 
   it('keys profiles by the lowercased login and the tier', () => {
-    expect(profileCacheKey('OctoGarden', 'rest')).toBe('octogarden#rest')
-    expect(profileCacheKey('OctoGarden', 'graphql')).toBe('octogarden#graphql')
+    expect(profileCacheKey('OctoTracks', 'rest')).toBe('octotracks#rest')
+    expect(profileCacheKey('OctoTracks', 'graphql')).toBe('octotracks#graphql')
   })
 
   it('serves a profile fetched within the day, under any casing of the login', async () => {
     const store = memoryStore()
-    await rememberProfile(store, profile('OctoGarden'), 'rest', T0)
-    expect([...store.map.keys()]).toEqual(['octogarden#rest'])
-    const hit = await readProfile(store, 'octogarden', 'rest', T0 + DAY - 1)
+    await rememberProfile(store, profile('OctoTracks'), 'rest', T0)
+    expect([...store.map.keys()]).toEqual(['octotracks#rest'])
+    const hit = await readProfile(store, 'octotracks', 'rest', T0 + DAY - 1)
     // the profile keeps GitHub's casing; only the key is lowercased
-    expect(hit?.data.login).toBe('OctoGarden')
+    expect(hit?.data.login).toBe('OctoTracks')
     expect(hit?.savedAt).toBe(new Date(T0).toISOString())
-    expect((await readProfile(store, 'OCTOGARDEN', 'rest', T0))?.data.login).toBe('OctoGarden')
+    expect((await readProfile(store, 'OCTOTRACKS', 'rest', T0))?.data.login).toBe('OctoTracks')
   })
 
   it('stops serving it once the day has passed, or when its version is stale', async () => {
@@ -167,7 +167,7 @@ describe('profile cache', () => {
     const store = browserProfileStore()!
     // storage errors are swallowed: the app then simply fetches
     expect(await store.get(profileCacheKey('octo', 'rest'))).toBeUndefined()
-    expect(opens).toEqual([['repo-garden-profiles', 1]])
+    expect(opens).toEqual([['gitube-profiles', 1]])
     expect(created).toEqual([['profiles', { keyPath: 'key' }]])
   })
 })

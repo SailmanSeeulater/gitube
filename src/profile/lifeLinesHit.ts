@@ -7,7 +7,7 @@
  * the marker; elsewhere stations come first, as they are drawn over the lines. A line (its drawn
  * stretch, or its start marker) is looked for only on the tracks within reach of the pointer, however
  * close a crowded plot packs them, the nearest winning and the earlier in paint order on a tie; lines
- * in notDrawn (the hidden ones, and those the time-lapse has not sown) are skipped, as they are not
+ * in notDrawn (the hidden ones, and those the time-lapse has not reached) are skipped, as they are not
  * drawn. Geometry is lifeLinesGeometry's, the same the painter draws with.
  */
 import type { LifeCamera, LifeHover, LifeViewport } from './lifeTypes'

@@ -27,7 +27,7 @@ import { GITLOG_PALETTE } from '../src/theme/console/gitlog'
 import { MINIMAP_PALETTE } from '../src/theme/console/minimap'
 import { HELIX_PALETTE } from '../src/theme/console/helix'
 import type { ProfileData } from '../src/types'
-import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, type Grown } from './helpers/personScene'
+import { GAEARON_NOW, KEPANO_NOW, gaearonProfile, load, kepanoProfile, type Loaded } from './helpers/personScene'
 
 const VIEWS: PersonView[] = ['lines', 'constellation', 'phosphor', 'htop', 'gitlog', 'minimap', 'helix']
 const theme = getTheme('obsidian')
@@ -179,12 +179,12 @@ describe('the switcher', () => {
 })
 
 describe("each view's scene", () => {
-  const lives = (): Array<[string, Grown]> => [
-    ['kepano (graphql)', grow(kepano, KEPANO_NOW, theme)],
-    ['gaearon (rest)', grow(gaearon, GAEARON_NOW, theme)],
+  const lives = (): Array<[string, Loaded]> => [
+    ['kepano (graphql)', load(kepano, KEPANO_NOW, theme)],
+    ['gaearon (rest)', load(gaearon, GAEARON_NOW, theme)],
   ]
 
-  it('lays out every lane once, keyed by repo, rooted at its root day and sown on its first day, over the shared axis', () => {
+  it('lays out every lane once, keyed by repo, rooted at its root day and reached on its first day, over the shared axis', () => {
     for (const [label, g] of lives()) {
       const axis = axisOf(g.timeline)
       for (const view of VIEWS) {
@@ -208,7 +208,7 @@ describe("each view's scene", () => {
     }
   })
 
-  it('orders every label once, keeps them off the ground, and anchors each grown repo on the canvas', () => {
+  it('orders every label once, keeps them off the ground, and anchors each drawn repo on the canvas', () => {
     for (const [label, g] of lives()) {
       const palette = new Set([...Object.values(languagePalette(g.timeline, theme)), theme.fallback, g.ink.dry])
       for (const view of VIEWS) {
@@ -260,7 +260,7 @@ describe("each view's scene", () => {
       const colours = paletteColours(own)
       let first: string | null = null
       for (const t of THEMES) {
-        const g = grow(kepano, KEPANO_NOW, t)
+        const g = load(kepano, KEPANO_NOW, t)
         const ink = def.ink!(g.ink)
         const { dimAlpha, ...rest } = ink
         // every colour the shared pieces read is the console's, and so is the dimming of the repos a selection leaves out
@@ -277,7 +277,7 @@ describe("each view's scene", () => {
   })
 
   it('lays out the same timeline the same way twice', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     for (const view of VIEWS) {
       const def = LIFE_VIEWS[view]
       expect(JSON.stringify(def.layout(g.timeline, 'graphql'), (_k, v) => (v instanceof Map ? [...v] : v))).toBe(

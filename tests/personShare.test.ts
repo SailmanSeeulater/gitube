@@ -31,15 +31,15 @@ import { usePersonStore } from '../src/profile/usePersonStore'
 import { readSubject, type PersonView } from '../src/share/shareUrl'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
-import { FAKE_TOKEN, KEPANO_NOW, grow, kepanoProfile, setApp, setPerson, withPrivate } from './helpers/personScene'
+import { FAKE_TOKEN, KEPANO_NOW, load, kepanoProfile, setApp, setPerson, withPrivate } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
 import { LINES_VIEW } from '../src/profile/lifeViews'
 
 const noop = () => {}
 const theme = getTheme('obsidian')
-const ORIGIN = 'https://garden.example'
+const ORIGIN = 'https://gitube.example'
 
-/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
+/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, an uncounted fork and an archived one, made private. */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 
 let kepano: ProfileData
@@ -75,7 +75,7 @@ function propsFor(href: string) {
   return { login: read.login, request: read.request, view: read.view, focusInput: read.fromInput, onRepo: noop, onUser: noop }
 }
 
-/** PersonApp's markup for a link, the profile already in the query cache as a grown one would be. */
+/** PersonApp's markup for a link, the profile already in the query cache as a loaded one would be. */
 function openLink(href: string, profile: ProfileData, token = ''): string {
   setApp({ token })
   const props = propsFor(href)
@@ -170,7 +170,7 @@ describe('a copied link', () => {
 
 describe('the controls', () => {
   it('puts the poster and copy-link buttons in the panel header, the poster only when it can be saved', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, colourOf: g.colourOf, name: g.name, privateCount: 0, revealed: false, onReveal: noop, theme }
     const withPoster = renderToStaticMarkup(h(PersonPanel, { ...base, onPoster: noop }))
     expect(withPoster).toContain('aria-label="Save a poster"')
@@ -194,7 +194,7 @@ describe('the controls', () => {
   })
 
   it('offers the time-lapse from the status strip only when given one', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, cachedAt: null, hasToken: true, onRefresh: noop, onAddToken: noop }
     const offered = renderToStaticMarkup(h(PersonStatus, { ...base, onTimelapse: noop }))
     expect(offered).toContain('replay')
@@ -241,7 +241,7 @@ describe("PersonApp's Phase 5 wiring", () => {
   it('opens and closes the time-lapse through lifeTimelapse, which sends timelapse-play', () => {
     expect(code).toContain('openLifeTimelapse(lapseProgress,')
     expect(code).toContain('closeLifeTimelapse(lapseProgress,')
-    // the canvas grows with the controls' progress, captioned with the login only, and repaints
+    // the canvas fills in with the controls' progress, captioned with the login only, and repaints
     // only while the controls say it is live (playing, recording or scrubbing)
     expect(code).toContain('{ progress: lapseProgress, title: profile.login, live: lapseLive }')
     expect(code).toContain('onLiveChange={setLapseLive}')
@@ -323,7 +323,7 @@ describe('a failed poster save', () => {
   })
 
   it("reads saveLifePoster's own rejections: its chunk, or its encoder", async () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const input = { profile: g.profile, timeline: g.timeline, layout: g.layout, view: LINES_VIEW, theme, colourOf: g.colourOf, name: g.name, hidden: new Set<string>() }
     const makeCanvas = (width: number, height: number) => {
       const rec = recordingCtx(width, height)

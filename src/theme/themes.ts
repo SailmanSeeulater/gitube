@@ -75,7 +75,7 @@ export interface ThemeTokens {
   textDim: string
   /** tertiary text (hints, timestamps) and commit SHAs on the canvas */
   muted: string
-  /** links, selection, focus rings, the Grow chip, and the default branch's colour */
+  /** links, selection, focus rings, the Go chip, and the default branch's colour */
   accent: string
   /** text on a solid accent fill */
   accentText: string
@@ -175,7 +175,7 @@ export interface ThemeDerived {
   runMark: string
   /** selected panel row: accent at 0.10 over the panel, row text in accent */
   selectedRow: string
-  /** accent chip (Grow): accent at 0.15 over the panel (0.25 on hover), text in accent */
+  /** accent chip (Go): accent at 0.15 over the panel (0.25 on hover), text in accent */
   accentChip: string
   accentChipHover: string
   /** warn chip: warn at 0.10 (background) and 0.40 (border), text in warn */
@@ -449,7 +449,7 @@ const THEME_TOKENS = [
     id: 'rose',
     name: 'Rose',
     mode: 'light',
-    blurb: 'Blush-pink petals, a raspberry trunk and a map of berry and floral colours.',
+    blurb: 'Blush pink, a raspberry trunk and a palette of berry and floral colours.',
     canvas: '#fdf0f1',
     panel: '#fffafa',
     panelBorder: '#edd4d6',

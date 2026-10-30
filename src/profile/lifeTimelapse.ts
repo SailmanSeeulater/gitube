@@ -1,6 +1,6 @@
 /**
  * Person mode's time-lapse (PROFILE_SPEC.md section 6, "Time-lapse and export"): the view on
- * show (any of them) grown from the timeline's start (the account's creation, or
+ * show (any of them) drawn from the timeline's start (the account's creation, or
  * earlier backdated work) to today on the life clock (timeline.ts), with play, scrub and a silent
  * video recording of the canvas.
  *
@@ -21,7 +21,7 @@ import type { LifeInk, LifeViewport } from './lifeTypes'
 export const LAPSE_LENGTHS = [10, 20, 40, 60] as const
 export type LapseLength = (typeof LAPSE_LENGTHS)[number]
 export const LAPSE_DEFAULT_LENGTH: LapseLength = 20
-/** A recording lingers this long on the grown view before it saves. */
+/** A recording lingers this long on the finished view before it saves. */
 export const LAPSE_HOLD_MS = 1500
 /** Frames a second the recorder captures. */
 export const LAPSE_FPS = 30
@@ -60,7 +60,7 @@ function clamp01(p: number): number {
 /**
  * One frame of a play at performance time now, paced by the wall clock, so dropped frames never
  * slow it down: progress runs from `from` to 1 over lengthS seconds for a full play. At 1 a play
- * stops; a recording goes on for LAPSE_HOLD_MS on the grown view, then saves.
+ * stops; a recording goes on for LAPSE_HOLD_MS on the finished view, then saves.
  */
 export function lapseTick(play: LapsePlay, now: number): LapseTick {
   const progress = Math.min(1, clamp01(play.from) + Math.max(0, now - play.startedAt) / (play.lengthS * 1000))
@@ -75,8 +75,8 @@ export interface LapseCaption {
   /** the GitHub day the clock shows ('YYYY-MM-DD') */
   day: string
   year: string
-  /** repos drawn: sown by the clock's day (startDay <= at) and not hidden, the painter's own rule in every view */
-  sown: number
+  /** repos drawn: reached by the clock's day (startDay <= at) and not hidden, the painter's own rule in every view */
+  reached: number
 }
 
 /** The GitHub day the clock shows at a progress: timeline.start at 0, timeline.today at 1. */
@@ -87,7 +87,7 @@ export function lapseDay(timeline: Pick<LifeTimeline, 'clock' | 'startDay' | 'to
 
 /**
  * The caption at a progress, counting the repos drawn as every view decides them: a view's items
- * (its lines or stars, say) are sown on their first day, so the count is the same whichever is on show.
+ * (its lines or stars, say) are reached on their first day, so the count is the same whichever is on show.
  */
 export function lapseCaption(
   timeline: LifeTimeline,
@@ -98,9 +98,9 @@ export function lapseCaption(
   const p = clamp01(progress)
   const at = dayAt(timeline.clock, p)
   const day = lapseDay(timeline, p)
-  let sown = 0
-  for (const item of items) if (!(item.startDay > at) && !hidden.has(item.key)) sown++
-  return { day, year: day.slice(0, 4), sown }
+  let reached = 0
+  for (const item of items) if (!(item.startDay > at) && !hidden.has(item.key)) reached++
+  return { day, year: day.slice(0, 4), reached }
 }
 
 /** 'Apr 2019': a day key read in UTC, so it is GitHub's day whatever the viewer's time zone. */
@@ -135,7 +135,7 @@ export function paintLapseHud(ctx: CanvasRenderingContext2D, view: LifeViewport,
   text(caption.year, W - 18, 38)
   ctx.font = `12px ${HUD_FONT}`
   ctx.fillStyle = ink.muted
-  text(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`, W - 18, 58)
+  text(`${caption.reached} repo${caption.reached === 1 ? '' : 's'}`, W - 18, 58)
   ctx.font = `11px ${HUD_FONT}`
   text(`${title} · gitube`, W - 14, H - 14)
   ctx.globalAlpha = 0.85

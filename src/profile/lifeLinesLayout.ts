@@ -70,7 +70,7 @@ export interface LifeLine extends LifeViewItem {
   /** a repo they only contributed to (isOwn false): its start is hollow */
   visiting: boolean
   /** a token profile's lane GitHub counted no commits to (detailed false): drawn dotted */
-  seedling: boolean
+  uncounted: boolean
   /** counted commits with a token, active days without; labels go to the heaviest first */
   weight: number
   stars: number
@@ -209,7 +209,7 @@ export function layoutLifeLines(timeline: LifeTimeline, source: ProfileData['sou
       dry: lane.isArchived,
       branch: lane.isFork,
       visiting: !lane.isOwn,
-      seedling: token && !lane.detailed,
+      uncounted: token && !lane.detailed,
       weight: laneWeight(lane, source),
       stars: lane.stars,
       parts,

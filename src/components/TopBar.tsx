@@ -4,7 +4,7 @@ import { preload } from '../lazy/chunk'
 import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useAppStore } from '../store/useAppStore'
 import { getTheme } from '../theme/themes'
-import { DownloadIcon, KeyIcon, PaletteIcon, SproutIcon } from './icons'
+import { DownloadIcon, KeyIcon, PaletteIcon, MetroIcon } from './icons'
 import { LazySlot, lazyPart } from './LazyPart'
 
 // both drop-downs load on first open, or as the pointer or focus reaches their button
@@ -186,7 +186,7 @@ export default function TopBar({
     >
       <div className="flex min-w-0 items-center gap-1 rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[13px] shadow-soft backdrop-blur">
         <span className="pl-1.5 text-ui-muted" aria-hidden>
-          <SproutIcon size={15} />
+          <MetroIcon size={15} />
         </span>
         <input
           ref={inputRef}

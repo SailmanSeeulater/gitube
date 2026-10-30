@@ -44,7 +44,7 @@ export interface ViewPaintOptions<L> {
   /** measures a label's text as drawn; measureLabel when left out */
   measure?: (text: string) => number
   /**
-   * the time-lapse grows the view to its progress (0..1) and draws its caption over it, naming
+   * the time-lapse draws the view up to its progress (0..1) and draws its caption over it, naming
    * title (the login when left out). While it is live (playing, recording or scrubbing; live when
    * left out) every frame asks for the next, so a recording gets a steady stream of them; otherwise
    * a frame asks for another only while the labels settle or the progress has moved since the last
@@ -75,7 +75,7 @@ interface Frame<G> {
   geoms: G
   /** the boxes labels kept off in this view */
   keepOut: Float32Array
-  /** the time-lapse's day: repos not sown by then were not drawn. null: fully grown. */
+  /** the time-lapse's day: repos not reached by then were not drawn. null: fully drawn. */
   at: number | null
 }
 
@@ -90,12 +90,12 @@ export function makeViewPaint<L extends LifeViewModel, G>(scene: LifeScene<L, G>
     opts.prevLabels ?? null,
   )
   const indexOf = (key: string | null): number => (key !== null ? (layout.byKey.get(key) ?? -1) : -1)
-  const sown = (i: number, at: number | null) => !(at !== null && items[i].startDay > at)
+  const isReached = (i: number, at: number | null) => !(at !== null && items[i].startDay > at)
   let frame: Frame<G> | null = null
   /** the time-lapse progress the last frame drew; null before the first */
   let drawnProgress: number | null = null
 
-  /** the repos a hit skips: the hidden ones, and those the time-lapse has not sown yet, which were not drawn */
+  /** the repos a hit skips: the hidden ones, and those the time-lapse has not reached yet, which were not drawn */
   const notDrawn = (hidden: ReadonlySet<string>, at: number | null): ReadonlySet<string> => {
     if (at === null) return hidden
     const out = new Set(hidden)
@@ -108,7 +108,7 @@ export function makeViewPaint<L extends LifeViewModel, G>(scene: LifeScene<L, G>
     const { hover, hidden } = state()
     const { at } = frame
     const label = labels.hit(x, y, hover?.kind === 'repo' ? indexOf(hover.key) : -1)
-    if (label >= 0 && sown(label, at)) return { kind: 'repo', key: items[label].key }
+    if (label >= 0 && isReached(label, at)) return { kind: 'repo', key: items[label].key }
     return scene.hit(layout, frame.geoms, frame.camera, frame.view, x, y, notDrawn(hidden, at), at)
   }
 
@@ -135,8 +135,8 @@ export function makeViewPaint<L extends LifeViewModel, G>(scene: LifeScene<L, G>
     const hovered = hover?.kind === 'repo' ? indexOf(hover.key) : -1
     const picked = indexOf(selected)
     const forced = [hovered, picked].filter((i) => i >= 0)
-    // a hidden repo, or one not sown yet, has no label and blocks none
-    const anchor = (i: number, out: Float32Array) => !hidden.has(items[i].key) && sown(i, at) && scene.anchor(layout, geoms, i, at, out)
+    // a hidden repo, or one not reached yet, has no label and blocks none
+    const anchor = (i: number, out: Float32Array) => !hidden.has(items[i].key) && isReached(i, at) && scene.anchor(layout, geoms, i, at, out)
     const busy = labels.update({ anchor, keepOut, view, dtMs, cameraMoving, forced, explore: hovered })
     labels.draw(ctx, ink, (i) => scene.itemColour(layout, i, ink, colourOf), picked)
     // the time-lapse's caption over everything, so a recording carries it

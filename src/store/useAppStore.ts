@@ -5,14 +5,11 @@ import { readStoredThemeId, writeStoredThemeId } from '../theme/storage'
 import { isThemeId, type ThemeId } from '../theme/themes'
 import { LAYOUT_STORAGE_KEY, TOKEN_STORAGE_KEY } from '../storageKeys'
 
-/**
- * How the repo is laid out: pinned to a straight metro map (the default), or free force physics.
- * A layout saved as 'garden' before that layout was retired opens as metro.
- */
+/** How the repo is laid out: pinned to a straight metro map (the default), or free force physics. */
 export type LayoutMode = 'metro' | 'organic'
 
 /** Which list the side panel shows. */
-export type PanelTab = 'branches' | 'contributors' | 'weeds'
+export type PanelTab = 'branches' | 'contributors' | 'cleanup'
 
 export { LAYOUT_STORAGE_KEY, TOKEN_STORAGE_KEY }
 
@@ -124,7 +121,7 @@ export interface AppActions {
   setThemeId: (id: ThemeId) => void
   /** Clears the branch or contributor selection and the inspector (Escape / background click). */
   clearSelection: () => void
-  /** Resets per-repo UI state when a different repo is grown. Keeps token, view and layout mode, panel and its tab, stale filter, theme. */
+  /** Resets per-repo UI state when a different repo is loaded. Keeps token, view and layout mode, panel and its tab, stale filter, theme. */
   resetForNewRepo: () => void
 }
 

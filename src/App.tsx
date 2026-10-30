@@ -13,7 +13,7 @@ import { readStoredThemeId } from './theme/storage'
 import { THEME_STORAGE_KEY } from './theme/themes'
 import { useTheme } from './theme/useTheme'
 
-// person mode is a chunk of its own, loaded when a login is grown or a ?user= link is opened
+// person mode is a chunk of its own, loaded when a login is entered or a ?user= link is opened
 const PersonApp = lazyPart(personAppChunk)
 
 /** Person mode's placeholder while it loads, and its reload notice if it cannot be loaded. */
@@ -41,7 +41,7 @@ export default function App() {
 
   // Every switch drops the store's selection first, so no hidden branch or selection of one repo
   // reaches another. The same login again (in any case) is a new request for the person on show,
-  // as Grow on the same repo is, and leaves the address bar, and the view it names, alone.
+  // as Go on the same repo is, and leaves the address bar, and the view it names, alone.
   const toUser = useCallback(
     (login: string) => {
       useAppStore.getState().resetForNewRepo()

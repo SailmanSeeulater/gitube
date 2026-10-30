@@ -4,7 +4,7 @@
  * Labels are hit before this, by the label placer that drew them.
  *
  * Only the lanes within reach of the pointer are searched, the nearest branch winning and the earlier
- * in paint order on a tie; branches in notDrawn (hidden, or not sown by the time-lapse) are skipped,
+ * in paint order on a tie; branches in notDrawn (hidden, or not reached by the time-lapse) are skipped,
  * as they are not drawn. Geometry is gitLogGeometry's, the same the painter draws with.
  */
 import type { LifeCamera, LifeHover, LifeViewport } from './lifeTypes'

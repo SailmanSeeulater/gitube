@@ -18,7 +18,7 @@ const chip =
   'group flex items-center gap-2 rounded-full border border-ui-border bg-ui-panel/90 px-3 py-1 text-[12px] text-ui-text-dim shadow-soft transition-colors hover:border-ui-accent/50 hover:text-ui-text'
 
 export default function EmptyState({ onPick }: EmptyStateProps) {
-  // repos grown in this browser before; growing one again within a day costs no requests
+  // repos loaded in this browser before; loading one again within a day costs no requests
   const [recent, setRecent] = useState<RecentRepo[]>([])
   useEffect(() => {
     const store = sharedRepoStore()

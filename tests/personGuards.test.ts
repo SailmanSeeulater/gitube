@@ -29,13 +29,13 @@ import {
   GAEARON_NOW,
   KEPANO_NOW,
   gaearonProfile,
-  grow,
+  load,
   kepanoProfile,
   paintView,
   setApp,
   setPerson,
   withPrivate,
-  type Grown,
+  type Loaded,
 } from './helpers/personScene'
 
 const noop = () => {}
@@ -115,7 +115,7 @@ function expectNoSecret(c: Case, text: string, where: string): void {
 }
 
 /** Every part's markup for one state of the store: the panel (with its switcher), the inspector, each view's legend and the strip. */
-function markup(g: Grown, revealed: boolean): string[] {
+function markup(g: Loaded, revealed: boolean): string[] {
   const { profile, timeline, days, colourOf, name, privateKeys } = g
   return [
     renderToStaticMarkup(
@@ -128,7 +128,7 @@ function markup(g: Grown, revealed: boolean): string[] {
 }
 
 /** The states a visitor can put the views in that show a private repo: hovered, selected, hidden, searched, its days and milestones. */
-function states(g: Grown, c: Case): Array<Partial<PersonState>> {
+function states(g: Loaded, c: Case): Array<Partial<PersonState>> {
   const keys = c.names.map(repoKey)
   const out: Array<Partial<PersonState>> = [{}, { tab: 'milestones' }, { search: 'private' }, { hidden: new Set(keys) }]
   for (const key of keys) out.push({ hover: { kind: 'repo', key } }, { selected: key }, { selected: key, hidden: new Set([key]) })
@@ -159,7 +159,7 @@ describe('private repo names', () => {
       )
       for (const name of others) expectNoSecret(c, name, 'another repo\'s name')
       // the stale copy counts: the timeline merged it into a lane that may read public
-      expect(grow(c.profile, c.now, theme).privateKeys.size).toBe(c.names.length)
+      expect(load(c.profile, c.now, theme).privateKeys.size).toBe(c.names.length)
       // with a token, a private repo has pull requests landed in it, so the checks below cover their marks and lines
       if (c.token) expect(c.profile.landed.some((l) => c.names.some((n) => repoKey(n) === repoKey(l.repo)))).toBe(true)
     }
@@ -168,7 +168,7 @@ describe('private repo names', () => {
   it('never reach the panel, inspector, legend, milestones or strip while hidden, or revealed for another login', () => {
     for (const c of cases) {
       for (const revealFor of [null, 'someone-else']) {
-        const g = grow(c.profile, c.now, theme, revealFor)
+        const g = load(c.profile, c.now, theme, revealFor)
         for (const state of states(g, c)) {
           setPerson(state)
           for (const html of markup(g, false)) expectNoSecret(c, html, `${c.label} ${JSON.stringify(state, (_k, v) => (v instanceof Set ? [...v] : v))}`)
@@ -185,7 +185,7 @@ describe('private repo names', () => {
   it('never reach a fallback note: GitHub words, quoted, lose anything slashed', () => {
     for (const c of cases) {
       const profile: ProfileData = { ...c.profile, source: 'rest', fallback: { message: `Could not resolve ${c.names[0]} (${c.names[0]}).`, limit: null, resetAt: null } }
-      const g = grow(profile, c.now, theme)
+      const g = load(profile, c.now, theme)
       for (const html of markup(g, false)) expectNoSecret(c, html, `${c.label} fallback`)
     }
   })
@@ -232,7 +232,7 @@ describe('private repo names', () => {
     for (const c of cases) {
       const keys = c.names.map(repoKey)
       for (const revealFor of [null, 'someone-else']) {
-        const g = grow(c.profile, c.now, theme, revealFor)
+        const g = load(c.profile, c.now, theme, revealFor)
         for (const view of VIEWS) {
           let shownLabel = false
           for (const key of keys) {
@@ -253,7 +253,7 @@ describe('private repo names', () => {
   it('show on screen once revealed for this very login, still locked and never linked', () => {
     for (const c of cases) {
       const key = repoKey(c.names[0])
-      const g = grow(c.profile, c.now, theme, c.profile.login.toUpperCase())
+      const g = load(c.profile, c.now, theme, c.profile.login.toUpperCase())
       setPerson({ hover: { kind: 'repo', key } })
       const [panel, inspector] = markup(g, true)
       expect(panel.toLowerCase()).toContain(key)

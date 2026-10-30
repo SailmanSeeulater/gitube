@@ -1,9 +1,9 @@
 /**
- * Pure geometry for the time-lapse: stems drawn part of the way along a link, nodes popping in.
+ * Pure geometry for the time-lapse: links drawn part of the way along, nodes popping in.
  * Works on plain numbers so it can be tested without a canvas; RepoGraph turns the results into paths.
  */
 
-/** A node's scale while it grows in (g 0..1): a quick pop that overshoots a little and settles. */
+/** A node's scale while it appears (g 0..1): a quick pop that overshoots a little and settles. */
 export function popScale(g: number): number {
   if (g <= 0) return 0
   if (g >= 1) return 1

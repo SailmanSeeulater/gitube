@@ -39,7 +39,7 @@ export interface MinimapRow extends LifeViewItem {
   /** archived: drawn as a comment */
   dry: boolean
   /** a token profile's lane GitHub counted no commits to: its tokens drawn hollow */
-  seedling: boolean
+  uncounted: boolean
   /** counted commits with a token, active days without; labels go to the heaviest first */
   weight: number
   stars: number
@@ -111,7 +111,7 @@ export function layoutMinimap(timeline: LifeTimeline, source: ProfileData['sourc
       language: lane.language,
       tone: lane.language === null ? -1 : toneOf.get(lane.language)!,
       dry: lane.isArchived,
-      seedling: source === 'graphql' && !lane.detailed,
+      uncounted: source === 'graphql' && !lane.detailed,
       weight: laneWeight(lane, source),
       stars: lane.stars,
       tokens,
@@ -249,8 +249,8 @@ export function drawnTo(row: Pick<MinimapRow, 'x1'>, startDay: number, at: numbe
   return at === null ? row.x1 : Math.min(row.x1, at - startDay)
 }
 
-/** Whether the time-lapse has sown the row (any of it is drawn). */
-export function sown(row: Pick<MinimapRow, 'startDay'>, at: number | null): boolean {
+/** Whether the time-lapse has reached the row (any of it is drawn). */
+export function isReached(row: Pick<MinimapRow, 'startDay'>, at: number | null): boolean {
   return at === null || row.startDay <= at
 }
 

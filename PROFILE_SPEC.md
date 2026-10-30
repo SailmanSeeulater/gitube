@@ -1,4 +1,7 @@
-# repo-garden — Person mode: Build Spec
+# gitube — Person mode: Build Spec
+
+> Written when the app was called repo-garden. It keeps the names and the life garden view of that
+> time; the README describes person mode as it is.
 
 > **For Claude Code:** This is the full spec for a new feature in the existing repo-garden app.
 > Build it **phase by phase**. At the end of each phase, stop, summarize what was built, list how to

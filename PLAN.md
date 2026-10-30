@@ -1,4 +1,7 @@
-# repo-garden — stack plan
+# gitube — stack plan
+
+> Written when the app was called repo-garden, before the metro revamp. The names and files below are
+> as they were then; the README describes the app as it is.
 
 Paste a GitHub repo URL, get an Obsidian-style node graph of how its branches
 fork from and merge back into each other.

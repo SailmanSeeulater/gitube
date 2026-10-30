@@ -233,7 +233,7 @@ export interface MetroLayout {
   stubs: MetroStub[]
   segments: MetroSegment[]
   bounds: MetroBounds
-  /** bounds grown by the label boxes and run markers, for fit-to-view. */
+  /** bounds widened by the label boxes and run markers, for fit-to-view. */
   boundsWithLabels: MetroBounds
   /** Distinct lanes with a line on them. */
   laneCount: number
@@ -1998,7 +1998,7 @@ export function metroLayout(graph: Graph, data: RepoData, opts: MetroOptions = {
   }
   const bounds: MetroBounds = { minX, maxX, minY, maxY }
   const lb: MetroBounds = { ...bounds }
-  const grow = (x: number, y: number): void => {
+  const extend = (x: number, y: number): void => {
     if (x < lb.minX) lb.minX = x
     if (x > lb.maxX) lb.maxX = x
     if (y < lb.minY) lb.minY = y
@@ -2009,11 +2009,11 @@ export function metroLayout(graph: Graph, data: RepoData, opts: MetroOptions = {
     const ux = Math.cos(r)
     const uy = Math.sin(r)
     for (const [t, v] of [[0, -0.75 * fontSize], [0, 0.25 * fontSize], [label.width, -0.75 * fontSize], [label.width, 0.25 * fontSize]])
-      grow(label.tx + ux * t - uy * v, label.ty + uy * t + ux * v)
+      extend(label.tx + ux * t - uy * v, label.ty + uy * t + ux * v)
   }
   for (const b of markerBoxes.all) {
-    grow(b.cx - b.hw, b.cy - b.hh)
-    grow(b.cx + b.hw, b.cy + b.hh)
+    extend(b.cx - b.hw, b.cy - b.hh)
+    extend(b.cx + b.hw, b.cy + b.hh)
   }
 
   const lanes = new Map<string, number>()

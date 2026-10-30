@@ -1,8 +1,8 @@
 /**
  * Person mode's views end to end (PROFILE_SPEC.md Phase 6): life lines, the constellation and the
  * console views share the panel (its switcher marking the view on show, its legend explaining
- * it), the inspector, the theme, the time-lapse (one clock grows each view, and the caption counts
- * the same repos in all of them), the poster (the view on show, fully grown) and the recording (one
+ * it), the inspector, the theme, the time-lapse (one clock draws each view, and the caption counts
+ * the same repos in all of them), the poster (the view on show, fully drawn) and the recording (one
  * canvas, the switcher locked while it records). A switch leaves the store as it was, so hidden
  * repos, the selection, the hover and the privacy reveal carry over, and the camera does too, as
  * every view spans the same days. view-switch is sent with the view by the switcher only: never on
@@ -43,8 +43,8 @@ import {
   GAEARON_NOW,
   KEPANO_NOW,
   gaearonProfile,
-  grow,
-  growView,
+  load,
+  loadView,
   kepanoProfile,
   paintView,
   setApp,
@@ -52,7 +52,7 @@ import {
   textOf,
   viewPainterFor,
   withPrivate,
-  type Grown,
+  type Loaded,
 } from './helpers/personScene'
 import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/recordingCtx'
 
@@ -71,7 +71,7 @@ const INTROS: Record<PersonView, string> = {
   helix: 'each thread is a repo, wound on where their part in it starts',
 }
 
-/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
+/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, an uncounted fork and an archived one, made private. */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const SECRETS = KEPANO_PRIVATE.flatMap((name) => [
@@ -163,7 +163,7 @@ describe('the panel and the inspector', () => {
   it('shows the same inspector for a hovered or selected repo, whichever view is on show', () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(KEPANO_NOW)
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const key = repoKey(g.timeline.lanes[g.timeline.lanes.length - 1].repo)
     const other = repoKey(g.timeline.lanes[0].repo)
     for (const state of [{ hover: { kind: 'repo', key } }, { selected: other }, { hover: { kind: 'day', day: g.timeline.startDay + 500, milestone: null } }] as Array<
@@ -177,7 +177,7 @@ describe('the panel and the inspector', () => {
   })
 
   it('shows the switcher only when given one, and holds it while a recording runs', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const base = { profile: g.profile, timeline: g.timeline, colourOf: g.colourOf, name: g.name, privateCount: 0, revealed: false, onReveal: noop, theme }
     expect(renderToStaticMarkup(h(PersonPanel, base))).not.toContain('aria-label="View"')
     const free = renderToStaticMarkup(h(PersonPanel, { ...base, view: 'lines', onView: noop }))
@@ -190,7 +190,7 @@ describe('the panel and the inspector', () => {
 })
 
 /** Every colour the theme lets the views draw with: its ink and its language colours. */
-function allowedColours(g: Grown): Set<string> {
+function allowedColours(g: Loaded): Set<string> {
   const { dimAlpha: _alpha, ...flat } = g.ink
   const allowed = new Set<string>(Object.values(flat))
   for (const colour of [...Object.values(languagePalette(g.timeline, g.theme)), g.theme.fallback]) allowed.add(colour)
@@ -220,7 +220,7 @@ describe('the theme', () => {
     /** a console view's draws and strokes with their colours, as the first theme painted them */
     const consoleFrames = new Map<PersonView, string>()
     for (const t of THEMES) {
-      const g = grow(kepano, KEPANO_NOW, t)
+      const g = load(kepano, KEPANO_NOW, t)
       const lanes = g.timeline.lanes
       const state = { hover: { kind: 'repo' as const, key: repoKey(lanes[3].repo) }, selected: repoKey(lanes[lanes.length - 2].repo) }
       for (const view of VIEWS) {
@@ -257,8 +257,8 @@ describe('the theme', () => {
 })
 
 /** The entries a view's scene alone logs for g at the time-lapse's day at, with the keys in hidden left out (on g's canvas, or another). */
-function sceneLog(g: Grown, view: PersonView, hidden: ReadonlySet<string>, at: number | null, viewport = g.view): CtxEntry[] {
-  const { def, layout } = growView(g, view)
+function sceneLog(g: Loaded, view: PersonView, hidden: ReadonlySet<string>, at: number | null, viewport = g.view): CtxEntry[] {
+  const { def, layout } = loadView(g, view)
   const rec = recordingCtx(viewport.width * 2, viewport.height * 2)
   const camera = viewport === g.view ? g.camera : fitLifeCamera(layout.days, viewport)
   const geoms = def.scene.geoms(layout, camera, viewport)
@@ -267,9 +267,9 @@ function sceneLog(g: Grown, view: PersonView, hidden: ReadonlySet<string>, at: n
 }
 
 describe('the time-lapse', () => {
-  const lives = (): Array<[string, Grown]> => [
-    ['kepano', grow(kepano, KEPANO_NOW, theme)],
-    ['gaearon', grow(gaearon, GAEARON_NOW, theme)],
+  const lives = (): Array<[string, Loaded]> => [
+    ['kepano', load(kepano, KEPANO_NOW, theme)],
+    ['gaearon', load(gaearon, GAEARON_NOW, theme)],
   ]
 
   it('counts the same repos in every view at every progress, and draws the same caption over each', () => {
@@ -277,7 +277,7 @@ describe('the time-lapse', () => {
       const hidden = new Set([repoKey(g.timeline.lanes[1].repo), repoKey(g.timeline.lanes[g.timeline.lanes.length - 1].repo)])
       for (const p of PROGRESSES) {
         const captions = VIEWS.map((view) => {
-          const { def, layout } = growView(g, view)
+          const { def, layout } = loadView(g, view)
           return lapseCaption(g.timeline, def.scene.items(layout), p, hidden)
         })
         for (const caption of captions) expect(caption, `${label} at ${p}`).toEqual(captions[0])
@@ -287,18 +287,18 @@ describe('the time-lapse', () => {
           painter.paint(rec.ctx, g.view, g.camera, 16)
           return rec.calls('fillText').slice(-3).map((c) => String(c.args[0]))
         })
-        expect(huds[0], `${label} at ${p}`).toEqual([captions[0].year, `${captions[0].sown} repo${captions[0].sown === 1 ? '' : 's'}`, `${g.profile.login} · gitube`])
+        expect(huds[0], `${label} at ${p}`).toEqual([captions[0].year, `${captions[0].reached} repo${captions[0].reached === 1 ? '' : 's'}`, `${g.profile.login} · gitube`])
         for (const hud of huds) expect(hud, `${label} at ${p}`).toEqual(huds[0])
       }
     }
   })
 
-  it('draws a repo in every view exactly once the clock has sown it, so what is drawn only ever grows', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+  it('draws a repo in every view exactly once the clock has reached it, so what is drawn only ever adds up', () => {
+    const g = load(kepano, KEPANO_NOW, theme)
     const keys = g.timeline.lanes.map((lane) => repoKey(lane.repo))
     const all = new Set(keys)
     for (const view of VIEWS) {
-      const items = growView(g, view).def.scene.items(growView(g, view).layout)
+      const items = loadView(g, view).def.scene.items(loadView(g, view).layout)
       let before = new Set<string>()
       for (const p of PROGRESSES) {
         const at = dayAt(g.timeline.clock, p)
@@ -312,7 +312,7 @@ describe('the time-lapse', () => {
         }
         for (const key of before) expect(drawn.has(key), `${view} ${key} at ${p}`).toBe(true)
         before = drawn
-        // at the very start nothing has grown: the view draws its axis alone
+        // at the very start nothing has been drawn: the view draws its axis alone
         if (p === 0) {
           expect(drawn.size, view).toBe(0)
           expect(sceneLog(g, view, new Set(), at), view).toEqual(sceneLog(g, view, all, at))
@@ -350,8 +350,8 @@ function posterRig() {
   return { recs, measured, umamiTrack, kit, deps }
 }
 
-function posterInput(g: Grown, view: PersonView, hidden: ReadonlySet<string> = new Set()): PosterInput {
-  const { def, layout } = growView(g, view)
+function posterInput(g: Loaded, view: PersonView, hidden: ReadonlySet<string> = new Set()): PosterInput {
+  const { def, layout } = loadView(g, view)
   return { profile: g.profile, timeline: g.timeline, view: def, layout, theme: g.theme, colourOf: g.colourOf, name: g.name, hidden }
 }
 
@@ -367,8 +367,8 @@ function lastFrame(rec: RecordingCtx): CtxEntry[] {
 const count = (log: CtxEntry[], name: string) => log.filter((e) => e.kind === 'call' && e.name === name).length
 
 describe('the poster', () => {
-  it('draws the view on show, fully grown, and none of another view’s marks', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+  it('draws the view on show, fully drawn, and none of another view’s marks', () => {
+    const g = load(kepano, KEPANO_NOW, theme)
     const plots = Object.fromEntries(
       VIEWS.map((view) => {
         const r = posterRig()
@@ -376,7 +376,7 @@ describe('the poster', () => {
         return [view, lastFrame(r.recs[0])]
       }),
     ) as Record<PersonView, CtxEntry[]>
-    // no curves or petals: those were the retired life garden's
+    // no curves or ellipses: lines and stars only
     for (const view of ['lines', 'constellation'] as const) {
       expect(count(plots[view], 'quadraticCurveTo'), view).toBe(0)
       expect(count(plots[view], 'ellipse'), view).toBe(0)
@@ -384,16 +384,16 @@ describe('the poster', () => {
     // a line per repo, a star per repo
     expect(plots.lines.filter((e) => e.kind === 'call' && e.name === 'stroke' && e.style.lineWidth !== 1).length).toBeGreaterThan(g.timeline.lanes.length)
     expect(count(plots.constellation, 'arc')).toBeGreaterThan(g.timeline.lanes.length)
-    // fully grown, the whole life fitted: every mark of the view as the scene draws it with no time-lapse (no lock here, so every arc is the view's)
+    // fully drawn, the whole life fitted: every mark of the view as the scene draws it with no time-lapse (no lock here, so every arc is the view's)
     for (const view of ['lines', 'constellation'] as const) {
-      const grownArcs = count(sceneLog(g, view, new Set(), null, POSTER_VIEWPORT), 'arc')
-      expect(count(plots[view], 'arc'), view).toBe(grownArcs)
-      expect(grownArcs, view).toBeGreaterThan(count(sceneLog(g, view, new Set(), dayAt(g.timeline.clock, 0.5), POSTER_VIEWPORT), 'arc'))
+      const drawnArcs = count(sceneLog(g, view, new Set(), null, POSTER_VIEWPORT), 'arc')
+      expect(count(plots[view], 'arc'), view).toBe(drawnArcs)
+      expect(drawnArcs, view).toBeGreaterThan(count(sceneLog(g, view, new Set(), dayAt(g.timeline.clock, 0.5), POSTER_VIEWPORT), 'arc'))
     }
   })
 
   it('draws no hover or selection, whatever the store holds, and leaves out what the eyes hide', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const key = repoKey(g.timeline.lanes[g.timeline.lanes.length - 3].repo)
     for (const view of ['lines', 'constellation'] as const) {
       const plain = posterRig()
@@ -421,12 +421,12 @@ describe('the poster', () => {
     for (const view of ['lines', 'constellation'] as const) {
       for (const revealFor of [null, 'someone-else']) {
         const r = posterRig()
-        composeLifePoster(posterInput(grow(secret, KEPANO_NOW, theme, revealFor), view), null, r.deps)
+        composeLifePoster(posterInput(load(secret, KEPANO_NOW, theme, revealFor), view), null, r.deps)
         expectNoSecret([...r.recs.flatMap((rec) => rec.texts()), ...r.measured], `${view} poster, revealed for ${revealFor}`)
         expect(r.recs.flatMap((rec) => rec.texts())).toContain(PRIVATE_REPO_LABEL)
       }
       const r = posterRig()
-      composeLifePoster(posterInput(grow(secret, KEPANO_NOW, theme, 'kepano'), view), null, r.deps)
+      composeLifePoster(posterInput(load(secret, KEPANO_NOW, theme, 'kepano'), view), null, r.deps)
       const shown = r.recs.flatMap((rec) => rec.texts()).join('\n')
       expect(SECRETS.some((s) => s.test(shown)), view).toBe(true)
     }
@@ -435,7 +435,7 @@ describe('the poster', () => {
   it('saves any view and sends poster-export once, with no data', async () => {
     for (const view of VIEWS) {
       const r = posterRig()
-      await saveLifePoster(posterInput(grow(kepano, KEPANO_NOW, theme), view), r.deps)
+      await saveLifePoster(posterInput(load(kepano, KEPANO_NOW, theme), view), r.deps)
       expect(r.kit.downloadBlob).toHaveBeenCalledTimes(1)
       expect(r.umamiTrack.mock.calls, view).toEqual([['poster-export']])
     }
@@ -457,7 +457,7 @@ describe('the recording', () => {
   })
 
   it('paints the caption over every view while the time-lapse is on, and keeps asking for frames while it is live', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     for (const view of VIEWS) {
       const { painter } = viewPainterFor(g, view, {}, { timelapse: { progress: { current: 0.6 }, title: 'kepano', live: true } })
       const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
@@ -472,7 +472,7 @@ describe('the recording', () => {
 
 describe('a switch', () => {
   it('leaves the store as it was: hidden repos, selection, hover, focus, reveal, tab and search', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const [a, b, c] = [3, 7, 11].map((i) => repoKey(g.timeline.lanes[i].repo))
     const store = usePersonStore.getState()
     store.resetFor('kepano')
@@ -493,25 +493,25 @@ describe('a switch', () => {
   })
 
   it('carries the hidden repos, the selection, the hover and the reveal into every view', () => {
-    const g = grow(secret, KEPANO_NOW, theme, 'kepano')
+    const g = load(secret, KEPANO_NOW, theme, 'kepano')
     const lanes = g.timeline.lanes
     const hidden = repoKey(lanes[5].repo)
     const selected = repoKey(lanes[lanes.length - 4].repo)
     const hovered = repoKey('kepano/obsidian-skills')
     for (const view of VIEWS) {
-      const { rec, labels, painter, grown } = paintView(g, view, { hidden: new Set([hidden]), selected, hover: { kind: 'repo', key: hovered } })
-      const items = grown.def.scene.items(grown.layout)
-      const at = (key: string) => grown.layout.byKey.get(key)!
+      const { rec, labels, painter, loaded } = paintView(g, view, { hidden: new Set([hidden]), selected, hover: { kind: 'repo', key: hovered } })
+      const items = loaded.def.scene.items(loaded.layout)
+      const at = (key: string) => loaded.layout.byKey.get(key)!
       // the hidden repo: no label, and nothing to hit where it would be
       expect(labels.placer.shown[at(hidden)], view).toBe(0)
-      const geoms = grown.def.scene.geoms(grown.layout, g.camera, g.view)
+      const geoms = loaded.def.scene.geoms(loaded.layout, g.camera, g.view)
       const spot = new Float32Array(3)
-      expect(grown.def.scene.anchor(grown.layout, geoms, at(hidden), null, spot)).toBe(true)
+      expect(loaded.def.scene.anchor(loaded.layout, geoms, at(hidden), null, spot)).toBe(true)
       expect(painter.hitAt(spot[0], spot[1]), view).not.toEqual({ kind: 'repo', key: hidden })
       // the selection: marked, every other repo dimmed, in the view's own ink (a console view's, whatever the theme)
-      const ink = viewInk(g.ink, grown.def)
+      const ink = viewInk(g.ink, loaded.def)
       expect(rec.log.some((e) => e.kind === 'call' && (e.name === 'stroke' || e.name === 'fill') && e.style.globalAlpha === ink.dimAlpha), view).toBe(true)
-      if (!grown.def.ink) {
+      if (!loaded.def.ink) {
         // a life view rings the selected and the hovered repo
         expect(rec.calls('stroke').some((e) => e.style.strokeStyle === ink.inspectedRing), view).toBe(true)
         expect(rec.calls('stroke').some((e) => e.style.strokeStyle === ink.hoverRing), view).toBe(true)
@@ -520,7 +520,7 @@ describe('a switch', () => {
         // log's halos): each changes what the scene draws, and the selection's mark is in its inspected colour
         const scene = (selected: string | null, hover: LifeHover) => {
           const r = recordingCtx(g.view.width * 2, g.view.height * 2)
-          grown.def.scene.paint(r.ctx, { layout: grown.layout, timeline: g.timeline, geoms, camera: g.camera, view: g.view, ink, colourOf: g.colourOf, hidden: new Set([hidden]), hover, selected, at: null })
+          loaded.def.scene.paint(r.ctx, { layout: loaded.layout, timeline: g.timeline, geoms, camera: g.camera, view: g.view, ink, colourOf: g.colourOf, hidden: new Set([hidden]), hover, selected, at: null })
           return JSON.stringify(r.log)
         }
         const plain = scene(null, null)
@@ -538,9 +538,9 @@ describe('a switch', () => {
   })
 
   it('keeps the camera: every view spans the same days from the same start', () => {
-    for (const g of [grow(kepano, KEPANO_NOW, theme), grow(gaearon, GAEARON_NOW, theme)]) {
+    for (const g of [load(kepano, KEPANO_NOW, theme), load(gaearon, GAEARON_NOW, theme)]) {
       const spans = VIEWS.map((view) => {
-        const { layout } = growView(g, view)
+        const { layout } = loadView(g, view)
         return [layout.startDay, layout.todayDay, layout.days]
       })
       for (const span of spans) expect(span).toEqual([g.layout.startDay, g.layout.todayDay, g.layout.days])

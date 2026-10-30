@@ -7,7 +7,7 @@ import { readSubject, type PersonView } from './share/shareUrl'
 
 /**
  * A repo, or a person. request counts the person's submits, so a later phase can refetch the
- * same login the way Grow refetches the same repo.
+ * same login the way Go refetches the same repo.
  */
 export type Subject =
   | { kind: 'repo'; initial?: RepoInitial }

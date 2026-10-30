@@ -1,5 +1,5 @@
 /**
- * The parts of gitube that load only when they are used, each its own chunk. Growing a repo
+ * The parts of gitube that load only when they are used, each its own chunk. Loading a repo
  * and looking at it in the organic layout needs none of them, so a first visit downloads none.
  *
  * Everything else is eager on purpose: the graph and its canvas (react-force-graph), the GitHub
@@ -40,11 +40,11 @@ export const timelapseChunk = defineChunk(() => import('../components/TimelapseB
 export const videoChunk = defineChunk(() => import('../export/video'))
 
 /** The vs overlay and its scoring. */
-export const battleChunk = defineChunk(() => import('../components/VsView'))
+export const vsChunk = defineChunk(() => import('../components/VsView'))
 
-/** The panel's people (contributors leaderboard) and weeds tabs. */
+/** The panel's people (contributors leaderboard) and cleanup tabs. */
 export const contributorsTabChunk = defineChunk(() => import('../components/ContributorsTab'))
-export const weedsTabChunk = defineChunk(() => import('../components/WeedsTab'))
+export const cleanupTabChunk = defineChunk(() => import('../components/CleanupTab'))
 
 /** The metro layout engine (graph/metro), loaded when metro is picked or was the saved layout. */
 export const metroChunk = defineChunk(() => import('../graph/metro'))
@@ -56,7 +56,7 @@ export const metroChunk = defineChunk(() => import('../graph/metro'))
 export const pullsChunk = defineChunk(() => import('./pullsPart'))
 
 /**
- * Person mode (?user=), loaded when a login is grown or a ?user= link is opened. Repo mode's
+ * Person mode (?user=), loaded when a login is entered or a ?user= link is opened. Repo mode's
  * first load carries only the routing that picks it (App, api/parseSubject and the share link).
  */
 export const personAppChunk = defineChunk(() => import('../PersonApp'))

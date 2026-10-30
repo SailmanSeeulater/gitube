@@ -28,8 +28,8 @@ const BODY_LEVELS = 6
 const DORMANT = 0.35
 /** An archived repo, at this share... */
 const DRY = 0.5
-/** ...a seedling at this... */
-const SEEDLING = 0.6
+/** ...an uncounted repo at this... */
+const UNCOUNTED = 0.6
 /** ...and every stack but the selected one while a selection is held. */
 const UNSELECTED = PHOSPHOR_DIM_ALPHA
 /** A head's halo: this far round it, at this alpha (times the star size, at least HALO_MIN). */
@@ -58,11 +58,11 @@ export function phosphorColour(stack: Pick<PhosphorStack, 'dry'>): string {
 
 /**
  * Screen y of the centre of the block a landed mark sits over: the body block at stack time t
- * among the `grown` risen so far, or the head block while none has.
+ * among the `drawnBlocks` risen so far, or the head block while none has.
  */
-export function landedCentreY(g: PhosphorGeom, i: number, grown: number, t: number): number {
-  if (grown <= 0) return headTop(g, i, 0) + g.head[i] / 2
-  const k = Math.min(grown - 1, Math.max(0, Math.floor(t * g.blocks[i])))
+export function landedCentreY(g: PhosphorGeom, i: number, drawnBlocks: number, t: number): number {
+  if (drawnBlocks <= 0) return headTop(g, i, 0) + g.head[i] / 2
+  const k = Math.min(drawnBlocks - 1, Math.max(0, Math.floor(t * g.blocks[i])))
   return g.base - (k + 1) * PITCH_PX + GAP_PX + BLOCK_PX / 2
 }
 
@@ -73,7 +73,7 @@ function dormantAt(stack: PhosphorStack, t: number): boolean {
 }
 
 /** One stack: its body blocks, brightening toward the top, then its head. */
-function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: PhosphorGeom, i: number, grown: number, alpha: number, at: number | null): void {
+function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: PhosphorGeom, i: number, drawnBlocks: number, alpha: number, at: number | null): void {
   const x = g.x[i]
   const n = g.blocks[i]
   const bx = Math.round(x - BLOCK_PX / 2)
@@ -84,8 +84,8 @@ function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: Phosp
     for (let level = 0; level < BODY_LEVELS; level++) {
       ctx.beginPath()
       let count = 0
-      for (let k = 0; k < grown; k++) {
-        if (Math.min(BODY_LEVELS - 1, Math.floor(((k + 1) / grown) * BODY_LEVELS - 1e-9)) !== level) continue
+      for (let k = 0; k < drawnBlocks; k++) {
+        if (Math.min(BODY_LEVELS - 1, Math.floor(((k + 1) / drawnBlocks) * BODY_LEVELS - 1e-9)) !== level) continue
         if (dormantAt(stack, (k + 0.5) / n) !== dormant) continue
         ctx.rect(bx, g.base - (k + 1) * PITCH_PX + GAP_PX, BLOCK_PX, BLOCK_PX)
         count++
@@ -102,7 +102,7 @@ function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: Phosp
   ctx.fillStyle = PHOSPHOR.bright
   for (const l of stack.landed) {
     if (at !== null && l.day > at) continue
-    const cy = landedCentreY(g, i, grown, l.t)
+    const cy = landedCentreY(g, i, drawnBlocks, l.t)
     ctx.beginPath()
     ctx.moveTo(x, cy - LANDED_PX)
     ctx.lineTo(x + LANDED_PX, cy)
@@ -115,7 +115,7 @@ function drawStack(ctx: CanvasRenderingContext2D, stack: PhosphorStack, g: Phosp
   // the head: a halo for a starred repo, then the block, hollow for a repo they only contributed to
   const side = g.head[i]
   const hx = Math.round(x - side / 2)
-  const hy = Math.round(headTop(g, i, grown))
+  const hy = Math.round(headTop(g, i, drawnBlocks))
   if (stack.head > 0) {
     ctx.globalAlpha = alpha * HALO_ALPHA * Math.max(HALO_MIN, stack.head)
     ctx.fillStyle = colour
@@ -179,7 +179,7 @@ export function paintPhosphor(ctx: CanvasRenderingContext2D, input: PhosphorPain
     const stack = stacks[i]
     const reach = g.head[i] / 2 + HALO_PX + 1
     if (g.x[i] + reach < 0 || g.x[i] - reach > W) continue
-    const alpha = (sel >= 0 && sel !== i ? UNSELECTED : 1) * (stack.dry ? DRY : 1) * (stack.seedling ? SEEDLING : 1)
+    const alpha = (sel >= 0 && sel !== i ? UNSELECTED : 1) * (stack.dry ? DRY : 1) * (stack.uncounted ? UNCOUNTED : 1)
     drawStack(ctx, stack, g, i, blocksAt(stack, g.blocks[i], at), alpha, at)
   }
   ctx.globalAlpha = 1

@@ -355,7 +355,7 @@ function settleMetroLabels(data: RepoData, mode: ViewMode) {
     shown++
     if (pinned.has(i)) continue
     const j = specs[i].node
-    // the text's ink, not the padded box, grown by half the line width
+    // the text's ink, not the padded box, widened by half the line width
     const x0 = placer.x0[i] + 2 - halfPx
     const y0 = placer.y0[i] + 3 - halfPx
     const x1 = placer.x0[i] + placer.w[i] - 2 + halfPx

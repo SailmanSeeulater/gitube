@@ -1,6 +1,6 @@
 /**
- * PersonApp's requests for a profile, without React, as RepoApp's Grow handles a repo. The router
- * counts a login's grows (App's request), so a new login or a new request is a new request:
+ * PersonApp's requests for a profile, without React, as RepoApp's Go handles a repo. The router
+ * counts a login's loads (App's request), so a new login or a new request is a new request:
  *
  * - it starts clean, before paint: nothing hidden, selected or revealed (startRequest), and whatever
  *   ends it, a new login or request or PersonApp unmounting, hides private names again;
@@ -12,7 +12,7 @@
  *   (refreshProfile).
  *
  * A token change is none of these: it changes the query, not the login or the request, so nothing
- * here runs and no grow is noted. PersonApp only wires these to its hooks; the tests drive them as
+ * here runs and no load is noted. PersonApp only wires these to its hooks; the tests drive them as
  * React does.
  */
 import type { PersonAnalyticsState, ProfileOnShow } from './analytics'
@@ -49,7 +49,7 @@ export function startRequest(store: RequestStore, key: string): () => void {
 }
 
 /**
- * Says when a request needs a live refetch: the same login asked for again (Grow on the person on
+ * Says when a request needs a live refetch: the same login asked for again (Go on the person on
  * show, or an error card's "press Go again"), unless a fetch already in flight answers it. A new
  * login needs none: its own query reads the cache first. PersonApp hands it each commit's
  * requestKey; the first is the mount's, which its query fetches by itself.
@@ -76,9 +76,9 @@ export function analyticsInput(login: string, request: number, shown: ProfileOnS
   return { login, request, profile, fetchedAt, cachedAt, isFetching, error }
 }
 
-/** What the status strip's refresh needs: usePersonAnalytics's noteGrow and the query's live refetch. */
+/** What the status strip's refresh needs: usePersonAnalytics's noteLoad and the query's live refetch. */
 export interface RefreshPorts {
-  noteGrow: (login: string) => void
+  noteLoad: (login: string) => void
   refetch: () => void
 }
 
@@ -87,6 +87,6 @@ export interface RefreshPorts {
  * with what is on show now, so the fetch it starts is counted once it lands.
  */
 export function refreshProfile(login: string, ports: RefreshPorts): void {
-  ports.noteGrow(login)
+  ports.noteLoad(login)
   ports.refetch()
 }

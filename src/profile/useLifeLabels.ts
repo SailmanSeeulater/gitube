@@ -8,7 +8,7 @@
  * and names, taking over the spots of the one before while the view is the same.
  *
  * A set knows its repos only by key and importance; each frame the view says where every anchor
- * is (or that it has none: hidden, not sown yet) and which boxes labels keep off.
+ * is (or that it has none: hidden, not reached yet) and which boxes labels keep off.
  *
  * Every text is a ShownName from the view's RepoNamer and is measured as it is shown, so no drawn
  * label, plate or box width carries a hidden private name or its length. A locked name keeps room
@@ -33,7 +33,7 @@ const LOCK_SIZE = 8
 const WIDE_MAX_PX = 200
 const COMPACT_MAX_PX = 120
 const COMPACT_MIN_SAVING_PX = 8
-/** the canvas colour stroked behind label text, so a stem passing under it never runs into the letters */
+/** the canvas colour stroked behind label text, so a line passing under it never runs into the letters */
 const HALO_PX = 3
 const PLATE_RADIUS = 4
 /** the backing plate of a label pinned over another head */
@@ -86,7 +86,7 @@ export interface LifeLabelItems {
 export interface LifeLabelFrame {
   /**
    * writes item i's anchor into out as [x, y, r] in screen px (the label keeps r clear round it);
-   * false for none (hidden, or not sown by the time-lapse yet): its label drops at once and blocks nothing
+   * false for none (hidden, or not reached by the time-lapse yet): its label drops at once and blocks nothing
    */
   anchor: (i: number, out: Float32Array) => boolean
   /** boxes labels keep off, as [x0, y0, x1, y1]* in screen px */

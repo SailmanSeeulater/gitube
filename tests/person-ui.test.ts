@@ -518,7 +518,7 @@ describe('PersonLegend', () => {
   it('explains the glyphs the profile has, and its languages', () => {
     /** The glyph grid's labels. */
     const labels = (html: string) => [...html.matchAll(/<span class="text-\[12px\] text-ui-text-dim">([^<]*)<\/span>/g)].map((m) => m[1])
-    expect(labels(legend(TOKEN))).toEqual(['active run', 'dormant', 'start', 'contributed', 'fork', 'archived', 'station', 'milestone', 'seedling', 'private repo'])
+    expect(labels(legend(TOKEN))).toEqual(['active run', 'dormant', 'start', 'contributed', 'fork', 'archived', 'station', 'milestone', 'uncounted', 'private repo'])
     expect(labels(legend(PUBLIC))).toEqual(['active run', 'dormant', 'start', 'fork', 'archived', 'station', 'milestone'])
     const token = textOf(legend(TOKEN))
     expect(token).toContain('thicker: more commits in a run.')
@@ -555,10 +555,9 @@ describe('PersonLegend', () => {
         for (const other of VIEWS) if (other !== view) expect(limits.join(' '), `${view} ${profile.source}`).not.toContain(MEASURES[other].counted)
         const lines = dataLimits(profile, 'lines')
         expect(limits.filter((limit, i) => limit !== lines[i]), `${view} ${profile.source}`).toHaveLength(view === 'lines' ? 0 : 1)
-        // the view's legend lists them, and no plant anywhere: the life garden is gone
+        // the view's legend lists them
         const html = legend(profile, view)
         for (const limit of limits) expect(textOf(html), `${view} ${profile.source}`).toContain(limit)
-        expect(html, `${view} ${profile.source}`).not.toContain('plant')
       }
     }
     // left out, the view is life lines

@@ -701,42 +701,6 @@ describe('first paint (index.html boot)', () => {
     }
   })
 
-  it("moves settings saved under the app's old name to their gitube: keys, once, before the theme is read", () => {
-    const data = new Map<string, string>([
-      ['repo-garden:token', 'ghp_example'],
-      ['repo-garden:theme', 'paper'],
-      ['repo-garden:layout', 'organic'],
-      ['repo-garden:sound', 'on'],
-      // a value already under the new key wins over the old one
-      ['gitube:sound', 'off'],
-      ['unrelated', 'kept'],
-    ])
-    const localStorage = {
-      getItem: (key: string) => data.get(key) ?? null,
-      setItem: (key: string, value: string) => void data.set(key, value),
-      removeItem: (key: string) => void data.delete(key),
-    }
-    const attrs = new Map<string, string>()
-    const document = {
-      documentElement: { style: { colorScheme: '', setProperty: () => {} }, setAttribute: (name: string, value: string) => void attrs.set(name, value) },
-      querySelector: () => null,
-    }
-    new Function('window', 'document', themeBootScript())({ localStorage }, document)
-    expect(Object.fromEntries(data)).toEqual({
-      'gitube:token': 'ghp_example',
-      'gitube:theme': 'paper',
-      'gitube:layout': 'organic',
-      'gitube:sound': 'off',
-      unrelated: 'kept',
-    })
-    // the moved theme is the one applied
-    expect(attrs.get('data-theme')).toBe('paper')
-    // a second load finds nothing to move and changes nothing
-    const before = Object.fromEntries(data)
-    new Function('window', 'document', themeBootScript())({ localStorage }, document)
-    expect(Object.fromEntries(data)).toEqual(before)
-  })
-
   it('ships the default theme as CSS for the very first paint', () => {
     const css = defaultThemeCss()
     expect(css.startsWith(':root{')).toBe(true)

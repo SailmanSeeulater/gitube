@@ -35,7 +35,7 @@ import {
 import { coreRateFromHeaders, lastPageFromLink, remainingNow } from '../src/api/http'
 import type { RateInfo } from '../src/api/http'
 import { checksWords, reviewWords } from '../src/components/prMark'
-import { defaultWeedPicks } from '../src/graph/weeds'
+import { defaultLeftoverPicks } from '../src/graph/cleanup'
 import { prMarks } from '../src/graph/pulls'
 import { GitHubFetchError, type Branch, type PullSummary, type RepoData } from '../src/types'
 import gqlExpress from './fixtures/github/graphql-pulls-express.json'
@@ -776,9 +776,9 @@ describe('GraphQL partial answers', () => {
     // the canvas draws feat/a's checks as not looked up (a lookup can fill them in), not as "no checks"
     const tip = { id: 'tip-a', isTip: true, tips: ['feat/a'] }
     expect(prMarks({ nodes: [tip] } as never, index).get('tip-a')).toMatchObject({ checks: 'unknown', review: 'approved' })
-    // the weeds tab treats an unchecked branch as one that may have a pull request: not ticked
+    // the cleanup tab treats an unchecked branch as one that may have a pull request: not ticked
     const hasOpenPr = (name: string) => index.byBranch.has(name) || index.unchecked.includes(name)
-    expect([...defaultWeedPicks([{ name: 'feat/c', keep: false }, { name: 'gone', keep: false }], hasOpenPr)]).toEqual(['gone'])
+    expect([...defaultLeftoverPicks([{ name: 'feat/c', keep: false }, { name: 'gone', keep: false }], hasOpenPr)]).toEqual(['gone'])
   })
 
   it('asks over 20 unchecked refs again in two halves', async () => {

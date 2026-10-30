@@ -26,7 +26,7 @@ import {
   gutterWidth,
   rooted,
   rowY,
-  sown,
+  isReached,
   stripLeft,
   stripRowY,
   stripX,
@@ -158,7 +158,7 @@ function drawRow(ctx: CanvasRenderingContext2D, row: MinimapRow, y: number, to: 
   }
   if (any) {
     const colour = rowColour(row)
-    if (row.seedling && h >= 3) {
+    if (row.uncounted && h >= 3) {
       ctx.strokeStyle = colour
       ctx.lineWidth = 1
       ctx.stroke()
@@ -336,7 +336,7 @@ export function paintMinimap(ctx: CanvasRenderingContext2D, input: MinimapPaintI
 
   const shown = (i: number) => {
     const row = rows[i]
-    return row !== undefined && !hidden.has(row.key) && sown(row, at)
+    return row !== undefined && !hidden.has(row.key) && isReached(row, at)
   }
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
   const hov = hover?.kind === 'repo' ? (layout.byKey.get(hover.key) ?? -1) : -1

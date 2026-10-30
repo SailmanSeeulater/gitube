@@ -52,7 +52,7 @@ describe('repo files', () => {
         commits: Object.fromEntries(
           Object.values(raw.commits).map((c) => [
             hex(c.sha),
-            { ...c, sha: hex(c.sha), parents: c.parents.map(hex), url: `https://github.com/octo/garden/commit/${hex(c.sha)}` },
+            { ...c, sha: hex(c.sha), parents: c.parents.map(hex), url: `https://github.com/octo/tracks/commit/${hex(c.sha)}` },
           ]),
         ),
         truncatedAt: raw.truncatedAt.map(hex),
@@ -96,7 +96,7 @@ describe('repo files', () => {
         })(),
       ),
     )
-    expect(file.data.commits.aaa1.url).toBe('https://github.com/octo/garden/commit/aaa1')
+    expect(file.data.commits.aaa1.url).toBe('https://github.com/octo/tracks/commit/aaa1')
     expect(file.data.commits.aaa1.login).toBe('ann')
     expect(file.data.commits.aaa1).not.toHaveProperty('avatarUrl')
     expect(file.data.commits.aaa2).not.toHaveProperty('login')

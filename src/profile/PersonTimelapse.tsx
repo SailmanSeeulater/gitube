@@ -141,7 +141,7 @@ export default function PersonTimelapse({
         setPlaying(false)
         return
       }
-      // a recording lingers on the grown view, then saves
+      // a recording lingers on the finished view, then saves
       if (tick.next === 'save') {
         void finishRecording()
         return

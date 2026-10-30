@@ -233,7 +233,7 @@ describe('a fetch that failed', () => {
     expect(buttons(refused)).toEqual([])
   })
 
-  it('says the network failed (offline included) or the fetch was cancelled, and to grow again', () => {
+  it('says the network failed (offline included) or the fetch was cancelled, and to press Go again', () => {
     const offline = card(personApp('octo', '', { error: new GitHubFetchError('Network error while looking up octo: fetch failed', 'network') }))
     expect(textOf(offline)).toContain("couldn't reach GitHub")
     expect(textOf(offline)).toContain('press Go again')

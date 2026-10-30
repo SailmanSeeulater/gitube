@@ -192,8 +192,8 @@ describe('useAppStore', () => {
     expect(readStoredLayoutMode()).toBe('metro')
     useAppStore.getState().setLayoutMode('organic')
     expect(readStoredLayoutMode()).toBe('organic')
-    // anything else saved, the retired 'garden' layout included, opens on metro, the default
-    for (const saved of ['bogus', 'garden']) {
+    // anything else saved opens on metro, the default
+    for (const saved of ['bogus', 'Organic']) {
       store.set(LAYOUT_STORAGE_KEY, saved)
       expect(readStoredLayoutMode()).toBe('metro')
     }

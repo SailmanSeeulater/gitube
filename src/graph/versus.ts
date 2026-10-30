@@ -5,7 +5,7 @@
  */
 import type { RepoData } from '../types'
 import { buildContributors } from './contributors'
-import { findWeeds } from './weeds'
+import { findCleanup } from './cleanup'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEK_MS = 7 * DAY_MS
@@ -24,8 +24,8 @@ export interface RepoStats {
   merges: number
   /** days since the newest loaded commit; NaN when none is dated */
   lastCommitDays: number
-  weeds: number
-  thorny: number
+  leftovers: number
+  diverged: number
   /** branches other than the default quiet for STALE_DAYS or more */
   stale: number
 }
@@ -43,7 +43,7 @@ export function repoStats(data: RepoData, now: number): RepoStats {
     if (t > last) last = t
   }
   const weeks = Number.isFinite(first) ? Math.max(1, (last - first) / WEEK_MS) : 1
-  const weeds = findWeeds(data)
+  const cleanup = findCleanup(data)
   const stale = data.branches.filter((b) => {
     if (b.isDefault || b.name === data.defaultBranch) return false
     const t = Date.parse(b.tipDate)
@@ -57,15 +57,15 @@ export function repoStats(data: RepoData, now: number): RepoStats {
     perWeek: commits.length / weeks,
     merges,
     lastCommitDays: Number.isFinite(last) ? Math.max(0, (now - last) / DAY_MS) : Number.NaN,
-    weeds: weeds.weeds.length,
-    thorny: weeds.thorny.length,
+    leftovers: cleanup.leftovers.length,
+    diverged: cleanup.diverged.length,
     stale,
   }
 }
 
 export type Side = 'a' | 'b'
 
-export interface BattleRow {
+export interface VersusRow {
   key: keyof Omit<RepoStats, 'name'>
   label: string
   /** what winning this row means */
@@ -77,7 +77,7 @@ export interface BattleRow {
 }
 
 interface Measure {
-  key: BattleRow['key']
+  key: VersusRow['key']
   label: string
   hint: string
   better: 'more' | 'less'
@@ -90,25 +90,25 @@ export const MEASURES: ReadonlyArray<Measure> = [
   { key: 'perWeek', label: 'commits / week', hint: 'busier: loaded commits per week of the loaded window', better: 'more' },
   { key: 'merges', label: 'merges', hint: 'more merge commits: work flowing back together', better: 'more' },
   { key: 'lastCommitDays', label: 'last commit', hint: 'fresher: the newest commit is more recent', better: 'less' },
-  { key: 'weeds', label: 'cleanup', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
-  { key: 'thorny', label: 'diverged', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
+  { key: 'leftovers', label: 'cleanup', hint: 'tidier: fewer merged branches left undeleted', better: 'less' },
+  { key: 'diverged', label: 'diverged', hint: 'smoother: fewer branches far apart from the default one', better: 'less' },
   { key: 'stale', label: 'stale', hint: `livelier: fewer branches quiet for ${STALE_DAYS}+ days`, better: 'less' },
 ]
 
 /** Values this close count as a draw (commits per week and days are fractional). */
 const DRAW = 1e-6
 
-export interface Battle {
-  rows: BattleRow[]
+export interface Versus {
+  rows: VersusRow[]
   /** rows won by each side */
   score: Record<Side, number>
   /** null for a draw */
   winner: Side | null
 }
 
-export function battle(a: RepoStats, b: RepoStats): Battle {
+export function versus(a: RepoStats, b: RepoStats): Versus {
   const score: Record<Side, number> = { a: 0, b: 0 }
-  const rows = MEASURES.map((m): BattleRow => {
+  const rows = MEASURES.map((m): VersusRow => {
     const va = a[m.key]
     const vb = b[m.key]
     let winner: Side | null = null

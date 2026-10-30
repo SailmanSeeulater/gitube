@@ -298,13 +298,13 @@ Repo mode sends these:
 
 | Event | Data | Sent when |
 |---|---|---|
-| `grow` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | a repo's data arrived after Go, an example chip, a share link or a refresh: once per request. Not for a vs challenger, a token change, a background refetch or an opened file |
+| `load` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | a repo's data arrived after Go, an example chip, a share link or a refresh: once per request. Not for a vs challenger, a token change, a background refetch or an opened file |
 | `layout-switch` | `layout`: `metro` or `organic` | another layout is picked |
 | `theme-switch` | `theme`: the theme's id | the theme picker closes on a different theme than it opened with |
 | `view-mode` | `view`: `skeleton` or `full` | another view is picked |
 | `timelapse-play` | none | the replay is opened |
-| `export` | `format`: `png`, `webm` (also when Safari records mp4), `json` or `garden-file` | a file is saved, or a saved file is opened (`garden-file`) |
-| `battle-start` | none | a vs is started from the side panel (not from a share link) |
+| `export` | `format`: `png`, `webm` (also when Safari records mp4), `json` or `repo-file` | a file is saved, or a saved file is opened (`repo-file`) |
+| `vs-start` | none | a vs is started from the side panel (not from a share link) |
 | `pr-overlay` | `state`: `on` or `off` | once per answer from GitHub about the repo's open pull requests |
 | `share-copy` | none | the share link is copied |
 | `token-added` | none | a new token is saved |
@@ -314,15 +314,15 @@ Person mode sends these (`src/profile/analytics.ts` has the rules):
 
 | Event | Data | Sent when |
 |---|---|---|
-| `grow` | `mode: 'person'`, `source` (`rest` or `graphql`), `cached`, `token`; `login` only for a live fetch without a token | the profile arrived after a search, a `?user=` link or a refresh: once per request |
+| `load` | `mode: 'person'`, `source` (`rest` or `graphql`), `cached`, `token`; `login` only for a live fetch without a token | the profile arrived after a search, a `?user=` link or a refresh: once per request |
 | `view-switch` | `view`: one of the seven view ids | another view is picked |
 | `timelapse-play` | none | the replay is opened |
 | `export` | `format: 'webm'` | a replay recording is saved |
 | `poster-export` | none | a poster is saved |
 | `share-copy`, `theme-switch`, `token-added` | as in repo mode | as in repo mode |
 
-The event names and values predate the rename (`grow`, `battle-start`,
-`garden-file`) and stay as they are, so the stats keep one history.
+Before the rename these were `grow`, `battle-start` and `garden-file`. Umami
+keeps the older counts under those names.
 
 Umami also gets what any server gets: the IP address and the User-Agent, from
 which it works out the location, browser, OS and device type.

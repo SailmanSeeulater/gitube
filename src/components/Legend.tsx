@@ -14,12 +14,12 @@ type GlyphKind =
   | 'origin'
   | 'muted'
   | 'run'
-  | 'thorn'
+  | 'spike'
   | 'pr'
   | 'pr-station'
 
-/** The spikes RepoGraph draws around a thorny tip (drawThorns), as an SVG path around (9, 9). */
-const THORN_PATH = Array.from({ length: 9 }, (_, i) => {
+/** The spikes RepoGraph draws around a diverged tip (drawSpikes), as an SVG path around (9, 9). */
+const SPIKE_PATH = Array.from({ length: 9 }, (_, i) => {
   const a = (i / 9) * Math.PI * 2 + 0.3
   const half = (Math.PI / 9) * 0.55
   const p = (r: number, t: number) => `${(9 + Math.cos(t) * r).toFixed(2)} ${(9 + Math.sin(t) * r).toFixed(2)}`
@@ -110,10 +110,10 @@ function Glyph({ kind, theme, prKnown }: { kind: GlyphKind; theme: Theme; prKnow
           <circle cx="9" cy="9" r="6.5" fill="none" stroke={branch} strokeWidth="1.5" />
         </svg>
       )
-    case 'thorn':
+    case 'spike':
       return (
         <svg {...common}>
-          <path d={THORN_PATH} fill={branch} />
+          <path d={SPIKE_PATH} fill={branch} />
           <circle cx="9" cy="9" r="3" fill={branch} />
           <circle cx="9" cy="9" r="5" fill="none" stroke={branch} strokeWidth="1.2" />
         </svg>
@@ -146,7 +146,7 @@ const ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
   { kind: 'fork', label: 'fork', hint: 'two or more children' },
   { kind: 'merge', label: 'merge', hint: 'two or more parents' },
   { kind: 'root', label: 'root', hint: 'history cut off here' },
-  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
+  { kind: 'spike', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string }> = [
@@ -155,7 +155,7 @@ const METRO_ITEMS: ReadonlyArray<{ kind: GlyphKind; label: string; hint: string 
   { kind: 'origin', label: 'root', hint: 'history cut off here (dashed lead-in)' },
   { kind: 'muted', label: 'merged / sync', hint: 'faint: a deleted merged branch. dashed: a merge between two live lines' },
   { kind: 'run', label: '+N hidden', hint: 'commits collapsed in skeleton view; the count shows beside the line when zoomed in enough' },
-  { kind: 'thorn', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
+  { kind: 'spike', label: 'diverged', hint: 'far apart from the default branch on both sides: a merge will likely hurt (see cleanup)' },
 ]
 
 const PR_HALVES =

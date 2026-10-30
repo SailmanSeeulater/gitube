@@ -454,9 +454,9 @@ describe('the hit test', () => {
     let hits = 0
     s.layout.threads.forEach((thread, i) => {
       if (hidden.has(thread.key)) return
-      const sown = helixAnchor(s.layout, s.g, i, at, out)
-      expect(sown).toBe(!(at !== null && thread.startDay > at))
-      if (!sown) return
+      const reached = helixAnchor(s.layout, s.g, i, at, out)
+      expect(reached).toBe(!(at !== null && thread.startDay > at))
+      if (!reached) return
       const notDrawn = new Set(hidden)
       if (at !== null) for (const other of s.layout.threads) if (other.startDay > at) notDrawn.add(other.key)
       const hit = hitHelix(s.layout, s.g, s.camera, s.view, out[0], out[1], notDrawn, at)

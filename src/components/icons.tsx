@@ -137,12 +137,15 @@ export function CrownIcon(props: IconProps) {
   )
 }
 
-export function SproutIcon(props: IconProps) {
+/** gitube's mark: a line with a branch leaving it at 45 degrees, stations at the fork and the two ends. */
+export function MetroIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <path d="M12 21v-8" />
-      <path d="M12 13c0-4 3-7 8-7 0 4-3 7-8 7Z" />
-      <path d="M12 13c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5Z" />
+      <path d="M4 17h16" />
+      <path d="M8 17l6-6h6" />
+      <circle cx="8" cy="17" r="2" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="17" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="11" r="1.6" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -225,8 +228,8 @@ export function StopIcon(props: IconProps) {
   )
 }
 
-/** A ring of spikes: the thorns RepoGraph draws on tips far apart from the default branch. */
-export function ThornIcon(props: IconProps) {
+/** A ring of spikes: the spikes RepoGraph draws on tips far apart from the default branch. */
+export function SpikesIcon(props: IconProps) {
   const spikes = Array.from({ length: 7 }, (_, i) => {
     const a = (i / 7) * Math.PI * 2 - Math.PI / 2
     const w = 0.28

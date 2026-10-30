@@ -142,15 +142,15 @@ describe('IndexedDB store', () => {
   it('stores entries in the named database and store, keyed by entry.key', async () => {
     const { opens, created } = fakeIndexedDb()
     const { indexedDbStore: make } = await freshModule()
-    const store = make<string>('garden-test', 'things')!
+    const store = make<string>('gitube-test', 'things')!
     const entry: CacheEntry<string> = { key: 'k', version: 1, savedAt: new Date(T0).toISOString(), data: 'data' }
     await store.put(entry)
     expect(await store.get('k')).toEqual(entry)
     expect(await store.all()).toEqual([entry])
     await store.delete('k')
     expect(await store.get('k')).toBeUndefined()
-    expect(opens).toEqual([['garden-test', 1]])
-    expect(created).toEqual([['garden-test', 'things', { keyPath: 'key' }]])
+    expect(opens).toEqual([['gitube-test', 1]])
+    expect(created).toEqual([['gitube-test', 'things', { keyPath: 'key' }]])
   })
 
   it('opens each database once, and separate databases separately', async () => {
@@ -168,7 +168,7 @@ describe('IndexedDB store', () => {
   it('swallows storage errors, and tries to open again on the next call', async () => {
     const { opens } = fakeIndexedDb(true)
     const { indexedDbStore: make } = await freshModule()
-    const store = make<string>('garden-test', 'things')!
+    const store = make<string>('gitube-test', 'things')!
     expect(await store.get('k')).toBeUndefined()
     expect(await store.all()).toEqual([])
     await expect(store.put({ key: 'k', version: 1, savedAt: '', data: 'x' })).resolves.toBeUndefined()

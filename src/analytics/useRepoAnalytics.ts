@@ -1,9 +1,9 @@
 /**
- * Repo mode's analytics events that follow fetches rather than clicks: grow, fetch-error and
+ * Repo mode's analytics events that follow fetches rather than clicks: load, fetch-error and
  * pr-overlay. The click events are sent where the click is handled. See analytics/umami.ts.
  *
- * grow counts requests, not fetches: Grow, refresh and a share link each ask for a repo, and the
- * event goes once that request has settled. A token change, a background refetch, a battle's
+ * load counts requests, not fetches: Go, refresh and a share link each ask for a repo, and the
+ * event goes once that request has settled. A token change, a background refetch, a vs
  * challenger or a saved file opened sends none by itself. The decisions are plain classes (RepoAnalytics
  * and its counters), so they can be tested without React; useRepoAnalytics only feeds them.
  */
@@ -14,7 +14,7 @@ import type { PullsStatus } from '../hooks/usePulls'
 import { useAppStore } from '../store/useAppStore'
 import { track, type EventData } from './umami'
 
-/** Branch counts in coarse buckets: enough to see what size of repo people grow. */
+/** Branch counts in coarse buckets: enough to see what size of repo people load. */
 export function branchBucket(count: number): string {
   if (count <= 1) return '1'
   if (count <= 5) return '2-5'
@@ -25,10 +25,10 @@ export function branchBucket(count: number): string {
 }
 
 /**
- * The grow event for a repo on show. The repo is named only for a live fetch without a token, the
+ * The load event for a repo on show. The repo is named only for a live fetch without a token, the
  * one case that proves it public: a cached copy may have been fetched with a token since removed.
  */
-export function growEventData(data: Pick<RepoData, 'owner' | 'repo' | 'branches'>, cached: boolean, token: boolean): EventData {
+export function loadEventData(data: Pick<RepoData, 'owner' | 'repo' | 'branches'>, cached: boolean, token: boolean): EventData {
   const event: EventData = { mode: 'repo', branches: branchBucket(data.branches.length), cached, token }
   if (!token && !cached) event.repo = `${data.owner}/${data.repo}`
   return event
@@ -50,20 +50,20 @@ function sameRepo(a: RepoRef, b: RepoRef): boolean {
 }
 
 /**
- * Counts requests to grow a repo. A request is armed with what was on show when it was made, and
+ * Counts requests to load a repo. A request is armed with what was on show when it was made, and
  * counted once it has settled: nothing is fetching and its repo is on show, fetched since. A new
  * error drops it uncounted; a request made since replaces it.
  */
-export class GrowCounter {
+export class LoadCounter {
   private armed: { target: RepoRef; fetchedAt: string | null; error: GitHubFetchError | null } | null = null
 
-  /** A request to grow target (Grow, refresh or a share link), made while current was on show. */
+  /** A request to load target (Go, refresh or a share link), made while current was on show. */
   arm(target: RepoRef, current: RepoOnShow): void {
     const shown = current.data !== undefined && sameRepo(current.data, target)
     this.armed = { target, fetchedAt: shown ? current.fetchedAt : null, error: current.error }
   }
 
-  /** The grow event once the armed request has settled with a new fetch of its repo; null otherwise. */
+  /** The load event once the armed request has settled with a new fetch of its repo; null otherwise. */
   observe(state: RepoOnShow, token: boolean): EventData | null {
     const armed = this.armed
     // A fetch in flight settles the request later, whatever error is still on show meanwhile.
@@ -75,7 +75,7 @@ export class GrowCounter {
     const { data, fetchedAt } = state
     if (!data || !sameRepo(data, armed.target) || fetchedAt === null || fetchedAt === armed.fetchedAt) return null
     this.armed = null
-    return growEventData(data, state.cachedAt !== null, token)
+    return loadEventData(data, state.cachedAt !== null, token)
   }
 }
 
@@ -120,15 +120,15 @@ export interface RepoAnalyticsState extends RepoOnShow {
   prMarkCount: number
 }
 
-export type RepoAnalyticsEvent = ['grow' | 'fetch-error' | 'pr-overlay', EventData]
+export type RepoAnalyticsEvent = ['load' | 'fetch-error' | 'pr-overlay', EventData]
 
 /**
  * Everything useRepoAnalytics decides, without React: the hook feeds it each committed state and
- * sends what comes back. A request (noteGrow) is armed with the state last observed, the one on
+ * sends what comes back. A request (noteLoad) is armed with the state last observed, the one on
  * screen when it was made.
  */
 export class RepoAnalytics {
-  private readonly grows = new GrowCounter()
+  private readonly loads = new LoadCounter()
   private readonly errors = new FetchErrorCounter()
   private readonly overlays = new PrOverlayCounter()
   private shown: RepoOnShow
@@ -136,19 +136,19 @@ export class RepoAnalytics {
   /** initialRepo: a share link's repo, asked for from the first render. */
   constructor(initial: RepoOnShow, initialRepo: RepoRef | null = null) {
     this.shown = initial
-    if (initialRepo) this.grows.arm(initialRepo, initial)
+    if (initialRepo) this.loads.arm(initialRepo, initial)
   }
 
-  noteGrow(ref: RepoRef): void {
-    this.grows.arm(ref, this.shown)
+  noteLoad(ref: RepoRef): void {
+    this.loads.arm(ref, this.shown)
   }
 
   observe(state: RepoAnalyticsState, token: boolean): RepoAnalyticsEvent[] {
     const { data, fetchedAt, cachedAt, isFetching, error } = state
     this.shown = { data, fetchedAt, cachedAt, isFetching, error }
     const events: RepoAnalyticsEvent[] = []
-    const grow = this.grows.observe(this.shown, token)
-    if (grow) events.push(['grow', grow])
+    const load = this.loads.observe(this.shown, token)
+    if (load) events.push(['load', load])
     const failed = this.errors.observe(error, isFetching)
     if (failed) events.push(['fetch-error', failed])
     const overlay = this.overlays.observe(data, state.pullsStatus, state.pullsIndex, state.prMarkCount)
@@ -159,13 +159,13 @@ export class RepoAnalytics {
 
 interface RepoAnalyticsInput extends RepoAnalyticsState {
   data: RepoData | undefined
-  /** a share link's repo, grown from the first render: read once */
+  /** a share link's repo, loaded from the first render: read once */
   initialRepo?: RepoRef | null
 }
 
 /**
- * Sends grow, fetch-error and pr-overlay as the repo on show changes. Returns noteGrow (stable),
- * which Grow and refresh call with the repo they ask for.
+ * Sends load, fetch-error and pr-overlay as the repo on show changes. Returns noteLoad (stable),
+ * which Go and refresh call with the repo they ask for.
  */
 export function useRepoAnalytics(input: RepoAnalyticsInput): (ref: RepoRef) => void {
   const { data, fetchedAt, cachedAt, isFetching, error, pullsStatus, pullsIndex, prMarkCount } = input
@@ -174,5 +174,5 @@ export function useRepoAnalytics(input: RepoAnalyticsInput): (ref: RepoRef) => v
     const state = { data, fetchedAt, cachedAt, isFetching, error, pullsStatus, pullsIndex, prMarkCount }
     for (const [event, eventData] of analytics.observe(state, useAppStore.getState().token !== '')) track(event, eventData)
   }, [analytics, data, fetchedAt, cachedAt, isFetching, error, pullsStatus, pullsIndex, prMarkCount])
-  return useCallback((ref: RepoRef) => analytics.noteGrow(ref), [analytics])
+  return useCallback((ref: RepoRef) => analytics.noteLoad(ref), [analytics])
 }

@@ -63,7 +63,7 @@ export interface LifeStar extends LifeViewItem {
   y: number
   /** index in bands */
   band: number
-  /** 0..1: the lane's weight against the heaviest, square-rooted; 0 for a seedling */
+  /** 0..1: the lane's weight against the heaviest, square-rooted; 0 for an uncounted repo */
   size: number
   /** 0..1: starSignal(stars), as phosphor's head blocks */
   glow: number
@@ -74,7 +74,7 @@ export interface LifeStar extends LifeViewItem {
   /** a repo they only contributed to (isOwn false): drawn hollow */
   visiting: boolean
   /** a token profile's lane GitHub counted no commits to (detailed false) */
-  seedling: boolean
+  uncounted: boolean
   language: string | null
   /** the lane's last day number */
   endDay: number
@@ -82,13 +82,13 @@ export interface LifeStar extends LifeViewItem {
   /** the days pull requests of theirs were merged into it, as day numbers, ascending, one per day (lane.landed) */
   landed: number[]
   /**
-   * How far the star has grown through the time-lapse, piecewise linear: growthShares[i] by the
-   * start of day growthDays[i]. 0 before the first day, 1 from the last. Each active span adds its
+   * How far the star has been drawn through the time-lapse, piecewise linear: revealShares[i] by the
+   * start of day revealDays[i]. 0 before the first day, 1 from the last. Each active span adds its
    * share of the lane's commits (a token profile) or of its active days (otherwise), evenly over its
    * days; a dormant span adds nothing.
    */
-  growthDays: number[]
-  growthShares: number[]
+  revealDays: number[]
+  revealShares: number[]
 }
 
 export interface StarLink {
@@ -235,21 +235,21 @@ function slotsOf(lanes: ReadonlyArray<Lane>, bandOf: ReadonlyArray<number>, coun
   return { slot, turn, crowd: runs.map((run) => run.lanes) }
 }
 
-/** The lane's growth through the time-lapse (LifeStar's growthDays and growthShares). */
-function growthOf(lane: Lane, source: ProfileData['source']): { days: number[]; shares: number[] } {
+/** The lane's reveal through the time-lapse (LifeStar's revealDays and revealShares). */
+function revealOf(lane: Lane, source: ProfileData['source']): { days: number[]; shares: number[] } {
   const active = activeSpans(lane)
   const byCommits = source === 'graphql' && lane.commits > 0
   let total = 0
   for (const span of active) total += byCommits ? span.commits : span.days
   const days: number[] = []
   const shares: number[] = []
-  let grown = 0
+  let drawnShare = 0
   active.forEach((span, k) => {
     days.push(span.fromDay)
-    shares.push(grown)
-    grown += total > 0 ? (byCommits ? span.commits : span.days) / total : 0
+    shares.push(drawnShare)
+    drawnShare += total > 0 ? (byCommits ? span.commits : span.days) / total : 0
     days.push(span.toDay + 1)
-    shares.push(k === active.length - 1 ? 1 : Math.min(1, grown))
+    shares.push(k === active.length - 1 ? 1 : Math.min(1, drawnShare))
   })
   return { days, shares }
 }
@@ -272,7 +272,7 @@ function firstSharedDay(a: ReadonlyArray<Span>, b: ReadonlyArray<Span>): number 
  * in it (by weight, then lane order); a pair's strength is the months it shares, and a pair with no
  * day both are active on is dropped. Each star picks its LINKS_PER_STAR strongest partners (then the
  * earliest first shared day, then the lower star index), the picks are pooled, and the MAX_LINKS
- * strongest are kept (then the earliest, then by a and b). Seedlings of a token profile, whose spans
+ * strongest are kept (then the earliest, then by a and b). Uncounted repos of a token profile, whose spans
  * GitHub counted nothing in, link to nothing.
  */
 function linksOf(lanes: ReadonlyArray<Lane>, weights: ReadonlyArray<number>, linked: ReadonlyArray<boolean>, starOf: ReadonlyArray<number>): StarLink[] {
@@ -357,10 +357,10 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
   const axis = axisOf(timeline)
   const { lanes } = timeline
   const weights = lanes.map((lane) => laneWeight(lane, source))
-  const seedling = lanes.map((lane) => source === 'graphql' && !lane.detailed)
+  const uncounted = lanes.map((lane) => source === 'graphql' && !lane.detailed)
   let heaviest = 0
   lanes.forEach((_lane, i) => {
-    if (!seedling[i]) heaviest = Math.max(heaviest, weights[i])
+    if (!uncounted[i]) heaviest = Math.max(heaviest, weights[i])
   })
 
   const { bands, bandOf } = bandsOf(lanes, weights)
@@ -377,7 +377,7 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
     // sharing a slot on their day share the middle half evenly, by their turn, so none hides another.
     const crowd = slots.crowd[i]
     const offset = crowd > 1 ? ((slots.turn[i] + 0.5) / crowd - 0.5) * SLOT_SPREAD : (hash01(`${shape}#${twin}`) - 0.5) * SLOT_SPREAD
-    const growth = growthOf(lane, source)
+    const revealProgress = revealOf(lane, source)
     return {
       lane: i,
       key: repoKey(lane.repo),
@@ -385,18 +385,18 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
       x: lane.rootDay - timeline.startDay + 0.5,
       y: band.y0 + ((band.y1 - band.y0) * (slots.slot[i] + 0.5 + offset)) / slotCount(band.count),
       band: bandOf[i],
-      size: seedling[i] || heaviest <= 0 ? 0 : Math.sqrt(weights[i] / heaviest),
+      size: uncounted[i] || heaviest <= 0 ? 0 : Math.sqrt(weights[i] / heaviest),
       glow: starSignal(lane.stars),
       dry: lane.isArchived,
       twin: lane.isFork,
       visiting: !lane.isOwn,
-      seedling: seedling[i],
+      uncounted: uncounted[i],
       language: lane.language,
       endDay: lane.endDay,
       stars: lane.stars,
       landed: landedDays(lane),
-      growthDays: growth.days,
-      growthShares: growth.shares,
+      revealDays: revealProgress.days,
+      revealShares: revealProgress.shares,
     }
   })
   stars.sort(comparePaint)
@@ -410,6 +410,6 @@ export function layoutConstellation(timeline: LifeTimeline, source: ProfileData[
     byKey: new Map(stars.map((star, i) => [star.key, i])),
     bands,
     stars,
-    links: linksOf(lanes, weights, seedling.map((s) => !s), starOf),
+    links: linksOf(lanes, weights, uncounted.map((s) => !s), starOf),
   }
 }

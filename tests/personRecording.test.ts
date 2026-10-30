@@ -3,7 +3,7 @@
  * year to today and respects the privacy toggle"): the recorder captures the view's canvas,
  * painted frame by frame by one painter (as LifeView keeps one while the time-lapse is on) under
  * the time-lapse value PersonApp hands it, its progress written by the controls' clock (lapseTick
- * at LAPSE_FPS) from openLifeTimelapse's 0, through the hold on the grown view, to the save. On
+ * at LAPSE_FPS) from openLifeTimelapse's 0, through the hold on the finished view, to the save. On
  * every frame the caption's year runs from the timeline's start to today and lines only join; no
  * text drawn or measured on any frame names a private repo while the toggle hides it, and once
  * revealed for this login the names are on the canvas, and a recording the toggle turns under is
@@ -31,7 +31,7 @@ import { useAppStore } from '../src/store/useAppStore'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
 import { LINES_VIEW } from '../src/profile/lifeViews'
-import { FAKE_TOKEN, GAEARON_NOW, KEPANO_NOW, gaearonProfile, grow, kepanoProfile, paint, painterFor, withPrivate, type Grown } from './helpers/personScene'
+import { FAKE_TOKEN, GAEARON_NOW, KEPANO_NOW, gaearonProfile, load, kepanoProfile, paint, painterFor, withPrivate, type Loaded } from './helpers/personScene'
 import { recordingCtx } from './helpers/recordingCtx'
 
 const noop = () => {}
@@ -44,7 +44,7 @@ const NOW = new Date(2026, 9, 25, 12)
 
 const WEBM = { mimeType: 'video/webm', ext: 'webm' } as const
 
-/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, a seedling fork and an archived one, made private. */
+/** As in personGuards: kepano's top-starred repo, his own, one he contributed to, an uncounted fork and an archived one, made private. */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 
 let kepano: ProfileData
@@ -93,7 +93,7 @@ interface Frame {
  * paced by lapseTick, until it says save. One painter throughout, under PersonApp's time-lapse
  * value ({ progress, title: the login }); each frame's texts are checked as they come.
  */
-function record(g: Grown) {
+function record(g: Loaded) {
   stubTracker()
   const progress = { current: 1 }
   openLifeTimelapse(progress, noop)
@@ -128,9 +128,9 @@ describe('a recording of a life', () => {
       ['kepano (graphql)', kepano, KEPANO_NOW],
       ['gaearon (rest)', gaearon, GAEARON_NOW],
     ] as const) {
-      const g = grow(profile, now, theme)
+      const g = load(profile, now, theme)
       const { frames } = record(g)
-      // a frame a tick for the play, then the hold on the grown view
+      // a frame a tick for the play, then the hold on the finished view
       expect(frames.length, label).toBe(LENGTH * LAPSE_FPS + (LAPSE_HOLD_MS * LAPSE_FPS) / 1000 + 1)
       expect(frames[0].progress, label).toBe(0)
       expect(frames.findIndex((f) => f.progress === 1), label).toBe(LENGTH * LAPSE_FPS)
@@ -149,7 +149,7 @@ describe('a recording of a life', () => {
         expect(frames[i].strokes, `${label} frame ${i}`).toBeGreaterThanOrEqual(frames[i - 1].strokes)
       }
       expect(frames.every((f) => f.credited), label).toBe(true)
-      // it starts sparse and ends fully grown, as a still frame
+      // it starts sparse and ends fully drawn, as a still frame
       expect(frames[0].strokes, label).toBeLessThan(frames[frames.length - 1].strokes)
       expect(frames[frames.length - 1].strokes, label).toBe(paint(g).rec.calls('lineTo').length)
     }
@@ -157,14 +157,14 @@ describe('a recording of a life', () => {
 
   it('never names a private repo on any frame while hidden, or revealed for another login', () => {
     for (const revealFor of [null, 'someone-else']) {
-      const { frames, leaked } = record(grow(secret, KEPANO_NOW, theme, revealFor))
+      const { frames, leaked } = record(load(secret, KEPANO_NOW, theme, revealFor))
       expect(frames.length).toBeGreaterThan(LENGTH * LAPSE_FPS)
       expect(leaked, String(revealFor)).toEqual([])
     }
   })
 
   it('carries the names once revealed for this login, as the screen shows them', () => {
-    const { leaked, measured } = record(grow(secret, KEPANO_NOW, theme, 'KEPANO'))
+    const { leaked, measured } = record(load(secret, KEPANO_NOW, theme, 'KEPANO'))
     expect(leaked.length).toBeGreaterThan(0)
     expect(measured).toContain('obsidian-skills')
     expect(measured).toContain('obsidianmd/wordgard')
@@ -183,8 +183,8 @@ describe('a recording of a life', () => {
     recorder.start(take, 0, true)
     const timelapse = { progress, title: secret.login }
     // the view's painter, one per namer: the revealed one, then the hidden one once the toggle turns
-    let { painter } = painterFor(grow(secret, KEPANO_NOW, theme, 'KEPANO'), {}, { timelapse })
-    const g = grow(secret, KEPANO_NOW, theme)
+    let { painter } = painterFor(load(secret, KEPANO_NOW, theme, 'KEPANO'), {}, { timelapse })
+    const g = load(secret, KEPANO_NOW, theme)
     const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
     const play: LapsePlay = { from: progress.current, startedAt: 0, lengthS: LENGTH, recording: true, endedAt: -1 }
     // turned in the hold, the private repos all on the canvas by then
@@ -245,7 +245,7 @@ describe("Phase 5's events", () => {
         measure: (text) => text.length * 6.5,
       }
       // the privacy toggle hides the names, as it does by default
-      const g = grow(secret, KEPANO_NOW, theme)
+      const g = load(secret, KEPANO_NOW, theme)
 
       const progress = { current: 1 }
       openLifeTimelapse(progress, noop)

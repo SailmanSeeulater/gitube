@@ -6,7 +6,7 @@ import StatusStrip from '../src/components/StatusStrip'
 import { normaliseGraphql, type GqlPullData } from '../src/api/pulls'
 import { buildContributors, buildGraph } from '../src/graph'
 import { HEALTH_STALE_DAYS, healthItems, healthLine, repoHealth, type RepoHealth } from '../src/graph/health'
-import { findWeeds } from '../src/graph/weeds'
+import { findCleanup } from '../src/graph/cleanup'
 import type { Branch, Commit, PullIndex, PullSummary, RepoData } from '../src/types'
 import { makeRepo } from './fixtures/repos'
 import repoFixture from './fixtures/github/repo.json'
@@ -34,7 +34,7 @@ function repo(branches: Branch[], commits: Commit[]): RepoData {
 
 /** The whole thing from a RepoData alone (no pull requests), at NOW. */
 function healthOf(data: RepoData, pulls: PullIndex | null = null): RepoHealth {
-  return repoHealth(data, buildContributors(data), findWeeds(data), pulls, NOW)
+  return repoHealth(data, buildContributors(data), findCleanup(data), pulls, NOW)
 }
 
 function pr(head: string, number: number, over: Partial<PullSummary> = {}): PullSummary {
@@ -109,8 +109,8 @@ describe('bus factor', () => {
 
 /**
  * feature and feature2 forked at m0 (2026-10-01) and lived 10 and 4 days. stale forked at old
- * (2026-01-01), lived 31 days and has sat since February; thorny forked there too and is 300 ahead
- * and 100 behind. merged and same are weeds; unknownFork's merge base was never fetched.
+ * (2026-01-01), lived 31 days and has sat since February; diverged forked there too and is 300 ahead
+ * and 100 behind. merged and same are leftovers; unknownFork's merge base was never fetched.
  */
 function lives(): RepoData {
   const main = branch('main', { isDefault: true, mergeBaseSha: null, aheadBy: 0 })
@@ -122,7 +122,7 @@ function lives(): RepoData {
       branch('merged', { aheadBy: 0, behindBy: 5, tipDate: '2026-01-03T00:00:00Z' }),
       branch('same', { aheadBy: 0, behindBy: 0 }),
       branch('stale', { mergeBaseSha: 'old', tipDate: '2026-02-01T00:00:00Z' }),
-      branch('thorny', { mergeBaseSha: 'old', aheadBy: 300, behindBy: 100, tipDate: '2026-10-20T00:00:00Z' }),
+      branch('diverged', { mergeBaseSha: 'old', aheadBy: 300, behindBy: 100, tipDate: '2026-10-20T00:00:00Z' }),
       branch('unknownFork', { mergeBaseSha: 'zzzz' }),
     ],
     [commit('old', '2026-01-01T00:00:00Z'), commit('m0', '2026-10-01T00:00:00Z'), commit('m1', '2026-10-27T00:00:00Z', 'Bob', 'bob')],
@@ -132,11 +132,11 @@ function lives(): RepoData {
 describe('branch lifetime', () => {
   it('takes the median fork-to-tip over branches with work on them, and counts merged and stale ones', () => {
     const h = healthOf(lives())
-    // feature 10, feature2 4, stale 31, thorny 292: the median is between 10 and 31
+    // feature 10, feature2 4, stale 31, diverged 292: the median is between 10 and 31
     expect(h.branches).toEqual({ count: 7, medianDays: 20.5, merged: 1, stale: 2 })
   })
 
-  it('leaves out a fork point that was not fetched, and a weed (its fork point is its own tip)', () => {
+  it('leaves out a fork point that was not fetched, and a leftover (its fork point is its own tip)', () => {
     const data = repo(
       [branch('main', { isDefault: true, mergeBaseSha: null, aheadBy: 0 }), branch('merged', { aheadBy: 0, behindBy: 5 }), branch('unknownFork', { mergeBaseSha: 'zzzz' })],
       [commit('m0', '2026-01-01T00:00:00Z')],
@@ -154,7 +154,7 @@ describe('branch lifetime', () => {
       [branch('main', { isDefault: true, mergeBaseSha: null, aheadBy: 0 }), branch('work', { tipDate: '2026-02-01T00:00:00Z' })],
       [commit('m0', '2026-01-01T00:00:00Z')],
     )
-    const at = (now: number) => repoHealth(data, buildContributors(data), findWeeds(data), null, now).branches?.stale
+    const at = (now: number) => repoHealth(data, buildContributors(data), findCleanup(data), null, now).branches?.stale
     expect(at(Date.parse('2026-02-01T00:00:00Z') + HEALTH_STALE_DAYS * DAY_MS)).toBe(0)
     expect(at(Date.parse('2026-02-01T00:00:00Z') + (HEALTH_STALE_DAYS + 1) * DAY_MS)).toBe(1)
   })

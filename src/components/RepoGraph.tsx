@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import ForceGraph2D, { type ForceGraphMethods, type LinkObject, type NodeObject } from 'react-force-graph-2d'
 import type { Graph, GraphLink, GraphNode, PrMark, ViewMode } from '../types'
 import type { ContributorFocus } from '../graph/contributors'
-import { clockAt, growth, stemGrowth, type Timeline } from '../graph/timeline'
+import { clockAt, revealProgress, linkRevealed, type Timeline } from '../graph/timeline'
 import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
 import type { Theme } from '../theme/themes'
@@ -84,10 +84,10 @@ export interface RepoGraphProps {
   metro?: MetroView | null
   /** The selected contributor's commits, links and labels to keep lit; null when nobody is selected. */
   focus?: ContributorFocus | null
-  /** The time-lapse: only what has grown by its progress is drawn. null when it is off. */
+  /** The time-lapse: only what has appeared by its progress is drawn. null when it is off. */
   timelapse?: RepoGraphTimelapse | null
-  /** branch name -> thorn level (1..3) for branches far apart from the default one (see graph/weeds) */
-  thorns?: ReadonlyMap<string, number> | null
+  /** branch name -> spike level (1..3) for branches far apart from the default one (see graph/cleanup) */
+  spikes?: ReadonlyMap<string, number> | null
   /**
    * node id -> the open pull requests of the branches whose tip it is, combined (see graph/pulls):
    * drawn as a ring split into review | checks in place of the tip's own ring. Paint only: the label
@@ -140,7 +140,7 @@ const NODE_MODE_REPLACE = () => 'replace' as const
 const FIT_MS = 400
 /** metro mode: a search brings its hits into view once typing has paused this long */
 const SEARCH_REVEAL_MS = 300
-// time-lapse in metro mode: the camera pans when the growing edge leaves [MIN, MAX] of the view's
+// time-lapse in metro mode: the camera pans when the advancing edge leaves [MIN, MAX] of the view's
 // width, putting it at FOLLOW_AT, in a glide of FOLLOW_MS
 const FOLLOW_MIN = 0.1
 const FOLLOW_MAX = 0.85
@@ -193,25 +193,25 @@ function drawBadge(
   ctx.globalAlpha = 1
 }
 
-/** Spikes around a thorny tip. */
-const THORN_SPIKES = 9
+/** Spikes around a diverged tip. */
+const SPIKE_COUNT = 9
 
-/** How far a tip's thorns reach beyond its ring, in screen px; 0 for no thorns. */
-function thornLengthPx(level: number): number {
+/** How far a tip's spikes reach beyond its ring, in screen px; 0 for no spikes. */
+function spikeLengthPx(level: number): number {
   return level > 0 ? 2.5 + 2.5 * level : 0
 }
 
 /**
- * Thorns around a tip far apart from the default branch: THORN_SPIKES triangles in the branch's
- * colour, based on a circle of radius base (graph units) and reaching thornLengthPx(level) further.
+ * Spikes around a tip far apart from the default branch: SPIKE_COUNT triangles in the branch's
+ * colour, based on a circle of radius base (graph units) and reaching spikeLengthPx(level) further.
  */
-function drawThorns(ctx: CanvasRenderingContext2D, x: number, y: number, base: number, level: number, px: number, colour: string): void {
-  const reach = base + thornLengthPx(level) * px
-  const half = (Math.PI / THORN_SPIKES) * 0.55
+function drawSpikes(ctx: CanvasRenderingContext2D, x: number, y: number, base: number, level: number, px: number, colour: string): void {
+  const reach = base + spikeLengthPx(level) * px
+  const half = (Math.PI / SPIKE_COUNT) * 0.55
   ctx.beginPath()
-  for (let i = 0; i < THORN_SPIKES; i++) {
+  for (let i = 0; i < SPIKE_COUNT; i++) {
     // turned off the axes so no spike points straight at a label or a lane
-    const a = (i / THORN_SPIKES) * TWO_PI + 0.3
+    const a = (i / SPIKE_COUNT) * TWO_PI + 0.3
     ctx.moveTo(x + Math.cos(a - half) * base, y + Math.sin(a - half) * base)
     ctx.lineTo(x + Math.cos(a) * reach, y + Math.sin(a) * reach)
     ctx.lineTo(x + Math.cos(a + half) * base, y + Math.sin(a + half) * base)
@@ -270,7 +270,7 @@ export default function RepoGraph({
   metro = null,
   focus = null,
   timelapse = null,
-  thorns = null,
+  spikes = null,
   prMarks = null,
 }: RepoGraphProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -441,24 +441,24 @@ export default function RepoGraph({
     if (metro) return (node: GraphNode) => labelStationRadius(metro.stations.get(node.id), node.isTip)
     return undefined
   }, [metro])
-  // thorns: the highest level among the branches whose tip a node is (0 for none)
-  const thornOf = useCallback(
+  // spikes: the highest level among the branches whose tip a node is (0 for none)
+  const spikeOf = useCallback(
     (node: GraphNode): number => {
-      if (!thorns || !node.isTip) return 0
+      if (!spikes || !node.isTip) return 0
       let level = 0
-      for (const tip of node.tips) level = Math.max(level, thorns.get(tip) ?? 0)
+      for (const tip of node.tips) level = Math.max(level, spikes.get(tip) ?? 0)
       return level
     },
-    [thorns],
+    [spikes],
   )
-  // labels keep clear of bead rings in metro mode, and of thorns in every layout
+  // labels keep clear of bead rings in metro mode, and of spikes in every layout
   const labelRing = useMemo(() => {
-    const thornPx = (node: GraphNode) => thornLengthPx(thornOf(node))
-    if (metro) return (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) + thornPx(node)
-    if (!thorns || thorns.size === 0) return undefined
-    // organic: the default tip ring, then the thorns
-    return (node: GraphNode) => (node.isTip ? TIP_RING_PX : 0) + thornPx(node)
-  }, [metro, thorns, thornOf])
+    const spikePx = (node: GraphNode) => spikeLengthPx(spikeOf(node))
+    if (metro) return (node: GraphNode) => (metro.stations.get(node.id) === 'commit' && !node.isTip ? METRO_BEAD_RING_PX : 0) + spikePx(node)
+    if (!spikes || spikes.size === 0) return undefined
+    // organic: the default tip ring, then the spikes
+    return (node: GraphNode) => (node.isTip ? TIP_RING_PX : 0) + spikePx(node)
+  }, [metro, spikes, spikeOf])
   // ... and off the station rings (plain commit dots stay coverable) and the lines: the routes as
   // drawn once the tween has ended (during it, links are drawn straight)
   const labelHard = useMemo(() => (metro ? (node: GraphNode) => metro.stations.get(node.id) !== 'commit' : undefined), [metro])
@@ -469,17 +469,17 @@ export default function RepoGraph({
         : undefined,
     [metro, tweening],
   )
-  // ---- time-lapse: how far each node and stem has grown at timelapse.progress (read per paint) ----
-  /** 0 = not there yet, 1 = fully grown; always 1 with the time-lapse off */
-  const nodeGrowth = useCallback(
-    (id: string): number => (timelapse ? growth(timelapse.timeline.nodeAt.get(id) ?? 0, timelapse.progress.current) : 1),
+  // ---- time-lapse: how far each node and link has been drawn at timelapse.progress (read per paint) ----
+  /** 0 = not there yet, 1 = fully drawn; always 1 with the time-lapse off */
+  const nodeRevealed = useCallback(
+    (id: string): number => (timelapse ? revealProgress(timelapse.timeline.nodeAt.get(id) ?? 0, timelapse.progress.current) : 1),
     [timelapse],
   )
-  const stemShown = useCallback(
-    (source: string, target: string): number => (timelapse ? stemGrowth(timelapse.timeline, source, target, timelapse.progress.current) : 1),
+  const linkShown = useCallback(
+    (source: string, target: string): number => (timelapse ? linkRevealed(timelapse.timeline, source, target, timelapse.progress.current) : 1),
     [timelapse],
   )
-  const labelHidden = useMemo(() => (timelapse ? (id: string) => nodeGrowth(id) <= 0 : undefined), [timelapse, nodeGrowth])
+  const labelHidden = useMemo(() => (timelapse ? (id: string) => nodeRevealed(id) <= 0 : undefined), [timelapse, nodeRevealed])
 
   const { paintLabels, onPointerMove, onPointerLeave, clickTest, labelsBusy, maxTipSpeed, setDragNode, fitStarted } = useLabelPlacer({
     index,
@@ -522,9 +522,9 @@ export default function RepoGraph({
       if (x === undefined || y === undefined) return
       const id = node.id
       // time-lapse: nothing until it has appeared, then a quick pop to full size
-      const grown = nodeGrowth(id)
-      if (grown <= 0) return
-      const pop = grown < 1 ? popScale(grown) : 1
+      const drawnShare = nodeRevealed(id)
+      if (drawnShare <= 0) return
+      const pop = drawnShare < 1 ? popScale(drawnShare) : 1
       if (pop !== 1) {
         ctx.save()
         ctx.translate(x, y)
@@ -550,8 +550,8 @@ export default function RepoGraph({
       const outer = metro ? r : r + (node.isTip ? 2 : 0)
       const mark = node.isTip && prMarks ? prMarks.get(id) : undefined
 
-      // a growing node fades in over the first half of its pop
-      const alpha = (dim ? th.dimAlpha : 1) * Math.min(1, grown * 2)
+      // an appearing node fades in over the first half of its pop
+      const alpha = (dim ? th.dimAlpha : 1) * Math.min(1, drawnShare * 2)
       ctx.globalAlpha = alpha
 
       if (matches) {
@@ -571,9 +571,9 @@ export default function RepoGraph({
         ctx.stroke()
       }
 
-      // a tip far apart from the default branch grows thorns, from just outside its ring
-      const thorn = thornOf(node)
-      if (thorn > 0) drawThorns(ctx, x, y, metro ? r + px : outer + 2.5 * px, thorn, px, colour)
+      // a tip far apart from the default branch gets spikes, from just outside its ring
+      const spike = spikeOf(node)
+      if (spike > 0) drawSpikes(ctx, x, y, metro ? r + px : outer + 2.5 * px, spike, px, colour)
 
       if (metro) {
         // station glyphs: tips in branch colour outlined in the station colour, interchanges as
@@ -692,7 +692,7 @@ export default function RepoGraph({
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeGrowth, thornOf, prMarks],
+    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeRevealed, spikeOf, prMarks],
   )
 
   const paintPointerArea = useCallback(
@@ -700,8 +700,8 @@ export default function RepoGraph({
       const x = node.x
       const y = node.y
       if (x === undefined || y === undefined) return
-      // nothing to hover or click before it has grown
-      if (nodeGrowth(node.id) <= 0) return
+      // nothing to hover or click before it has been drawn
+      if (nodeRevealed(node.id) <= 0) return
       const px = 1 / globalScale
       const body = nodeRadius(node.reach) + (node.isTip ? 2 : 0)
       const outer = metro ? metroStationRadius(metro.stations.get(node.id), node.isTip, px) : body
@@ -710,7 +710,7 @@ export default function RepoGraph({
       ctx.arc(x, y, outer + (node.isTip ? 3.25 : 1) * px, 0, TWO_PI)
       ctx.fill()
     },
-    [metro, nodeGrowth],
+    [metro, nodeRevealed],
   )
 
   const linkColor = useCallback(
@@ -763,17 +763,17 @@ export default function RepoGraph({
   )
 
   /**
-   * Time-lapse links replace force-graph's own stroke: a stem growing from the parent towards the
+   * Time-lapse links replace force-graph's own stroke: a link drawing in from the parent towards the
    * child along the same curve (force-graph's __controlPoints, computed just before custom paints),
    * with its '+N' badge once it is whole.
    */
-  const paintStem = useCallback(
+  const paintRevealedLink = useCallback(
     (link: RepoGraphLink, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const s = link.source
       const t = link.target
       if (typeof s !== 'object' || typeof t !== 'object') return
       if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) return
-      const f = stemShown(linkEndId(s), linkEndId(t))
+      const f = linkShown(linkEndId(s), linkEndId(t))
       if (f <= 0) return
       ctx.strokeStyle = linkColor(link)
       ctx.lineWidth = linkWidth(link) / globalScale
@@ -789,13 +789,13 @@ export default function RepoGraph({
       ctx.stroke()
       if (f >= 1) paintLink(link, ctx, globalScale)
     },
-    [stemShown, linkColor, linkWidth, paintLink],
+    [linkShown, linkColor, linkWidth, paintLink],
   )
-  const stemMode = useCallback(() => 'replace' as const, [])
-  // ungrown links are left out of force-graph's hit canvas too, so they cannot be clicked
+  const replaceLinkMode = useCallback(() => 'replace' as const, [])
+  // unrevealed links are left out of force-graph's hit canvas too, so they cannot be clicked
   const linkVisible = useMemo(
-    () => (timelapse ? (link: RepoGraphLink) => !metroOn && stemShown(linkEndId(link.source), linkEndId(link.target)) > 0 : !metroOn),
-    [timelapse, metroOn, stemShown],
+    () => (timelapse ? (link: RepoGraphLink) => !metroOn && linkShown(linkEndId(link.source), linkEndId(link.target)) > 0 : !metroOn),
+    [timelapse, metroOn, linkShown],
   )
 
   /**
@@ -823,7 +823,7 @@ export default function RepoGraph({
           const s = typeof link.source === 'object' ? link.source : index.nodeById.get(String(link.source))
           const t = typeof link.target === 'object' ? link.target : index.nodeById.get(String(link.target))
           if (!s || !t || s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue
-          const f = stemShown(String(s.id), String(t.id))
+          const f = linkShown(String(s.id), String(t.id))
           if (f <= 0) continue
           const dim = isLinkDimmed(String(s.id), String(t.id), hovered, reachSet, litLinks)
           ctx.globalAlpha = dim ? th.metroDimAlpha : th.metroMutedAlpha
@@ -840,10 +840,10 @@ export default function RepoGraph({
       ctx.setLineDash([4, 4])
       ctx.lineWidth = Math.max(1.2, px)
       for (const stub of metro.stubs) {
-        const grown = nodeGrowth(stub.nodeId)
-        if (grown <= 0) continue
+        const drawnShare = nodeRevealed(stub.nodeId)
+        if (drawnShare <= 0) continue
         const dim = (hovered !== null && hovered !== stub.nodeId) || (reachSet !== null && !reachSet.has(stub.nodeId))
-        ctx.globalAlpha = (dim ? th.metroDimAlpha : th.metroStubAlpha) * grown
+        ctx.globalAlpha = (dim ? th.metroDimAlpha : th.metroStubAlpha) * drawnShare
         ctx.strokeStyle = palette[stub.colorBranch] ?? th.fallback
         ctx.beginPath()
         ctx.moveTo(stub.x0, stub.y0)
@@ -853,8 +853,8 @@ export default function RepoGraph({
       ctx.setLineDash(NO_DASH)
       let dashed = false
       for (const r of metro.routes) {
-        // the time-lapse grows each route from its parent end (pts run parent to child)
-        const f = stemShown(r.source, r.target)
+        // the time-lapse draws each route from its parent end (pts run parent to child)
+        const f = linkShown(r.source, r.target)
         if (f <= 0) continue
         const dim = isLinkDimmed(r.source, r.target, hovered, reachSet, litLinks)
         ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
@@ -878,8 +878,8 @@ export default function RepoGraph({
       const marks = markBoxesRef.current
       if (metro.badges.length > 0) {
         for (const b of metro.badges) {
-          // run markers wait for their route to finish growing
-          if (stemShown(b.source, b.target) < 1) continue
+          // run markers wait for their route to finish drawing
+          if (linkShown(b.source, b.target) < 1) continue
           ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.metroDimAlpha : 1
           strokeRunBars(ctx, b, px, width, th)
         }
@@ -891,7 +891,7 @@ export default function RepoGraph({
           ctx.lineJoin = 'round'
           const halfH = (fontPx / 2 + 1) * px
           for (const b of metro.badges) {
-            if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge' || stemShown(b.source, b.target) < 1) continue
+            if (b.textY === null || metroRunMarker(b, globalScale) !== 'badge' || linkShown(b.source, b.target) < 1) continue
             ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.dimAlpha : 1
             ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
@@ -900,9 +900,9 @@ export default function RepoGraph({
             ctx.fillText(b.text, b.x, b.textY)
             const halfW = ctx.measureText(b.text).width / 2 + px
             if (marks.rects.length < 4 * (marks.count + 1)) {
-              const grown = new Float32Array(Math.max(64, marks.rects.length * 2))
-              grown.set(marks.rects)
-              marks.rects = grown
+              const drawnShare = new Float32Array(Math.max(64, marks.rects.length * 2))
+              drawnShare.set(marks.rects)
+              marks.rects = drawnShare
             }
             const q = 4 * marks.count++
             marks.rects[q] = b.x - halfW
@@ -915,7 +915,7 @@ export default function RepoGraph({
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, colours, reachSet, litLinks, hoverVersion, stemShown, nodeGrowth],
+    [metro, index, colours, reachSet, litLinks, hoverVersion, linkShown, nodeRevealed],
   )
 
   // Time-lapse frames paint their own background (the canvas is otherwise transparent over a CSS
@@ -1106,9 +1106,9 @@ export default function RepoGraph({
     }
   }, [index, metro, ready, fitStarted])
 
-  // ---- time-lapse in metro mode: the camera keeps up with the growing edge ----
+  // ---- time-lapse in metro mode: the camera keeps up with the advancing edge ----
   // A long map opens at a readable zoom with its old lines off-screen, which is exactly where a
-  // time-lapse starts. The camera holds still and glides in steps: when the newest growth leaves the
+  // time-lapse starts. The camera holds still and glides in steps: when the newest part leaves the
   // middle stretch of the view, it pans to put it just past the centre, never past either end of
   // the map (the zoom is left alone). Holding still matters: labels only appear while the camera rests.
   useEffect(() => {
@@ -1122,7 +1122,7 @@ export default function RepoGraph({
       if (!fg || tweenRef.current || now < busyUntil) return
       let front = -Infinity
       for (const node of index.graphData.nodes) {
-        if (nodeGrowth(node.id) <= 0) continue
+        if (nodeRevealed(node.id) <= 0) continue
         const t = metro.targets.get(node.id)
         if (t && t.x > front) front = t.x
       }
@@ -1145,7 +1145,7 @@ export default function RepoGraph({
     }
     raf = requestAnimationFrame(follow)
     return () => cancelAnimationFrame(raf)
-  }, [timelapse, metro, ready, index, nodeGrowth])
+  }, [timelapse, metro, ready, index, nodeRevealed])
 
   // ---- metro mode: bring a selected branch or contributor, or the search hits, into view ----
   // A long map opens right-aligned at a readable zoom, so its older lines start off-screen; a
@@ -1224,8 +1224,8 @@ export default function RepoGraph({
           linkWidth={linkWidth}
           linkCurvature={linkCurvature}
           linkDirectionalArrowLength={0}
-          linkCanvasObjectMode={timelapse ? stemMode : linkMode}
-          linkCanvasObject={timelapse ? paintStem : paintLink}
+          linkCanvasObjectMode={timelapse ? replaceLinkMode : linkMode}
+          linkCanvasObject={timelapse ? paintRevealedLink : paintLink}
           cooldownTicks={metroOn ? 0 : 200}
           onNodeHover={handleHover}
           onNodeClick={handleNodeClick}

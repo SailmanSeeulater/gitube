@@ -18,7 +18,7 @@ import { LIFE_YEAR_FONT, RIBBON_GAP_PX, RIBBON_PX, paintAxisMilestones, paintCan
 import type { LifeViewport } from './lifeTypes'
 import type { LifeViewPaintInput } from './lifeView'
 import type { HtopLayout, HtopRow } from './htopLayout'
-import { HTOP_CELL_PX, HTOP_GUTTER_PX, HTOP_HEADER_PX, HTOP_TICK_PX, htopDrawnTo, htopSown, rowY, type HtopGeom } from './htopGeometry'
+import { HTOP_CELL_PX, HTOP_GUTTER_PX, HTOP_HEADER_PX, HTOP_TICK_PX, htopDrawnTo, htopReached, rowY, type HtopGeom } from './htopGeometry'
 
 export type HtopPaintInput = LifeViewPaintInput<HtopLayout, HtopGeom>
 
@@ -226,7 +226,7 @@ export function paintHtop(ctx: CanvasRenderingContext2D, input: HtopPaintInput):
     ctx.globalAlpha = 1
   }
 
-  const shown = (row: HtopRow | undefined): row is HtopRow => row !== undefined && !hidden.has(row.key) && htopSown(row, at)
+  const shown = (row: HtopRow | undefined): row is HtopRow => row !== undefined && !hidden.has(row.key) && htopReached(row, at)
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
   const hov = hover?.kind === 'repo' ? (layout.byKey.get(hover.key) ?? -1) : -1
 

@@ -35,25 +35,25 @@ describe('repo cache', () => {
 
   it('serves a repo fetched within the freshness window, under any casing of its name', async () => {
     const store = memoryStore()
-    await remember(store, repo('octo', 'garden'), T0)
-    const hit = await readFresh(store, { owner: 'Octo', repo: 'Garden' }, T0 + CACHE_FRESH_MS - 1)
-    expect(hit?.data.repo).toBe('garden')
+    await remember(store, repo('octo', 'tracks'), T0)
+    const hit = await readFresh(store, { owner: 'Octo', repo: 'Tracks' }, T0 + CACHE_FRESH_MS - 1)
+    expect(hit?.data.repo).toBe('tracks')
     expect(hit?.savedAt).toBe(new Date(T0).toISOString())
   })
 
   it('stops serving it once the window has passed, or when its version is stale', async () => {
     const store = memoryStore()
-    await remember(store, repo('octo', 'garden'), T0)
-    expect(await readFresh(store, { owner: 'octo', repo: 'garden' }, T0 + CACHE_FRESH_MS)).toBeNull()
-    store.map.get('octo/garden')!.version = CACHE_VERSION + 1
-    expect(await readFresh(store, { owner: 'octo', repo: 'garden' }, T0)).toBeNull()
+    await remember(store, repo('octo', 'tracks'), T0)
+    expect(await readFresh(store, { owner: 'octo', repo: 'tracks' }, T0 + CACHE_FRESH_MS)).toBeNull()
+    store.map.get('octo/tracks')!.version = CACHE_VERSION + 1
+    expect(await readFresh(store, { owner: 'octo', repo: 'tracks' }, T0)).toBeNull()
     expect(await readFresh(store, { owner: 'octo', repo: 'other' }, T0)).toBeNull()
   })
 
   it('ignores an entry dated in the future (a clock that moved back)', async () => {
     const store = memoryStore()
-    await remember(store, repo('octo', 'garden'), T0)
-    expect(await readFresh(store, { owner: 'octo', repo: 'garden' }, T0 - 60_000)).toBeNull()
+    await remember(store, repo('octo', 'tracks'), T0)
+    expect(await readFresh(store, { owner: 'octo', repo: 'tracks' }, T0 - 60_000)).toBeNull()
   })
 
   it(`keeps the ${CACHE_MAX_REPOS} most recently fetched repos`, async () => {

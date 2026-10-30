@@ -1,7 +1,7 @@
 /**
  * The router (src/App.tsx, src/subject.ts) and RepoApp's deltas from the old App body, so "repo mode is unchanged"
  * has a guard: what a page address opens, that a ?repo= link renders repo mode and a ?user=
- * link the person-mode slot, and that RepoApp's Grow hands a login over before anything of repo
+ * link the person-mode slot, and that RepoApp's Go hands a login over before anything of repo
  * mode is reset, fetched or counted (checked on RepoApp's source, as prMarks.placement does).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -51,28 +51,28 @@ describe('App', () => {
   })
 })
 
-describe("RepoApp's grow", () => {
-  /** grow's body, from its useCallback to the deps array that closes it */
-  const grow = repoApp.slice(repoApp.indexOf('const grow = useCallback('), repoApp.indexOf('const submit = useCallback('))
+describe("RepoApp's load", () => {
+  /** load's body, from its useCallback to the deps array that closes it */
+  const load = repoApp.slice(repoApp.indexOf('const load = useCallback('), repoApp.indexOf('const submit = useCallback('))
 
   it('hands a login to person mode before anything of repo mode is reset, fetched or counted', () => {
     const at = (needle: string) => {
-      const i = grow.indexOf(needle)
+      const i = load.indexOf(needle)
       expect(i, needle).toBeGreaterThan(-1)
       return i
     }
     const handOver = at('onUser(subject.login)')
     expect(handOver).toBeLessThan(at('setInvalidUrl(false)'))
     expect(handOver).toBeLessThan(at('resetForNewRepo()'))
-    expect(handOver).toBeLessThan(at('noteGrow(parsed)'))
+    expect(handOver).toBeLessThan(at('noteLoad(parsed)'))
     // and returns right after it
-    expect(grow.slice(handOver, handOver + 60)).toMatch(/onUser\(subject\.login\)\s*return/)
+    expect(load.slice(handOver, handOver + 60)).toMatch(/onUser\(subject\.login\)\s*return/)
     // unparsable input still shows the invalid input card, before any hand-over
     expect(at('setInvalidUrl(true)')).toBeLessThan(handOver)
   })
 
-  it('keeps the battle field on repos only', () => {
-    const battle = repoApp.slice(repoApp.indexOf('const startBattle = useCallback('))
-    expect(battle.slice(0, 300)).toContain('parseRepoUrl(value)')
+  it('keeps the vs field on repos only', () => {
+    const versus = repoApp.slice(repoApp.indexOf('const startVs = useCallback('))
+    expect(versus.slice(0, 300)).toContain('parseRepoUrl(value)')
   })
 })

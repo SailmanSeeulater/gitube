@@ -35,8 +35,8 @@ const GLOW_DISCS: ReadonlyArray<readonly [number, number]> = [
   [0.66, 0.16],
   [0.33, 0.24],
 ]
-/** A star just sown on the time-lapse is drawn at this share of its radius at least. */
-const MIN_GROWN_R = 0.35
+/** A star just reached on the time-lapse is drawn at this share of its radius at least. */
+const MIN_REVEAL_R = 0.35
 /** A contributed repo's hollow core: its ring's width. */
 const HOLLOW_PX = 1.5
 /** A fork's companion: this far beyond the core, up and to the right, TWIN_R of its radius. */
@@ -49,8 +49,8 @@ const TWIN_MIN_PX = 1
 const SPARKLE_STARS = 100
 const SPARKLE_REACH = 0.9
 const SPARKLE_ALPHA = 0.8
-/** A seedling (no counted commits) is drawn faint. */
-const SEEDLING_ALPHA = 0.55
+/** An uncounted repo (no counted commits) is drawn faint. */
+const UNCOUNTED_ALPHA = 0.55
 /** A band's name: its dot and text from here, below the band's top... */
 const BAND_NAME_X = 10
 const BAND_NAME_DY = 4
@@ -71,10 +71,10 @@ export function starColour(star: Pick<LifeStar, 'dry' | 'language'>, ink: Pick<L
   return star.dry ? ink.dry : colourOf(star.language)
 }
 
-/** How much of a star has grown by the time-lapse's day (0..1), along its growth; 1 when fully grown. */
-export function starGrownShare(star: Pick<LifeStar, 'growthDays' | 'growthShares'>, at: number | null): number {
-  const days = star.growthDays
-  const shares = star.growthShares
+/** How much of a star has been drawn by the time-lapse's day (0..1), along its reveal; 1 when fully drawn. */
+export function starRevealedShare(star: Pick<LifeStar, 'revealDays' | 'revealShares'>, at: number | null): number {
+  const days = star.revealDays
+  const shares = star.revealShares
   const last = days.length - 1
   if (at === null || last < 0 || at >= days[last]) return 1
   if (!(at > days[0])) return 0
@@ -89,9 +89,9 @@ export function starGrownShare(star: Pick<LifeStar, 'growthDays' | 'growthShares
   return shares[lo] + ((shares[lo + 1] - shares[lo]) * (at - days[lo])) / (days[lo + 1] - days[lo])
 }
 
-/** A core's radius at a grown share: the full radius r shrunk by the share's square root, never under MIN_GROWN_R of it. */
-export function grownRadius(r: number, share: number): number {
-  return r * Math.max(MIN_GROWN_R, Math.sqrt(share))
+/** A core's radius at a revealed share: the full radius r shrunk by the share's square root, never under MIN_REVEAL_R of it. */
+export function revealedRadius(r: number, share: number): number {
+  return r * Math.max(MIN_REVEAL_R, Math.sqrt(share))
 }
 
 /** A band's name is drawn when the band is tall enough to hold it. */
@@ -187,13 +187,13 @@ export function paintConstellation(ctx: CanvasRenderingContext2D, input: Constel
     ctx.globalAlpha = 1
   }
 
-  // what is drawn: neither hidden nor waiting to be sown by the time-lapse, and how far it has grown
+  // what is drawn: neither hidden nor waiting to be reached by the time-lapse, and how far it has been drawn
   const drawn = new Uint8Array(stars.length)
   const share = new Float64Array(stars.length)
   stars.forEach((star, i) => {
     if (hidden.has(star.key) || (at !== null && star.startDay > at)) return
     drawn[i] = 1
-    share[i] = starGrownShare(star, at)
+    share[i] = starRevealedShare(star, at)
   })
   const sel = selected !== null ? (layout.byKey.get(selected) ?? -1) : -1
   const hov = hover?.kind === 'repo' ? (layout.byKey.get(hover.key) ?? -1) : -1
@@ -242,11 +242,11 @@ export function paintConstellation(ctx: CanvasRenderingContext2D, input: Constel
     if (drawn[i] !== 1) continue
     const star = stars[i]
     const x = g.x[i]
-    const r = grownRadius(g.r[i], share[i])
+    const r = revealedRadius(g.r[i], share[i])
     const glow = g.glow[i] * share[i]
     const reach = r * (1 + TWIN_R) + Math.max(TWIN_GAP_PX, LANDED_GAP_PX + LANDED_PX) + glow + TWIN_MIN_PX
     if (x + reach < 0 || x - reach > W) continue
-    const alpha = (sel >= 0 && sel !== i ? ink.dimAlpha : 1) * (star.seedling ? SEEDLING_ALPHA : 1)
+    const alpha = (sel >= 0 && sel !== i ? ink.dimAlpha : 1) * (star.uncounted ? UNCOUNTED_ALPHA : 1)
     // the landed mark once the time-lapse has reached the first day a pull request landed
     const landed = star.landed.length > 0 && (at === null || star.landed[0] <= at)
     drawStar(ctx, star, x, g.y[i], r, glow, starColour(star, ink, colourOf), alpha, ink, landed)
@@ -281,7 +281,7 @@ export function paintConstellation(ctx: CanvasRenderingContext2D, input: Constel
   const ring = (i: number, colour: string, gap: number, lineWidth: number) => {
     if (i < 0 || drawn[i] !== 1) return
     ctx.beginPath()
-    ctx.arc(g.x[i], g.y[i], grownRadius(g.r[i], share[i]) + gap, 0, TWO_PI)
+    ctx.arc(g.x[i], g.y[i], revealedRadius(g.r[i], share[i]) + gap, 0, TWO_PI)
     ctx.strokeStyle = colour
     ctx.lineWidth = lineWidth
     ctx.stroke()
@@ -292,13 +292,13 @@ export function paintConstellation(ctx: CanvasRenderingContext2D, input: Constel
   ctx.restore()
 }
 
-/** Where star i's label points: its centre, and its core's radius as grown by then, plus a px. */
+/** Where star i's label points: its centre, and its core's radius as drawn by then, plus a px. */
 export function starAnchor(layout: ConstellationLayout, g: ConstellationGeom, i: number, at: number | null, out: Float32Array): boolean {
   const star = layout.stars[i]
   if (star === undefined || (at !== null && star.startDay > at)) return false
   out[0] = g.x[i]
   out[1] = g.y[i]
-  out[2] = grownRadius(g.r[i], starGrownShare(star, at)) + 1
+  out[2] = revealedRadius(g.r[i], starRevealedShare(star, at)) + 1
   return true
 }
 

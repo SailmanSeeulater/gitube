@@ -15,7 +15,7 @@ import { usePersonStore, type PersonState } from '../src/profile/usePersonStore'
 import { dayKey, dayNumber } from '../src/profile/timeline'
 import { getTheme } from '../src/theme/themes'
 import type { ProfileData, ProfileRepo } from '../src/types'
-import { grow, setApp, setPerson, type Grown } from './helpers/personScene'
+import { load, setApp, setPerson, type Loaded } from './helpers/personScene'
 
 const theme = getTheme('obsidian')
 const noop = () => {}
@@ -102,26 +102,26 @@ beforeEach(() => {
 })
 
 /** Where a repo's lane is: what the views tie a repo to, in place of its name. */
-function positionOf(g: Grown, name: string): number {
+function positionOf(g: Loaded, name: string): number {
   return g.timeline.lanes.findIndex((lane) => repoKey(lane.repo) === repoKey(name))
 }
 
 /** The panel's markup, on one tab. */
-function panel(g: Grown, tab: PersonState['tab']): string {
+function panel(g: Loaded, tab: PersonState['tab']): string {
   setPerson({ tab, hover: null, selected: null })
   const { profile, timeline, colourOf, name, privateKeys } = g
   return renderToStaticMarkup(h(PersonPanel, { profile, timeline, colourOf, name, privateCount: privateKeys.size, revealed: false, onReveal: noop, theme }))
 }
 
 /** The inspector's markup with the store in state. */
-function inspector(g: Grown, state: Partial<PersonState>): string {
+function inspector(g: Loaded, state: Partial<PersonState>): string {
   setPerson({ hover: null, selected: null, ...state })
   const { profile, timeline, days, colourOf, name } = g
   return renderToStaticMarkup(h(PersonInspector, { profile, timeline, days, colourOf, name }))
 }
 
 /** Everything a visitor can see while the names are hidden, with repos as lane positions. */
-function seen(g: Grown) {
+function seen(g: Loaded) {
   const { timeline, layout, days, name } = g
   const lanes = timeline.lanes.map(({ repo: shown, ...rest }) => ({ ...rest, name: name(shown).text }))
   const dayRepos = [...days.repos]
@@ -142,7 +142,7 @@ function seen(g: Grown) {
 }
 
 describe('lane order and hidden names', () => {
-  const base = grow(profileWith(BASE), NOW, theme)
+  const base = load(profileWith(BASE), NOW, theme)
 
   it('is a case where name order would show: private lanes tie on their root, their day and their stars', () => {
     const { lanes } = base.timeline
@@ -157,7 +157,7 @@ describe('lane order and hidden names', () => {
   for (const [label, names] of VARIANTS) {
     it(`shows the same panel, day lists, lines and milestones with ${label}`, () => {
       const expected = seen(base)
-      const other = seen(grow(profileWith(names), NOW, theme))
+      const other = seen(load(profileWith(names), NOW, theme))
       expect(other.lanes).toEqual(expected.lanes)
       expect(other.dayRepos).toEqual(expected.dayRepos)
       expect(other.lines).toEqual(expected.lines)
@@ -169,6 +169,6 @@ describe('lane order and hidden names', () => {
   it('shows the same whatever order the repos come in', () => {
     const expected = seen(base)
     const profile = profileWith(BASE)
-    expect(seen(grow({ ...profile, repos: [...profile.repos].reverse() }, NOW, theme))).toEqual(expected)
+    expect(seen(load({ ...profile, repos: [...profile.repos].reverse() }, NOW, theme))).toEqual(expected)
   })
 })

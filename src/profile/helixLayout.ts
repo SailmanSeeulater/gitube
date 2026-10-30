@@ -74,7 +74,7 @@ export interface HelixThread extends LifeViewItem {
   /** archived: drawn dim */
   dry: boolean
   /** a token profile's lane GitHub counted no commits to: drawn faint */
-  seedling: boolean
+  uncounted: boolean
   /** a repo they only contributed to (isOwn false): drawn dashed */
   visiting: boolean
   fork: boolean
@@ -193,7 +193,7 @@ export function layoutHelix(timeline: LifeTimeline, source: ProfileData['source'
       track,
       language: lane.language,
       dry: lane.isArchived,
-      seedling: !lane.detailed && token,
+      uncounted: !lane.detailed && token,
       visiting: !lane.isOwn,
       fork: lane.isFork,
       weight: laneWeight(lane, source),

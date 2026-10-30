@@ -111,14 +111,14 @@ describe('profileQueryFn', () => {
   })
 
   it('notes no budget when GitHub sends none', async () => {
-    const user = { login: 'quiet-sprout', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' }
+    const user = { login: 'quiet-dev', name: null, avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4', created_at: '2020-02-01T00:00:00Z', type: 'User' }
     const fetch: typeof globalThis.fetch = async (input) => {
       const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).pathname
-      const body = path === '/users/quiet-sprout' ? user : []
+      const body = path === '/users/quiet-dev' ? user : []
       return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
     }
     const { deps: d, progress, rates } = deps({ fetch })
-    const { profile } = await run('quiet-sprout', d)
+    const { profile } = await run('quiet-dev', d)
     expect(profile.repos).toEqual([])
     expect(progress.filter((p) => p !== null).length).toBeGreaterThan(0)
     expect(rates).toEqual([])

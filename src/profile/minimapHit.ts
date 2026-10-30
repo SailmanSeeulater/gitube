@@ -3,12 +3,12 @@
  * over everything at the canvas's right edge), a row's line number in the gutter, a row's drawn
  * stretch in the editor (its tokens and the whitespace between them, as far as the time-lapse has
  * drawn it), else the axis (axisHover: a milestone on the horizon, or the day under x). Rows in
- * notDrawn (hidden, or not sown by the time-lapse) are skipped, as they are not drawn. Geometry is
+ * notDrawn (hidden, or not reached by the time-lapse) are skipped, as they are not drawn. Geometry is
  * minimapLayout's, the same the painter draws with.
  */
 import type { LifeCamera, LifeHover, LifeViewport } from './lifeTypes'
 import { axisHover, onCanvas } from './lifeView'
-import { drawnTo, rowY, sown, stripRowY, tokenSpan, type MinimapGeom, type MinimapLayout } from './minimapLayout'
+import { drawnTo, rowY, isReached, stripRowY, tokenSpan, type MinimapGeom, type MinimapLayout } from './minimapLayout'
 
 /** A row is hit this far above and below its centre at least (half its pitch when that is more)... */
 export const MIN_ROW_HIT_PX = 3
@@ -31,7 +31,7 @@ export function hitMinimap(
   const { rows } = layout
   const drawn = (i: number) => {
     const row = rows[i]
-    return row !== undefined && !notDrawn.has(row.key) && sown(row, at)
+    return row !== undefined && !notDrawn.has(row.key) && isReached(row, at)
   }
 
   // the strip: the nearest drawn row's bar within reach

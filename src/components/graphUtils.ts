@@ -555,7 +555,7 @@ function midWordCuts(text: string, short: string): number {
 /**
  * Shortens text to at most maxW without cutting into text[start, end) (a search match). It tries a
  * middle cut wholly after the match and one wholly before it, snapped to separators as in
- * middleEllipsis, and a window around the match ('…-stacktrace-with-v8', '…-skip-tags-…') grown
+ * middleEllipsis, and a window around the match ('…-stacktrace-with-v8', '…-skip-tags-…') widened
  * towards the end of the name first (where branches of one family differ), then towards its start;
  * the form keeping the most characters wins, a cut inside a word counting as SNAP_CHARS fewer.
  * Returns null when not even '…' + match + '…' fits.

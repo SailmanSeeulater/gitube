@@ -31,7 +31,7 @@ import { posterFailure, saveLifePoster } from './profile/lifePoster'
 export interface PersonAppProps {
   /** as typed (GitHub compares logins case-insensitively) */
   login: string
-  /** counts the grows of this login, so a new one can refetch it */
+  /** counts the loads of this login, so a new one can refetch it */
   request: number
   /** the view a ?user= link named, carried through unchanged */
   view: PersonView | null
@@ -152,15 +152,15 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const asked = requestKey(login, request)
   useLayoutEffect(() => startRequest(usePersonStore.getState(), asked), [asked])
 
-  // The same login asked for again is fetched again, live, as Grow refetches the same repo, unless a
+  // The same login asked for again is fetched again, live, as Go refetches the same repo, unless a
   // fetch in flight answers it. A new login needs no refetch: its own query reads the cache first.
   const [tracker] = useState(() => new RequestTracker(asked))
   useEffect(() => {
     if (tracker.refetchFor(asked, isFetching)) refetch()
   }, [tracker, asked, isFetching, refetch])
 
-  // grow, once per request for a profile (analytics.ts has the rules)
-  const noteGrow = usePersonAnalytics(analyticsInput(login, request, fetched))
+  // load, once per request for a profile (analytics.ts has the rules)
+  const noteLoad = usePersonAnalytics(analyticsInput(login, request, fetched))
 
   // The life is read once per profile, today being when it arrived; the view on show is laid out
   // from it, once per view: a switch back reuses that view's layout until the timeline changes. Every
@@ -228,7 +228,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   useLayoutEffect(() => closeLapse(), [asked, profile, closeLapse])
   const getCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
 
-  // ---- poster: the view on show fully grown, framed, with the names as the screen shows them now ----
+  // ---- poster: the view on show fully drawn, framed, with the names as the screen shows them now ----
   const [posterBusy, setPosterBusy] = useState(false)
   const [posterError, setPosterError] = useState<string | null>(null)
   // a new login or request leaves the last one's poster error and reload card behind
@@ -272,10 +272,10 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
     else onUser(subject.login)
   }, [input, onRepo, onUser])
 
-  // a switch from repo mode's input lands typing in this one, as Grow leaves it in the input
+  // a switch from repo mode's input lands typing in this one, as Go leaves it in the input
   useEffect(() => {
     if (focusInput) inputRef.current?.focus()
-    // on mount only: later grows keep this input, and its focus
+    // on mount only: later loads keep this input, and its focus
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -288,7 +288,7 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const openToken = useCallback(() => showToken(true), [showToken])
   const openFile = useCallback((file: File) => onRepo({ file }), [onRepo])
   /** the status strip's refresh: a new request for the person on show, from GitHub */
-  const refresh = useCallback(() => refreshProfile(login, { noteGrow, refetch }), [login, noteGrow, refetch])
+  const refresh = useCallback(() => refreshProfile(login, { noteLoad, refetch }), [login, noteLoad, refetch])
 
   // a saved .json dropped anywhere on the page opens it in repo mode
   useEffect(() => {

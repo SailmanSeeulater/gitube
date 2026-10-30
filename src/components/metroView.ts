@@ -327,14 +327,14 @@ export function buildMetroView(layout: MetroLayout, nodes: ReadonlyArray<{ id: s
   let maxX = -Infinity
   let minY = Infinity
   let maxY = -Infinity
-  const grow = (x: number, y: number) => {
+  const extend = (x: number, y: number) => {
     if (x < minX) minX = x
     if (x > maxX) maxX = x
     if (y < minY) minY = y
     if (y > maxY) maxY = y
   }
-  for (const p of targets.values()) grow(p.x, p.y)
-  for (const s of stubs) grow(s.x0, s.y0)
+  for (const p of targets.values()) extend(p.x, p.y)
+  for (const s of stubs) extend(s.x0, s.y0)
   const bbox: MetroView['bbox'] = Number.isFinite(minX) ? { x: [minX, maxX], y: [minY, maxY] } : { x: [0, 0], y: [0, 0] }
 
   return {

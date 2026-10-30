@@ -4,9 +4,9 @@
  * and their top three milestones, in the active theme's colours (a console view's own, on its dark
  * screen, for a console view).
  *
- * The view is painted again off screen by the canvas's own painter (makeViewPaint), fully grown,
+ * The view is painted again off screen by the canvas's own painter (makeViewPaint), fully drawn,
  * with the whole life fitted and no hover or selection, so the poster never carries the screen's
- * zoom, its hover rings and plates, or a half-grown time-lapse. It hides what the panel's eyes hide,
+ * zoom, its hover rings and plates, or a half-drawn time-lapse. It hides what the panel's eyes hide,
  * and every repo name comes through the screen's namer: a poster shows a private name only while
  * the privacy toggle shows it on screen, and its file is named after the login alone.
  *
@@ -172,7 +172,7 @@ export interface PosterView {
 }
 
 /**
- * The view as the canvas paints it, fully grown (no time-lapse), the whole life fitted to view,
+ * The view as the canvas paints it, fully drawn (no time-lapse), the whole life fitted to view,
  * with no hover and no selection whatever the store holds. Paints until the labels have settled
  * (paint() asks for no more frames) or maxFrames, each frame over the last, under the device
  * transform the caller set.

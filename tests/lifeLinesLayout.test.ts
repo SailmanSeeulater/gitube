@@ -107,7 +107,7 @@ const RICH = profile({
     repo('Upper', { createdAt: iso('2022-08-01'), language: null, activity: commitsOn({ '2022-08-01': 2 }) }),
     repo('secret-one', { createdAt: iso('2021-06-01'), isPrivate: true, language: 'Rust', activity: commitsOn({ '2021-06-01': 3, '2022-02-01': 9 }) }),
     repo('secret-two', { createdAt: iso('2021-06-01'), isPrivate: true, language: 'Rust', activity: commitsOn({ '2021-06-01': 1 }) }),
-    repo('seedling', { createdAt: iso('2023-08-01'), stars: 5 }),
+    repo('uncounted', { createdAt: iso('2023-08-01'), stars: 5 }),
     repo('backdated', { createdAt: iso('2022-01-10'), activity: commitsOn({ '2021-11-01': 2, '2022-01-10': 1 }) }),
   ],
   days: calendar('2019-01-01', TODAY, (day) => (day === '2019-02-10' ? 30 : day === '2021-01-05' ? 7 : 0)),
@@ -185,7 +185,7 @@ function expectValid(layout: LifeLinesLayout, timeline: LifeTimeline, source: Pr
     expect(line.end).toBeLessThanOrEqual(line.x1)
     if (line.dry) expect(line.end).toBe(line.x1)
     expect([line.language, line.dry, line.branch, line.visiting, line.stars]).toEqual([lane.language, lane.isArchived, lane.isFork, !lane.isOwn, lane.stars])
-    expect(line.seedling).toBe(token && !lane.detailed)
+    expect(line.uncounted).toBe(token && !lane.detailed)
     // an archived line ends at its last activity, any other at today
     if (lane.isArchived) expect(line.x1).toBe(lane.endDay + 1 - startDay)
     else expect([lane.endDay, line.x1]).toEqual([todayDay, days])
@@ -269,12 +269,12 @@ describe('life lines layout: placement', () => {
     expect(theirs.visiting).toBe(true)
   })
 
-  it('flags archived, forked, visited and seedling lines', () => {
-    expect(lineOf(rich, 'me/old')).toMatchObject({ dry: true, branch: false, visiting: false, seedling: false, stars: 40 })
+  it('flags archived, forked, visited and uncounted lines', () => {
+    expect(lineOf(rich, 'me/old')).toMatchObject({ dry: true, branch: false, visiting: false, uncounted: false, stars: 40 })
     expect(lineOf(rich, 'me/old').x1).toBe(dayNumber('2019-04-20') + 1 - richTimeline.startDay)
     expect(lineOf(rich, 'me/copy')).toMatchObject({ dry: false, branch: true, visiting: false })
     expect(lineOf(rich, 'them/theirs')).toMatchObject({ visiting: true, language: 'Rust' })
-    expect(lineOf(rich, 'me/seedling')).toMatchObject({ seedling: true, weight: 0 })
+    expect(lineOf(rich, 'me/uncounted')).toMatchObject({ uncounted: true, weight: 0 })
     expect(lineOf(rich, 'me/upper').language).toBeNull()
   })
 
@@ -286,7 +286,7 @@ describe('life lines layout: placement', () => {
     for (const line of layout.lines) {
       const lane = rest.lanes[line.lane]
       expect(line.weight).toBe(lane.spans.filter((s) => s.kind === 'active').reduce((n, s) => n + s.days, 0))
-      expect(line.seedling).toBe(false)
+      expect(line.uncounted).toBe(false)
     }
     expectValid(layout, rest, 'rest')
   })

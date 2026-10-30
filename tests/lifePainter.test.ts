@@ -93,7 +93,7 @@ const REPOS: ProfileRepo[] = [
   repo('Me/old-thing', { createdAt: iso('2019-06-01'), language: 'JavaScript', stars: 15, isArchived: true, activity: monthly('2019-06', '2019-12') }),
   repo('Me/forked-lib', { createdAt: iso('2021-01-10'), language: 'Go', isFork: true, activity: monthly('2021-01', '2021-03', 1) }),
   repo('someone/big-project', { createdAt: iso('2015-01-01'), firstActiveAt: iso('2022-05-01'), isOwn: false, language: null, activity: monthly('2022-05', '2023-02', 5) }),
-  repo('Me/empty-seedling', { createdAt: iso('2023-08-01'), stars: 5 }),
+  repo('Me/empty-uncounted', { createdAt: iso('2023-08-01'), stars: 5 }),
 ]
 
 const PRIVATE = ['me/secret-plans']
@@ -124,7 +124,7 @@ function scene(p: ProfileData = profile({ repos: REPOS }), theme: Theme = getThe
   }
 }
 
-/** Where each line's label is anchored, fully grown: its start marker. */
+/** Where each line's label is anchored, fully drawn: its start marker. */
 function anchors(s: Scene, camera: LifeCamera = s.camera): Array<{ key: string; x: number; y: number }> {
   const g = linesGeom(s.layout, camera, VIEW)
   const out = new Float32Array(3)
@@ -192,7 +192,7 @@ describe("makeViewPaint: a view's frame, hit test and click (on life lines)", ()
     expect(picked.calls('stroke').some((c) => c.style.globalAlpha === s.ink.dimAlpha)).toBe(true)
     expect(picked.calls('fill').some((c) => c.style.fillStyle === s.ink.labelPlateFill)).toBe(true)
 
-    // the time-lapse keeps frames coming, and draws only what has grown: nothing to hit at its start
+    // the time-lapse keeps frames coming, and draws only what has appeared: nothing to hit at its start
     const lapse = painterFor(s, {}, false, { timelapse: { progress: { current: 0 } } }).painter
     expect(lapse.paint(recordingCtx().ctx, VIEW, s.camera, 16)).toBe(true)
     settle(lapse, s.camera)

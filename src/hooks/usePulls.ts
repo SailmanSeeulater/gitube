@@ -34,7 +34,7 @@ export interface PullsView {
   error: PullsError | null
   /** asks GitHub again now */
   retry: () => void
-  /** marks the index stale, so it is asked again once the graph's own fetch is done (refresh, Grow) */
+  /** marks the index stale, so it is asked again once the graph's own fetch is done (refresh, Go) */
   invalidate: () => void
   /** Looks one pull request's review and checks up now (3 core requests). */
   lookup: (pr: PullSummary) => void
@@ -98,7 +98,7 @@ export function resetWakeDelay(resetAt: string | null, now: number = Date.now())
 
 /**
  * The open pull requests of the repo on show, for the overlay. Runs once enabled (App: the graph is
- * in, its own fetch is idle, no saved file is open, and a battle's challenger is not loading), with
+ * in, its own fetch is idle, no saved file is open, and a vs challenger is not loading), with
  * the network code loaded lazily. Kept 5 minutes, never written to the repo cache or saved files.
  */
 export function usePulls(data: RepoData | null | undefined, enabled: boolean): PullsView {

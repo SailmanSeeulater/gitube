@@ -3,7 +3,7 @@ import { parseRepoUrl, type RepoRef } from './api/parseRepoUrl'
 import { parseSubject } from './api/parseSubject'
 import { assignPalette, buildContributors, buildFullGraph, buildGraph, contributorFocus } from './graph'
 import { buildTimeline } from './graph/timeline'
-import { findWeeds, type WeedReport } from './graph/weeds'
+import { findCleanup, type CleanupReport } from './graph/cleanup'
 import { healthItems, repoHealth } from './graph/health'
 import { countPulls, prMarks } from './graph/pulls'
 import type { RepoGraphTimelapse } from './components/RepoGraph'
@@ -11,7 +11,7 @@ import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
 import { releaseAudio, readSound, unlockAudio } from './audio/context'
 import { preload } from './lazy/chunk'
-import { battleChunk, contributorsTabChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
+import { vsChunk, contributorsTabChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
 import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { track } from './analytics/umami'
@@ -36,13 +36,13 @@ const PANEL_INSET = 324
 
 // loaded when first opened (see lazy/parts.ts)
 const TimelapseBar = lazyPart(timelapseChunk)
-const VsView = lazyPart(battleChunk)
+const VsView = lazyPart(vsChunk)
 
 /** The time-lapse controls' placeholder while they load, where they will be (and the status strip was). */
 const TIMELAPSE_FRAME =
   'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 px-3 py-2 shadow-soft backdrop-blur'
-/** The battle's placeholder: the battle covers the app, so its placeholder does. */
-const BATTLE_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-ui-bg'
+/** The vs view's placeholder: vs covers the app, so its placeholder does. */
+const VS_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-ui-bg'
 
 /** GitHub owner and repo names are case-insensitive. */
 function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
@@ -53,14 +53,14 @@ function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
 export type RepoInitial = { input: string } | { file: File }
 
 export interface RepoAppProps {
-  /** a login was grown: the router switches to person mode */
+  /** a login was loaded: the router switches to person mode */
   onUser: (login: string) => void
   /** run once on mount, as if typed into the input or dropped on the page */
   initial?: RepoInitial
 }
 
 export default function RepoApp({ onUser, initial }: RepoAppProps) {
-  // A share link (?repo=...&branch=... or &by=...) grows its repo straight away; its selection is
+  // A share link (?repo=...&branch=... or &by=...) loads its repo straight away; its selection is
   // applied once that repo's data is in (see the share link effects below).
   const [initialShare] = useState<ShareState>(() => readShareState(typeof window === 'undefined' ? '' : window.location.search))
   const pendingShare = useRef<ShareState | null>(initialShare.repo ? initialShare : null)
@@ -68,7 +68,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const [repoRef, setRepoRef] = useState<RepoRef | null>(initialShare.repo)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
-  /** A repo opened from a saved file; it stands in for fetched data until the next Grow. */
+  /** A repo opened from a saved file; it stands in for fetched data until the next Go. */
   const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   /** a part of the app that loads on demand could not be fetched, even on its retry: offer a reload */
@@ -94,13 +94,13 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const theme = useTheme()
 
   const fetched = useRepoData(repoRef)
-  // a vs: the challenger grows beside the repo on show (a share link may name one)
-  const [battleRef, setBattleRef] = useState<RepoRef | null>(initialShare.vs ?? null)
-  const challenger = useRepoData(battleRef)
-  // The battle's code loads as soon as a battle is named, a share link's included, while the repo
+  // a vs: the challenger loads beside the repo on show (a share link may name one)
+  const [vsRef, setVsRef] = useState<RepoRef | null>(initialShare.vs ?? null)
+  const challenger = useRepoData(vsRef)
+  // The vs view's code loads as soon as a vs is named, a share link's included, while the repo
   // data is still on its way. Its overlay mounts once the code is in instead of suspending: a map
   // read from the repo cache would otherwise wait out Suspense's 300 ms fallback throttle as well.
-  const battleCode = useChunk(battleChunk, battleRef !== null)
+  const vsCode = useChunk(vsChunk, vsRef !== null)
   const { error, isFetching, refetch } = fetched
   const data = opened?.data ?? fetched.data
   const cachedAt = opened ? null : fetched.cachedAt
@@ -130,9 +130,9 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
 
   // ---- pull requests (the overlay) ----
   // The repo's open pull requests, once its graph is in and its own fetch has finished: never for a
-  // saved file (no network at all), never for a battle's challenger, and not while a challenger
-  // named by a share link is still growing (the anonymous budget goes to it first).
-  const pullsEnabled = opened === null && fetched.data !== undefined && !isFetching && !(battleRef !== null && challenger.isFetching)
+  // saved file (no network at all), never for a vs challenger, and not while a challenger
+  // named by a share link is still loading (the anonymous budget goes to it first).
+  const pullsEnabled = opened === null && fetched.data !== undefined && !isFetching && !(vsRef !== null && challenger.isFetching)
   const pulls = usePulls(opened ? null : fetched.data, pullsEnabled)
   /** tip node id -> its pull request mark; empty when there are none (the canvas then looks as before) */
   const marks = useMemo(() => prMarks(graph, opened ? null : pulls.index), [graph, opened, pulls.index])
@@ -140,8 +140,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const prMarksKnown = useMemo(() => [...marks.values()].some((m) => m.review !== 'unknown' || m.checks !== 'unknown'), [marks])
   const pullsInvalidate = pulls.invalidate
 
-  // grow, fetch-error and pr-overlay (the click events are sent where each click is handled)
-  const noteGrow = useRepoAnalytics({
+  // load, fetch-error and pr-overlay (the click events are sent where each click is handled)
+  const noteLoad = useRepoAnalytics({
     data: fetched.data,
     fetchedAt: fetched.fetchedAt,
     cachedAt: fetched.cachedAt,
@@ -155,17 +155,17 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
 
   // the leaderboard covers every fetched commit, whatever is hidden
   const contributors = useMemo<ContributorIndex | null>(() => (data ? buildContributors(data) : null), [data])
-  // merged branches to clear away, and thorny ones drifting far from the default branch
-  const weeds = useMemo<WeedReport | null>(() => (data ? findWeeds(data) : null), [data])
+  // merged branches to clear away, and diverged ones drifting far from the default branch
+  const cleanup = useMemo<CleanupReport | null>(() => (data ? findCleanup(data) : null), [data])
   // the status strip's health line: bus factor, branch lifetime, pull request hygiene
   const health = useMemo(
-    () => (data && contributors && weeds ? healthItems(repoHealth(data, contributors, weeds, pulls.index)) : null),
-    [data, contributors, weeds, pulls.index],
+    () => (data && contributors && cleanup ? healthItems(repoHealth(data, contributors, cleanup, pulls.index)) : null),
+    [data, contributors, cleanup, pulls.index],
   )
 
   // ---- share links ----
   // A link to a person (?by=) opens the people tab once the repo is in: start on its code now, while
-  // the repo is fetched, not after (a battle's code, ?vs=, starts through battleCode above).
+  // the repo is fetched, not after (the vs view's code, ?vs=, starts through vsCode above).
   useEffect(() => {
     if (initialShare.person !== null) preload(contributorsTabChunk)
   }, [initialShare])
@@ -192,11 +192,11 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     // leave an incoming link alone until its selection has been applied
     if (pendingShare.current !== null) return
     const repo = shownOwner !== null && shownRepo !== null ? { owner: shownOwner, repo: shownRepo } : null
-    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor, vs: battleRef }, window.location.search)
+    const search = writeShareState({ repo, branch: selectedBranch, person: selectedContributor, vs: vsRef }, window.location.search)
     if (search !== window.location.search) {
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
     }
-  }, [shownOwner, shownRepo, selectedBranch, selectedContributor, battleRef])
+  }, [shownOwner, shownRepo, selectedBranch, selectedContributor, vsRef])
 
   // The selected person's commits to keep lit. Skeleton links stand for runs of hidden commits, so
   // the full graph (same hidden branches) is walked to see whose commits each run holds.
@@ -212,7 +212,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const [timelapseOpen, setTimelapseOpen] = useState(false)
   /** 0..1; the controls write it every frame and RepoGraph reads it in every paint, without renders */
   const timelapseProgress = useRef(1)
-  // when each shown node and stem appears; skeleton links are dated through the full graph
+  // when each shown node and link appears; skeleton links are dated through the full graph
   const timeline = useMemo(() => {
     if (!timelapseOpen || !data || !graph) return null
     return buildTimeline(graph, viewMode === 'full' ? graph : buildFullGraph(data, effectiveHidden))
@@ -297,11 +297,11 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const inspectorNode = inspectorNodeId !== null && nodeById ? (nodeById.get(inspectorNodeId) ?? null) : null
 
   /**
-   * Parse the value and start a fetch. Growing the same repo again refetches in place, so a
-   * failed or cancelled fetch can be retried from the Grow button (as the error cards promise)
+   * Parse the value and start a fetch. Loading the same repo again refetches in place, so a
+   * failed or cancelled fetch can be retried from the Go button (as the error cards promise)
    * instead of silently doing nothing because the query key did not change.
    */
-  const grow = useCallback(
+  const load = useCallback(
     (value: string) => {
       const subject = parseSubject(value)
       if (!subject) {
@@ -319,8 +319,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       setChunkFailed(false)
       setOpened(null)
       resetForNewRepo()
-      // a fetch already in flight for the same repo answers this Grow too
-      noteGrow(parsed)
+      // a fetch already in flight for the same repo answers this Go too
+      noteLoad(parsed)
       if (sameRepo(repoRef, parsed)) {
         if (!isFetching) {
           // its pull requests are read again once the graph is in
@@ -331,27 +331,27 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         setRepoRef(parsed)
       }
     },
-    [repoRef, isFetching, refetch, resetForNewRepo, pullsInvalidate, noteGrow, onUser],
+    [repoRef, isFetching, refetch, resetForNewRepo, pullsInvalidate, noteLoad, onUser],
   )
 
-  const submit = useCallback(() => grow(input), [grow, input])
+  const submit = useCallback(() => load(input), [load, input])
 
-  // Example chips fill the input and grow straight away.
+  // Example chips fill the input and load straight away.
   const pickExample = useCallback(
     (example: string) => {
       setInput(example)
-      grow(example)
+      load(example)
     },
-    [grow],
+    [load],
   )
 
   const openToken = useCallback(() => setTokenOpen(true), [])
   /** the status strip's refresh (and the inspector's): the graph from GitHub, then its pull requests */
   const refresh = useCallback(() => {
-    if (repoRef) noteGrow(repoRef)
+    if (repoRef) noteLoad(repoRef)
     pullsInvalidate()
     refetch()
-  }, [repoRef, noteGrow, pullsInvalidate, refetch])
+  }, [repoRef, noteLoad, pullsInvalidate, refetch])
   const inspectorPulls = useMemo<InspectorPulls | null>(
     () =>
       opened || !fetched.data
@@ -364,29 +364,29 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const handleBackgroundClick = useCallback(() => clearSelection(), [clearSelection])
   const closeInspector = useCallback(() => setInspectorNodeId(null), [setInspectorNodeId])
   // the inspector's author link: highlight that person and show them in the leaderboard
-  const startBattle = useCallback(
+  const startVs = useCallback(
     (value: string): boolean => {
       const ref = parseRepoUrl(value)
       if (!ref) return false
       // a selection made for one repo means nothing to the other
       clearSelection()
-      setBattleRef(ref)
-      track('battle-start')
+      setVsRef(ref)
+      track('vs-start')
       return true
     },
     [clearSelection],
   )
-  const endBattle = useCallback(() => setBattleRef(null), [])
-  const battleFailed = useCallback(() => {
-    setBattleRef(null)
+  const endVs = useCallback(() => setVsRef(null), [])
+  const vsFailed = useCallback(() => {
+    setVsRef(null)
     setChunkFailed(true)
   }, [])
-  // The battle's code could not be loaded: drop the battle, once it would have shown, and say why.
-  // Read live, as for metro: a battle named again after a failure has already started a new try.
+  // The vs view's code could not be loaded: drop the vs, once it would have shown, and say why.
+  // Read live, as for metro: a vs named again after a failure has already started a new try.
   useEffect(() => {
-    if (battleRef === null || !data || battleChunk.state().status !== 'failed') return
-    battleFailed()
-  }, [battleRef, data, battleCode.status, battleFailed])
+    if (vsRef === null || !data || vsChunk.state().status !== 'failed') return
+    vsFailed()
+  }, [vsRef, data, vsCode.status, vsFailed])
 
   const showContributor = useCallback(
     (key: string) => {
@@ -457,12 +457,12 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         const saved = kit.parseRepoFile(await file.text())
         resetForNewRepo()
         setOpened({ data: saved.data, savedAt: saved.savedAt })
-        // no fetch while a file is open; Grow (the input now names the repo) loads it live
+        // no fetch while a file is open; Go (the input now names the repo) loads it live
         setRepoRef(null)
         setInput(`${saved.data.owner}/${saved.data.repo}`)
         setInvalidUrl(false)
         setFileError(null)
-        track('export', { format: 'garden-file' })
+        track('export', { format: 'repo-file' })
       } catch (err) {
         setFileError(err instanceof kit.RepoFileError ? err.message : 'the file could not be read.')
       }
@@ -492,7 +492,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     }
   }, [openFile])
 
-  // What person mode handed over goes the way of an example chip or a dropped file, so grow,
+  // What person mode handed over goes the way of an example chip or a dropped file, so load,
   // analytics and the address bar behave as if it had been typed here. Once: StrictMode runs
   // effects twice on mount, and later renders bring new callbacks.
   const initialRun = useRef(false)
@@ -516,7 +516,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       setExportError(null)
       setChunkFailed(false)
       setTokenOpen(false)
-      setBattleRef(null)
+      setVsRef(null)
       // the time-lapse while its controls are still loading (once they are in, Escape leaves it on)
       if (timelapseChunk.state().status !== 'ready') closeTimelapse()
     }
@@ -526,7 +526,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
 
   const showEmpty = !graph && !isFetching && !error && !invalidUrl && fileError === null
   // also while a first map waits for the metro engine (see layouts)
-  const showGrowing = (!graph && isFetching && repoRef !== null) || (graph !== null && holdGraph)
+  const showLoading = (!graph && isFetching && repoRef !== null) || (graph !== null && holdGraph)
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-ui-bg text-ui-text">
@@ -544,14 +544,14 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
             metro={metro}
             focus={focus}
             timelapse={graphTimelapse}
-            thorns={weeds?.thorns ?? null}
+            spikes={cleanup?.spikes ?? null}
             prMarks={timelapseOpen ? null : marks}
           />
         )}
       </div>
 
       {showEmpty && <EmptyState onPick={pickExample} />}
-      {showGrowing && (
+      {showLoading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="animate-pulse text-[13px] text-ui-muted">
             loading {shownOwner}/{shownRepo}…
@@ -586,13 +586,13 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
       )}
 
-      {data && graph && contributors && weeds && (
+      {data && graph && contributors && cleanup && (
         <Panel
           data={data}
           palette={palette}
           contributors={contributors}
-          weeds={weeds}
-          onBattle={startBattle}
+          cleanup={cleanup}
+          onVs={startVs}
           pulls={opened ? null : pulls}
           hasPrMarks={marks.size > 0 && !timelapseOpen}
           prMarksKnown={prMarksKnown}
@@ -649,24 +649,24 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         />
       )}
 
-      {battleRef &&
+      {vsRef &&
         data &&
-        (battleCode.status === 'ready' ? (
-          <LazySlot frame={BATTLE_FRAME} label="setting up vs" onFailed={battleFailed}>
+        (vsCode.status === 'ready' ? (
+          <LazySlot frame={VS_FRAME} label="setting up vs" onFailed={vsFailed}>
             <VsView
               a={data}
               b={challenger.data}
-              bRef={battleRef}
+              bRef={vsRef}
               bFetching={challenger.isFetching}
               bError={challenger.error}
               theme={theme}
               onRetry={challenger.refetch}
-              onClose={endBattle}
+              onClose={endVs}
             />
           </LazySlot>
         ) : (
-          // its code is still on the way (a failure drops the battle: see battleFailed)
-          <ChunkPlaceholder frame={BATTLE_FRAME} label="setting up vs" />
+          // its code is still on the way (a failure drops the vs: see vsFailed)
+          <ChunkPlaceholder frame={VS_FRAME} label="setting up vs" />
         ))}
     </div>
   )

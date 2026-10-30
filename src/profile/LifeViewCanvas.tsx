@@ -43,7 +43,7 @@ export interface LifeViewProps<L extends LifeViewModel = LifeViewModel> {
   /** the person, for the canvas's label (and the time-lapse caption when it names no title) */
   login: string
   /**
-   * the time-lapse grows the view to its progress (0..1), which the controls write every frame,
+   * the time-lapse draws the view up to its progress (0..1), which the controls write every frame,
    * under a caption naming title; keep its identity while it is on, as the painter is made per value
    */
   timelapse?: { progress: RefObject<number>; title: string; live?: boolean } | null
@@ -99,7 +99,7 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
   })
   const { invalidate, getCamera, getView, setCamera, wasDrag, fit } = canvas
 
-  // the time-lapse opens on the whole life, so nothing grows off screen and a recording starts on the whole horizon
+  // the time-lapse opens on the whole life, so nothing appears off screen and a recording starts on the whole horizon
   const lapsing = timelapse !== null
   useEffect(() => {
     if (lapsing) fit(0)

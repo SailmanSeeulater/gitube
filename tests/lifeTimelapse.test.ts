@@ -1,7 +1,7 @@
 /**
  * Person mode's time-lapse (PROFILE_SPEC.md Phase 5): a play paced by the wall clock, which runs
  * from the timeline's start (the join year on these recordings) to today; the caption the canvas
- * carries; the view it grows (life lines), painted by the view's own painter on a recording context,
+ * carries; the view it draws (life lines), painted by the view's own painter on a recording context,
  * only ever adding lines, labels and repos; a hit test that never names a repo before it appears; the
  * privacy toggle on every frame, caption included; frames asked for only while the time-lapse is
  * live or its progress moves; and the analytics it sends: timelapse-play when it opens, export
@@ -47,7 +47,7 @@ import { repoKey } from '../src/profile/privacy'
 import { LIFE_LABEL_FONT, labelNames, lifeLabelSpec } from '../src/profile/useLifeLabels'
 import type { ProfileData } from '../src/types'
 import { recordingCtx } from './helpers/recordingCtx'
-import { GAEARON_NOW, KEPANO_NOW, VIEW, gaearonProfile, grow, kepanoProfile, paint, painterFor, quietCtx, withPrivate, type Grown } from './helpers/personScene'
+import { GAEARON_NOW, KEPANO_NOW, VIEW, gaearonProfile, load, kepanoProfile, paint, painterFor, quietCtx, withPrivate, type Loaded } from './helpers/personScene'
 
 const theme = getTheme('obsidian')
 /** The caption's year: repo mode's time-lapse date, in its LABEL_FONT. */
@@ -96,7 +96,7 @@ function expectNoSecret(texts: readonly string[], names: readonly string[], wher
 const labelTexts = (rec: ReturnType<typeof recordingCtx>) => rec.calls('fillText').filter((c) => c.style.font === LIFE_LABEL_FONT).map((c) => String(c.args[0]))
 
 /** The time-lapse's day at a progress, as the painter reads it. */
-const atOf = (g: Grown, p: number) => dayAt(g.timeline.clock, p)
+const atOf = (g: Loaded, p: number) => dayAt(g.timeline.clock, p)
 
 describe('lapseTick', () => {
   it('paces a play by the wall clock, whatever frames came between, and stops at the end', () => {
@@ -113,7 +113,7 @@ describe('lapseTick', () => {
     expect(lapseTick(play({ lengthS: 10 }), 6000).progress).toBe(0.5)
   })
 
-  it('holds a recording on the grown view, then saves it', () => {
+  it('holds a recording on the finished view, then saves it', () => {
     const rec = play({ recording: true })
     const end = lapseTick(rec, 21000)
     expect(end).toEqual({ progress: 1, endedAt: 21000, next: 'go' })
@@ -145,7 +145,7 @@ describe('lapseDate and lapseDay', () => {
   })
 
   it('runs from the timeline start to today', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     expect(lapseDay(g.timeline, 0)).toBe(g.timeline.start)
     expect(lapseDay(g.timeline, 1)).toBe(g.timeline.today)
     expect(lapseDay(g.timeline, -1)).toBe(g.timeline.start)
@@ -162,7 +162,7 @@ describe('a play from the join year to today', () => {
 
   it('shows every day from the start to today in order, and sows every repo not hidden by the end', () => {
     for (const { label, profile, now } of profiles()) {
-      const g = grow(profile, now, theme)
+      const g = load(profile, now, theme)
       // two repos hidden with the eye
       const hidden = new Set(g.layout.lines.slice(0, 2).map((line) => line.key))
       const lapse = play({ startedAt: 0, lengthS: LAPSE_DEFAULT_LENGTH })
@@ -183,61 +183,61 @@ describe('a play from the join year to today', () => {
       expect(last.year, label).toBe(g.timeline.today.slice(0, 4))
       for (let i = 1; i < captions.length; i++) {
         expect(dayNumber(captions[i].day), label).toBeGreaterThanOrEqual(dayNumber(captions[i - 1].day))
-        expect(captions[i].sown, label).toBeGreaterThanOrEqual(captions[i - 1].sown)
+        expect(captions[i].reached, label).toBeGreaterThanOrEqual(captions[i - 1].reached)
       }
-      expect(last.sown, label).toBe(g.layout.lines.length - hidden.size)
-      expect(first.sown, label).toBeLessThan(last.sown)
+      expect(last.reached, label).toBe(g.layout.lines.length - hidden.size)
+      expect(first.reached, label).toBeLessThan(last.reached)
       // the years go by one after another
       const years = [...new Set(captions.map((c) => c.year))]
       expect(years.length, label).toBe(Number(last.year) - Number(first.year) + 1)
     }
   })
 
-  it('grows the view frame by frame: lines and labels only ever join, each once its repo is sown', () => {
+  it('draws the view frame by frame: lines and labels only ever join, each once its repo is reached', () => {
     for (const { label, profile, now } of profiles()) {
-      const g = grow(profile, now, theme)
+      const g = load(profile, now, theme)
       const names = labelNames(g.layout.lines, g.timeline, g.name, profile.login)
       // painterFor's measure
       const measure = (text: string) => text.length * 6.5
       const forms = names.map((name, i) => lifeLabelSpec(i, name, measure).texts)
       let strokes = -1
-      let sownBefore = -1
+      let reachedBefore = -1
       for (const p of PROGRESSES) {
         const { rec } = paint(g, { progress: p })
         const count = rec.calls('lineTo').length
         expect(count, `${label} at ${p}`).toBeGreaterThanOrEqual(strokes)
         strokes = count
         const at = atOf(g, p)
-        const sown = new Set<string>()
-        const unsown = new Set<string>()
+        const reached = new Set<string>()
+        const unreached = new Set<string>()
         g.layout.lines.forEach((line, i) => {
-          for (const text of forms[i]) (line.startDay > at ? unsown : sown).add(text)
+          for (const text of forms[i]) (line.startDay > at ? unreached : reached).add(text)
         })
         const drawn = labelTexts(rec)
-        expect(drawn.filter((text) => unsown.has(text) && !sown.has(text)), `${label} at ${p}`).toEqual([])
+        expect(drawn.filter((text) => unreached.has(text) && !reached.has(text)), `${label} at ${p}`).toEqual([])
         // halfway, some repos are up and labelled and some are still to come
         if (p === 0.5) {
-          expect(unsown.size, label).toBeGreaterThan(0)
-          expect(drawn.filter((text) => sown.has(text)).length, label).toBeGreaterThan(0)
+          expect(unreached.size, label).toBeGreaterThan(0)
+          expect(drawn.filter((text) => reached.has(text)).length, label).toBeGreaterThan(0)
         }
-        const { sown: repos } = lapseCaption(g.timeline, g.layout.lines, p, new Set())
-        expect(repos, `${label} at ${p}`).toBeGreaterThanOrEqual(sownBefore)
-        sownBefore = repos
+        const { reached: repos } = lapseCaption(g.timeline, g.layout.lines, p, new Set())
+        expect(repos, `${label} at ${p}`).toBeGreaterThanOrEqual(reachedBefore)
+        reachedBefore = repos
       }
-      // fully grown at the end: as many strokes as a frame with no time-lapse
+      // fully drawn at the end: as many strokes as a frame with no time-lapse
       expect(strokes, label).toBe(paint(g).rec.calls('lineTo').length)
       expect(paint(g, { progress: 0 }).rec.calls('lineTo').length, label).toBeLessThan(strokes)
     }
   })
 
   it('captions the canvas with the year, the repos so far and the person, only while a time-lapse is on', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     for (const p of PROGRESSES) {
       const { rec } = paint(g, { progress: p })
       const caption = lapseCaption(g.timeline, g.layout.lines, p, new Set())
       const texts = rec.calls('fillText').map((c) => String(c.args[0]))
       expect(texts).toContain(caption.year)
-      expect(texts).toContain(`${caption.sown} repo${caption.sown === 1 ? '' : 's'}`)
+      expect(texts).toContain(`${caption.reached} repo${caption.reached === 1 ? '' : 's'}`)
       expect(texts).toContain('kepano · gitube')
       // over the labels, so a label never covers it
       const year = rec.log.findIndex((e) => e.kind === 'call' && e.name === 'fillText' && e.args[0] === caption.year && e.style.font === HUD_YEAR_FONT)
@@ -256,13 +256,13 @@ describe('a play from the join year to today', () => {
     expect(rec.texts()).toContain('Kepano · gitube')
   })
 
-  it('never names a repo before it appears: a hit on where it will grow is a day', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+  it('never names a repo before it appears: a hit on where it will appear is a day', () => {
+    const g = load(kepano, KEPANO_NOW, theme)
     const full = paint(g).painter
     const p = 0.5
     const lapse = paint(g, { progress: p }).painter
     const at = atOf(g, p)
-    // each line's start marker, fully grown
+    // each line's start marker, fully drawn
     const out = new Float32Array(3)
     const later = g.layout.lines
       .map((line, i) => (linesAnchor(g.layout, g.geoms, i, null, out), { line, x: out[0], y: out[1] }))
@@ -275,9 +275,9 @@ describe('a play from the join year to today', () => {
       expect(lapse.pickAt(later[k].x, later[k].y)).not.toBe(later[k].line.key)
     }
     expect(hits.some((hit) => hit?.kind === 'day')).toBe(true)
-    // once grown, the same spot is the repo again
-    const grown = paint(g, { progress: 1 }).painter
-    expect(grown.hitAt(later[0].x, later[0].y)).toEqual({ kind: 'repo', key: later[0].line.key })
+    // once drawn, the same spot is the repo again
+    const drawnShare = paint(g, { progress: 1 }).painter
+    expect(drawnShare.hitAt(later[0].x, later[0].y)).toEqual({ kind: 'repo', key: later[0].line.key })
   })
 })
 
@@ -285,7 +285,7 @@ describe('the privacy toggle on every frame', () => {
   it('keeps private names out of every text drawn or measured, labels and caption alike, until revealed for this login', () => {
     const profile = withPrivate(kepano, KEPANO_PRIVATE)
     for (const revealFor of [null, 'someone-else']) {
-      const g = grow(profile, KEPANO_NOW, theme, revealFor)
+      const g = load(profile, KEPANO_NOW, theme, revealFor)
       for (const p of PROGRESSES) {
         const { rec, measured } = paint(g, { progress: p })
         expectNoSecret([...rec.texts(), ...measured], KEPANO_PRIVATE, `${revealFor} at ${p}`)
@@ -306,7 +306,7 @@ describe('the privacy toggle on every frame', () => {
       ]
       expectNoSecret(html, KEPANO_PRIVATE, `${revealFor} markup`)
     }
-    const shown = grow(profile, KEPANO_NOW, theme, 'KEPANO')
+    const shown = load(profile, KEPANO_NOW, theme, 'KEPANO')
     const { measured } = paint(shown, { progress: 1 })
     expect(measured).toContain('obsidian-skills')
     expect(measured).toContain('obsidianmd/wordgard')
@@ -315,10 +315,10 @@ describe('the privacy toggle on every frame', () => {
 
 describe('paintLapseHud', () => {
   it('draws in the view, haloed, from the theme, and leaves the context as it came', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const rec = recordingCtx(g.view.width * 2, g.view.height * 2)
     rec.ctx.setTransform(2, 0, 0, 2, 0, 0)
-    paintLapseHud(rec.ctx, g.view, g.ink, { day: '2019-04-01', year: '2019', sown: 1 }, 0.4, 'kepano')
+    paintLapseHud(rec.ctx, g.view, g.ink, { day: '2019-04-01', year: '2019', reached: 1 }, 0.4, 'kepano')
     expect(rec.calls('setTransform')).toHaveLength(1)
     expect(rec.calls('save')).toHaveLength(1)
     expect(rec.calls('restore')).toHaveLength(1)
@@ -337,13 +337,13 @@ describe('paintLapseHud', () => {
     expect(rec.calls('fillRect')[0].style.fillStyle).toBe(g.ink.accent)
   })
 
-  it('counts the repos the painter draws: sown and not hidden', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+  it('counts the repos the painter draws: reached and not hidden', () => {
+    const g = load(kepano, KEPANO_NOW, theme)
     const all = new Set(g.layout.lines.map((line) => line.key))
-    expect(lapseCaption(g.timeline, g.layout.lines, 1, new Set()).sown).toBe(g.layout.lines.length)
-    expect(lapseCaption(g.timeline, g.layout.lines, 1, all).sown).toBe(0)
+    expect(lapseCaption(g.timeline, g.layout.lines, 1, new Set()).reached).toBe(g.layout.lines.length)
+    expect(lapseCaption(g.timeline, g.layout.lines, 1, all).reached).toBe(0)
     const at = atOf(g, 0.5)
-    expect(lapseCaption(g.timeline, g.layout.lines, 0.5, new Set()).sown).toBe(g.layout.lines.filter((line) => line.startDay <= at).length)
+    expect(lapseCaption(g.timeline, g.layout.lines, 0.5, new Set()).reached).toBe(g.layout.lines.filter((line) => line.startDay <= at).length)
     // a progress that is no number paints the start rather than throwing
     const quiet = quietCtx(10, 10)
     expect(() => painterFor(g, {}, { timelapse: { progress: { current: Number.NaN } } }).painter.paint(quiet, g.view, g.camera, 16)).not.toThrow()
@@ -376,13 +376,13 @@ describe('frames while the time-lapse is on', () => {
   const quiet = quietCtx(VIEW.width * 2, VIEW.height * 2)
 
   /** Frames painted until one asks for no other; Infinity when they keep coming for limit frames. */
-  function framesUntilStill(painter: LifePainter, g: Grown, limit = 400): number {
+  function framesUntilStill(painter: LifePainter, g: Loaded, limit = 400): number {
     for (let n = 1; n <= limit; n++) if (!painter.paint(quiet, g.view, g.camera, 16)) return n
     return Number.POSITIVE_INFINITY
   }
 
   it('leaves a paused time-lapse still: frames only while the labels settle or the progress moves', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const progress = { current: 0.5 }
     const { painter } = painterFor(g, {}, { timelapse: { progress, live: false } })
     // the labels settle, then the canvas is still
@@ -407,7 +407,7 @@ describe('frames while the time-lapse is on', () => {
   })
 
   it('keeps every frame coming while live (or not said), the progress still or not, as a recording needs through its hold', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     for (const timelapse of [{ progress: { current: 1 }, live: true }, { progress: { current: 1 } }]) {
       const { painter } = painterFor(g, {}, { timelapse })
       // the labels settled first, as they are on the finished map a recording holds on
@@ -438,7 +438,7 @@ describe('a recording, from rec to its download', () => {
   }
 
   /** The exporters' chunk failing as a dropped connection leaves it, its message naming the module. */
-  const chunkFailure = () => new ChunkLoadError(new TypeError('Failed to fetch dynamically imported module: https://repo-garden.example/assets/exporters-DP1rtgNo.js'))
+  const chunkFailure = () => new ChunkLoadError(new TypeError('Failed to fetch dynamically imported module: https://gitube.example/assets/exporters-DP1rtgNo.js'))
 
   it("downloads the person's recording, then counts it as a webm export with no name", async () => {
     for (const token of ['', 'test-token-not-real']) {
@@ -615,7 +615,7 @@ describe('a recording, from rec to its download', () => {
 
 describe('PersonTimelapse', () => {
   it('renders the controls: play, scrubber, lengths, rec (waiting for the recorder) and close', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const html = renderToStaticMarkup(
       h(PersonTimelapse, { onClose: () => {}, timeline: g.timeline, login: 'kepano', progress: { current: 1 }, getCanvas: () => null, besidePanel: false, revealed: true }),
     )

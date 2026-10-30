@@ -3,7 +3,7 @@
  *
  * The privacy rules (README, "Analytics"):
  * - Umami never receives the GitHub token, the query string, or the URL path. Share links carry repo
- *   names, contributor logins and battle repos, and with a token those can be private. The tracker
+ *   names, contributor logins and vs repos, and with a token those can be private. The tracker
  *   is told to drop the query string (data-exclude-search), and beforeSend cuts every page URL down
  *   to the origin and every referrer down to its origin, so neither a query string nor a path is sent.
  * - Event data may carry a repo name or login only when it was fetched without a token (so it is
@@ -29,13 +29,13 @@ export const BEFORE_SEND_GLOBAL = 'gitubeBeforeSend'
 
 /** The complete list of custom events; nothing else is sent. */
 export type AnalyticsEvent =
-  | 'grow'
+  | 'load'
   | 'layout-switch'
   | 'theme-switch'
   | 'view-mode'
   | 'timelapse-play'
   | 'export'
-  | 'battle-start'
+  | 'vs-start'
   | 'pr-overlay'
   | 'share-copy'
   | 'token-added'

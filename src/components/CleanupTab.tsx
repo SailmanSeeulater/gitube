@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { defaultWeedPicks, deleteCommand, type WeedReport } from '../graph/weeds'
+import { defaultLeftoverPicks, deleteCommand, type CleanupReport } from '../graph/cleanup'
 import type { PullSummary } from '../types'
 import { useAppStore } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
 import { relativeTime } from './graphUtils'
-import { CheckIcon, ExternalIcon, ThornIcon } from './icons'
+import { CheckIcon, ExternalIcon, SpikesIcon } from './icons'
 
-export interface WeedsTabProps {
-  report: WeedReport
+export interface CleanupTabProps {
+  report: CleanupReport
   owner: string
   repo: string
   defaultBranch: string
@@ -21,19 +21,19 @@ export interface WeedsTabProps {
   unchecked?: ReadonlyArray<string> | null
 }
 
-/** The weeds that have (or may have) an open pull request, as one string that changes when the set does. */
-const prWeedKey = (report: WeedReport, hasOpenPr: (name: string) => boolean) =>
-  report.weeds
+/** The leftovers that have (or may have) an open pull request, as one string that changes when the set does. */
+const prLeftoverKey = (report: CleanupReport, hasOpenPr: (name: string) => boolean) =>
+  report.leftovers
     .filter((w) => hasOpenPr(w.name))
     .map((w) => w.name)
     .join('\n')
 
 /**
  * Branch cleanup: branches whose work is all in the default branch (with one command to delete the
- * ticked ones from the remote), and thorny branches far apart from it on both sides. Clicking a name
+ * ticked ones from the remote), and diverged branches far apart from it on both sides. Clicking a name
  * selects that branch on the graph.
  */
-export default function WeedsTab({ report, owner, repo, defaultBranch, palette, now, prs = null, unchecked = null }: WeedsTabProps) {
+export default function CleanupTab({ report, owner, repo, defaultBranch, palette, now, prs = null, unchecked = null }: CleanupTabProps) {
   const fallback = useTheme().fallback
   const selectedBranch = useAppStore((s) => s.selectedBranch)
   const toggleSelectedBranch = useAppStore((s) => s.toggleSelectedBranch)
@@ -43,14 +43,14 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
   // GitHub did not say
   const notChecked = new Set(unchecked ?? [])
   const hasOpenPr = (name: string) => (prs?.get(name)?.length ?? 0) > 0 || notChecked.has(name)
-  const prKey = prWeedKey(report, hasOpenPr)
-  const [picked, setPicked] = useState(() => defaultWeedPicks(report.weeds, hasOpenPr))
+  const prKey = prLeftoverKey(report, hasOpenPr)
+  const [picked, setPicked] = useState(() => defaultLeftoverPicks(report.leftovers, hasOpenPr))
   const [pickedFor, setPickedFor] = useState(report)
   const [prKeyFor, setPrKeyFor] = useState(prKey)
   if (pickedFor !== report) {
     setPickedFor(report)
     setPrKeyFor(prKey)
-    setPicked(defaultWeedPicks(report.weeds, hasOpenPr))
+    setPicked(defaultLeftoverPicks(report.leftovers, hasOpenPr))
   } else if (prKeyFor !== prKey) {
     // pull requests read after the tab opened: their branches are unticked (once; a tick after this stays)
     setPrKeyFor(prKey)
@@ -65,7 +65,7 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
       return next
     })
 
-  const command = useMemo(() => deleteCommand(report.weeds.filter((w) => picked.has(w.name)).map((w) => w.name)), [report, picked])
+  const command = useMemo(() => deleteCommand(report.leftovers.filter((w) => picked.has(w.name)).map((w) => w.name)), [report, picked])
 
   const [copied, setCopied] = useState<'idle' | 'copied' | 'failed'>('idle')
   useEffect(() => {
@@ -92,25 +92,25 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
     </button>
   )
 
-  const { weeds, thorny } = report
+  const { leftovers, diverged } = report
   return (
     <div className="ui-scroll min-h-0 flex-1 overflow-y-auto px-3 py-2.5 text-[12px]">
-      <section aria-labelledby="weeds-heading">
-        <h3 id="weeds-heading" className="text-[11px] uppercase tracking-wide text-ui-muted">
+      <section aria-labelledby="leftovers-heading">
+        <h3 id="leftovers-heading" className="text-[11px] uppercase tracking-wide text-ui-muted">
           merged, not deleted
         </h3>
-        {weeds.length === 0 ? (
+        {leftovers.length === 0 ? (
           <p className="mt-1 leading-snug text-ui-muted">
             nothing to clean up: every branch has commits <span className="font-mono">{defaultBranch}</span> lacks.
           </p>
         ) : (
           <>
             <p className="mt-1 leading-snug text-ui-muted">
-              {weeds.length} branch{weeds.length === 1 ? ' has' : 'es have'} nothing <span className="font-mono">{defaultBranch}</span>{' '}
-              lacks, so deleting {weeds.length === 1 ? 'it' : 'them'} loses no commits.
+              {leftovers.length} branch{leftovers.length === 1 ? ' has' : 'es have'} nothing <span className="font-mono">{defaultBranch}</span>{' '}
+              lacks, so deleting {leftovers.length === 1 ? 'it' : 'them'} loses no commits.
             </p>
             <ul className="-mx-1.5 mt-1.5">
-              {weeds.map((w) => (
+              {leftovers.map((w) => (
                 <li key={w.name} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-ui-hover">
                   <input
                     type="checkbox"
@@ -194,20 +194,20 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
         )}
       </section>
 
-      <section aria-labelledby="thorns-heading" className="mt-4">
-        <h3 id="thorns-heading" className="text-[11px] uppercase tracking-wide text-ui-muted">
+      <section aria-labelledby="spikes-heading" className="mt-4">
+        <h3 id="spikes-heading" className="text-[11px] uppercase tracking-wide text-ui-muted">
           diverged
         </h3>
-        {thorny.length === 0 ? (
+        {diverged.length === 0 ? (
           <p className="mt-1 leading-snug text-ui-muted">no diverged branches: nothing has drifted far from {defaultBranch} on both sides.</p>
         ) : (
           <>
             <p className="mt-1 leading-snug text-ui-muted">
               far apart from <span className="font-mono">{defaultBranch}</span> on both sides, so merging or rebasing will likely
-              conflict. the spikes grow with commits ahead × behind.
+              conflict. the spikes load with commits ahead × behind.
             </p>
             <ul className="-mx-1.5 mt-1.5">
-              {thorny.map((t) => (
+              {diverged.map((t) => (
                 <li key={t.name} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-ui-hover">
                   {nameButton(t.name)}
                   <span className="shrink-0 font-mono text-[11px] tabular-nums text-ui-muted" title="ahead / behind the default branch">
@@ -215,7 +215,7 @@ export default function WeedsTab({ report, owner, repo, defaultBranch, palette, 
                   </span>
                   <span className="flex w-[2.75rem] shrink-0 justify-end text-ui-text-dim" title={`${t.level} of 3`} aria-label={`${t.level} of 3 spikes`}>
                     {Array.from({ length: t.level }, (_, i) => (
-                      <ThornIcon key={i} size={12} />
+                      <SpikesIcon key={i} size={12} />
                     ))}
                   </span>
                 </li>

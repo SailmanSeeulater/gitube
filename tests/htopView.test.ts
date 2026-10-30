@@ -2,8 +2,8 @@
  * The htop view: its layout (one row per lane in lane order, meters tiling each lane, levels by tier,
  * colour slots from language use), the same layout for the profile in any order and for a renamed
  * repo, its geometry (rows inside the plot, thinner when there are many), its hit test (every row
- * drawn hit at its label anchor, fully grown, zoomed and halfway through the time-lapse; hidden and
- * unsown rows skipped; the gutter; the axis otherwise), and its painter on a recording context: only
+ * drawn hit at its label anchor, fully drawn, zoomed and halfway through the time-lapse; hidden and
+ * unreached rows skipped; the gutter; the axis otherwise), and its painter on a recording context: only
  * the console palette whatever the theme, no repo name, nothing of a hidden row, nothing past the
  * time-lapse's day, finite numbers. Then at scale (a prolific profile of 400 repos, gaearon's 301)
  * and with no repos at all.
@@ -19,7 +19,7 @@ import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP, horizonY } from '../src/profile/lifeG
 import { languageColour, languagePalette, lifeInk } from '../src/profile/lifeInk'
 import { axisHover } from '../src/profile/lifeView'
 import { layoutHtop, type HtopLayout } from '../src/profile/htopLayout'
-import { HTOP_GUTTER_PX, HTOP_MAX_PITCH, htopDrawnTo, htopGeom, htopSown, rowY, type HtopGeom } from '../src/profile/htopGeometry'
+import { HTOP_GUTTER_PX, HTOP_MAX_PITCH, htopDrawnTo, htopGeom, htopReached, rowY, type HtopGeom } from '../src/profile/htopGeometry'
 import { hitHtop } from '../src/profile/htopHit'
 import { htopAnchor, htopKeepOut, htopLabelOrder, htopRowColour, paintHtop, type HtopPaintInput } from '../src/profile/htopPaint'
 import { HTOP_VIEW } from '../src/profile/htopView'
@@ -109,9 +109,9 @@ const REPOS: ProfileRepo[] = [
   repo('Me/forked-lib', { createdAt: iso('2021-01-10'), language: 'Go', isFork: true, activity: monthly('2021-01', '2021-03', 1) }),
   repo('someone/big-project', { createdAt: iso('2015-01-01'), firstActiveAt: iso('2022-05-01'), isOwn: false, language: null, activity: monthly('2022-05', '2023-02', 5) }),
   repo('Me/busy-bee', { createdAt: iso('2022-09-01'), activity: daily('2022-09-01', 40) }),
-  repo('Me/empty-seedling', { createdAt: iso('2023-08-01'), stars: 5 }),
+  repo('Me/empty-uncounted', { createdAt: iso('2023-08-01'), stars: 5 }),
 ]
-const NAMES = ['alpha', 'secret', 'old-thing', 'forked-lib', 'big-project', 'busy-bee', 'empty-seedling', 'someone']
+const NAMES = ['alpha', 'secret', 'old-thing', 'forked-lib', 'big-project', 'busy-bee', 'empty-uncounted', 'someone']
 
 /** A seeded shuffle, so a failure reproduces. */
 function shuffled<T>(items: readonly T[], seed: number): T[] {
@@ -170,7 +170,7 @@ const anchorOf = (s: Scene, i: number, at: number | null = null) => {
 
 /** The set of repos not drawn at a time-lapse day, as the painter's host makes it. */
 const notDrawnAt = (s: Scene, at: number | null, hidden: ReadonlySet<string> = NONE) =>
-  new Set([...hidden, ...s.layout.rows.filter((r) => !htopSown(r, at)).map((r) => r.key)])
+  new Set([...hidden, ...s.layout.rows.filter((r) => !htopReached(r, at)).map((r) => r.key)])
 
 /** Every drawn row is hit at its own label anchor. */
 function expectHitAtAnchors(s: Scene, at: number | null = null) {
@@ -210,7 +210,7 @@ describe('htop layout', () => {
     const busy = s.layout.rows[s.layout.byKey.get('me/busy-bee')!]
     expect(busy.cells.some((c) => c.level === 3)).toBe(true)
     // a lane GitHub counted no commits to is lit half
-    expect(s.layout.rows[s.layout.byKey.get('me/empty-seedling')!].cells[0].level).toBe(2)
+    expect(s.layout.rows[s.layout.byKey.get('me/empty-uncounted')!].cells[0].level).toBe(2)
     const rest = scene(profile({ repos: REPOS, source: 'rest' }))
     for (const row of rest.layout.rows) for (const cell of row.cells) expect([0, 3]).toContain(cell.level)
   })
@@ -276,7 +276,7 @@ describe('htop geometry', () => {
 })
 
 describe('htop hit test', () => {
-  it('hits every row at its label anchor, fully grown and zoomed in', () => {
+  it('hits every row at its label anchor, fully drawn and zoomed in', () => {
     const s = scene()
     expect(expectHitAtAnchors(s)).toBe(s.layout.rows.length)
     const zoomed = scene(undefined, NOW, zoomLifeCamera(s.camera, 3, VIEW.width / 2, s.layout.days, VIEW))
@@ -292,14 +292,14 @@ describe('htop hit test', () => {
     expect(hitHtop(s.layout, s.g, s.camera, VIEW, mid, y, NONE, null)).toEqual({ kind: 'repo', key: row.key })
     expect(hitHtop(s.layout, s.g, s.camera, VIEW, HTOP_GUTTER_PX / 2, y, NONE, null)).toEqual({ kind: 'repo', key: row.key })
     // the busy row starts late: left of its meter is a day
-    const late = s.layout.byKey.get('me/empty-seedling')!
+    const late = s.layout.byKey.get('me/empty-uncounted')!
     const before = s.camera.tx + (s.layout.rows[late].x0 / 2) * s.camera.k
     const yl = rowY(s.g, late)
     expect(hitHtop(s.layout, s.g, s.camera, VIEW, before, yl, NONE, null)).toEqual(axisHover(s.layout, s.camera, VIEW, before, yl))
     expect(hitHtop(s.layout, s.g, s.camera, VIEW, -1, y, NONE, null)).toBeNull()
   })
 
-  it('skips hidden rows and rows the time-lapse has not sown', () => {
+  it('skips hidden rows and rows the time-lapse has not reached', () => {
     const s = scene()
     const i = s.layout.byKey.get('me/alpha')!
     const [x, y] = anchorOf(s, i)
@@ -311,11 +311,11 @@ describe('htop hit test', () => {
     const [lx, ly] = anchorOf(s, s.layout.rows.length - 1, at)
     const notDrawn = notDrawnAt(s, at)
     expect(notDrawn.has(last.key)).toBe(true)
-    const unsown = hitHtop(s.layout, s.g, s.camera, VIEW, lx, ly, notDrawn, at)
-    expect(unsown?.kind === 'repo' && unsown.key === last.key).toBe(false)
+    const unreached = hitHtop(s.layout, s.g, s.camera, VIEW, lx, ly, notDrawn, at)
+    expect(unreached?.kind === 'repo' && unreached.key === last.key).toBe(false)
   })
 
-  it('hits every sown row at its anchor halfway through the time-lapse, and not past its day', () => {
+  it('hits every reached row at its anchor halfway through the time-lapse, and not past its day', () => {
     const s = scene()
     const at = dayAt(s.timeline.clock, 0.5)
     expect(expectHitAtAnchors(s, at)).toBeGreaterThan(0)
@@ -371,7 +371,7 @@ describe('htop painter', () => {
     expect(rec.calls('fillText').some((c) => c.args[0] === String(i + 1))).toBe(false)
   })
 
-  it('draws nothing past the time-lapse day, and no row it has not sown', () => {
+  it('draws nothing past the time-lapse day, and no row it has not reached', () => {
     const s = scene()
     for (const p of [0.05, 0.3, 0.5, 0.8]) {
       const at = dayAt(s.timeline.clock, p)

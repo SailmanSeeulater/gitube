@@ -16,8 +16,8 @@ export const STAR_FOOT_PX = 10
 /** A core's radius: STAR_MIN_R for the lightest star, up to STAR_MAX_R for the heaviest... */
 export const STAR_MIN_R = 2.2
 export const STAR_MAX_R = 8
-/** ...and SEEDLING_R for a seedling, which has no weight. */
-export const SEEDLING_R = 1.6
+/** ...and UNCOUNTED_R for an uncounted repo, which has no weight. */
+export const UNCOUNTED_R = 1.6
 /** How far a full glow (10k stars) reaches beyond the core. */
 export const GLOW_PX = 12
 
@@ -26,9 +26,9 @@ export interface ConstellationGeom {
   /** a star's centre */
   x: Float64Array
   y: Float64Array
-  /** its core's radius, fully grown */
+  /** its core's radius, fully drawn */
   r: Float64Array
-  /** how far its glow reaches beyond the core, fully grown */
+  /** how far its glow reaches beyond the core, fully drawn */
   glow: Float64Array
   /** a band's top and foot, index-aligned with layout.bands */
   bandTop: Float64Array
@@ -45,9 +45,9 @@ export function starPlotY(view: LifeViewport, y: number): number {
   return view.top + y * starPlotHeight(view)
 }
 
-/** A star's core radius, fully grown. */
-export function starRadius(star: Pick<LifeStar, 'size' | 'seedling'>): number {
-  return star.seedling ? SEEDLING_R : STAR_MIN_R + (STAR_MAX_R - STAR_MIN_R) * star.size
+/** A star's core radius, fully drawn. */
+export function starRadius(star: Pick<LifeStar, 'size' | 'uncounted'>): number {
+  return star.uncounted ? UNCOUNTED_R : STAR_MIN_R + (STAR_MAX_R - STAR_MIN_R) * star.size
 }
 
 export function constellationGeom(layout: ConstellationLayout, camera: LifeCamera, view: LifeViewport): ConstellationGeom {

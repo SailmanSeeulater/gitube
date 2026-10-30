@@ -23,7 +23,7 @@ import {
   linesGeom,
   linesPlot,
   rooted,
-  sown,
+  isReached,
   stationMark,
   stationRadius,
   stationReached,
@@ -31,7 +31,7 @@ import {
   weightLevel,
   type LinesGeom,
 } from '../src/profile/lifeLinesGeometry'
-import { ERA_BAND_ALPHA, GRID_ALPHA, SEEDLING_DASH, lineColour, linesAnchor, linesKeepOut, linesLabelOrder, paintLifeLines, type LinesPaintInput } from '../src/profile/lifeLinesPaint'
+import { ERA_BAND_ALPHA, GRID_ALPHA, UNCOUNTED_DASH, lineColour, linesAnchor, linesKeepOut, linesLabelOrder, paintLifeLines, type LinesPaintInput } from '../src/profile/lifeLinesPaint'
 import type { LifeCamera, LifeHover, LifeInk, LifeViewport } from '../src/profile/lifeTypes'
 import type { ProfileData, ProfileRepo } from '../src/types'
 import { GAEARON_NOW, KEPANO_NOW, gaearonRouter, kepanoRouter, makeFetch } from './helpers/profileReplay'
@@ -102,7 +102,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
 /**
  * A token profile with one of each kind of line: a busy starred one with a quiet spell, a private
  * repo, an archived one, a fork, a repo they only contributed to, and one GitHub counted no commits
- * to (a seedling).
+ * to (uncounted).
  */
 const REPOS: ProfileRepo[] = [
   repo('Me/alpha', { createdAt: iso('2019-02-01'), stars: 120, activity: [...monthly('2019-02', '2020-06', 9), ...monthly('2021-06', '2021-09', 1)] }),
@@ -110,10 +110,10 @@ const REPOS: ProfileRepo[] = [
   repo('Me/old-thing', { createdAt: iso('2019-06-01'), language: 'JavaScript', stars: 15, isArchived: true, activity: monthly('2019-06', '2019-12') }),
   repo('Me/forked-lib', { createdAt: iso('2021-01-10'), language: 'Go', isFork: true, activity: monthly('2021-01', '2021-03', 1) }),
   repo('someone/big-project', { createdAt: iso('2015-01-01'), firstActiveAt: iso('2022-05-01'), isOwn: false, language: null, activity: monthly('2022-05', '2023-02', 5) }),
-  repo('Me/empty-seedling', { createdAt: iso('2023-08-01'), stars: 5 }),
+  repo('Me/empty-uncounted', { createdAt: iso('2023-08-01'), stars: 5 }),
 ]
 
-const NAMES = ['me/alpha', 'me/secret-plans', 'secret', 'old-thing', 'forked-lib', 'big-project', 'empty-seedling']
+const NAMES = ['me/alpha', 'me/secret-plans', 'secret', 'old-thing', 'forked-lib', 'big-project', 'empty-uncounted']
 
 /** The canvas host's frame on a laptop screen. */
 const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
@@ -244,7 +244,7 @@ describe('linesGeom', () => {
     // a line cut short of the next on its track is drawn to its cut, never on to its own end
     expect(drawnTo({ end: 240 }, 0, null)).toBe(240)
     expect(drawnTo({ end: 240 }, 0, 900)).toBe(240)
-    expect([sown(line, null), sown(line, 99.9), sown(line, 100)]).toEqual([true, false, true])
+    expect([isReached(line, null), isReached(line, 99.9), isReached(line, 100)]).toEqual([true, false, true])
     expect([rooted(line, null), rooted(line, 109.9), rooted(line, 110)]).toEqual([true, false, true])
     expect([stationReached(20.5, 100, null), stationReached(20.5, 100, 119.9), stationReached(20.5, 100, 120)]).toEqual([true, false, true])
   })
@@ -317,7 +317,7 @@ describe('paintLifeLines', () => {
     const widths = new Set(rec.calls('stroke').map((c) => c.style.lineWidth))
     expect(widths).toContain(s.g.dormantPx)
     // alpha's busy run and its light one, and the others
-    const active = s.layout.lines.flatMap((l) => (l.seedling ? [] : l.parts.filter((p) => p.kind === 'active').map((p) => weightLevel(p.weight))))
+    const active = s.layout.lines.flatMap((l) => (l.uncounted ? [] : l.parts.filter((p) => p.kind === 'active').map((p) => weightLevel(p.weight))))
     expect(new Set(active).size).toBeGreaterThan(1)
     for (const level of new Set(active)) expect(widths).toContain(s.g.activePx[level])
     // dormant parts with butt caps, active ones round
@@ -348,7 +348,7 @@ describe('paintLifeLines', () => {
   it('draws one stroke width for every active part without a token', () => {
     const rest = profile({ source: 'rest', repos: REPOS.map((r) => ({ ...r, activity: [], lastActiveAt: r.activity.at(-1) ? iso(r.activity.at(-1)!.date) : r.createdAt })) })
     const s = scene(rest)
-    expect(s.layout.lines.some((l) => l.seedling)).toBe(false)
+    expect(s.layout.lines.some((l) => l.uncounted)).toBe(false)
     const rec = paint(s)
     const widths = new Set(rec.calls('stroke').filter((c) => c.style.globalAlpha === 1).map((c) => c.style.lineWidth))
     expect(widths).toContain(s.g.activePx[2])
@@ -357,7 +357,7 @@ describe('paintLifeLines', () => {
     expect(rec.calls('setLineDash')).toHaveLength(0)
   })
 
-  it('marks each kind of line: start discs, a hollow start, a fork stub, a terminus and dotted seedlings', () => {
+  it('marks each kind of line: start discs, a hollow start, a fork stub, a terminus and dotted uncounted lines', () => {
     const s = scene()
     const rec = paint(s)
     const own = s.layout.lines[lineOf(s, 'me/alpha')]
@@ -383,8 +383,8 @@ describe('paintLifeLines', () => {
     expect(rec.calls('stroke').some((c) => c.style.strokeStyle === s.ink.dry && c.style.lineWidth === 1.5)).toBe(true)
     expect(lineColour(dry, s.ink, s.input.colourOf)).toBe(s.ink.dry)
     expect(lineColour(own, s.ink, s.input.colourOf)).toBe(s.input.colourOf('TypeScript'))
-    // a seedling is dotted, and the dash is put back
-    expect(argsOf(rec, 'setLineDash').map((a) => a[0])).toEqual([[...SEEDLING_DASH], []])
+    // an uncounted repo is dotted, and the dash is put back
+    expect(argsOf(rec, 'setLineDash').map((a) => a[0])).toEqual([[...UNCOUNTED_DASH], []])
   })
 
   it('draws the stations on their lines, larger and ringed while hovered', () => {
@@ -499,16 +499,16 @@ describe('paintLifeLines', () => {
     expect(rec.calls('stroke').some((c) => c.style.strokeStyle === s.ink.hoverRing && c.style.lineWidth === 1)).toBe(true)
   })
 
-  it('draws only what the time-lapse has grown', () => {
+  it('draws only what the time-lapse has reached', () => {
     const s = scene()
     const before = paint(s, { at: s.layout.startDay - 1 })
     for (const line of s.layout.lines) expect(drawnOn(before, yOf(s, line), -Infinity, Infinity)).toBe(false)
     expect(before.calls('arc')).toHaveLength(0)
 
     const at = dayNumber('2021-02-01')
-    const sownLines = s.layout.lines.filter((l) => l.startDay <= at)
-    expect(sownLines.length).toBeGreaterThan(0)
-    expect(sownLines.length).toBeLessThan(s.layout.lines.length)
+    const reachedLines = s.layout.lines.filter((l) => l.startDay <= at)
+    expect(reachedLines.length).toBeGreaterThan(0)
+    expect(reachedLines.length).toBeLessThan(s.layout.lines.length)
     const rec = paint(s, { at })
     const clock = sx(s, at - s.layout.startDay)
     for (const line of s.layout.lines) {
@@ -526,7 +526,7 @@ describe('paintLifeLines', () => {
       const [x, , w] = band.args as number[]
       expect(x + w).toBeLessThanOrEqual(clock + 1e-6)
     }
-    // the fork is sown but not rooted until its root day: no marker before then
+    // the fork is reached but not rooted until its root day: no marker before then
     const fork = s.layout.lines[lineOf(s, 'me/forked-lib')]
     expect(markerOf(paint(s, { at: fork.rootDay - 0.5 }), s, fork)).toHaveLength(0)
     expect(markerOf(paint(s, { at: fork.rootDay + 0.5 }), s, fork).length).toBeGreaterThan(0)
@@ -683,7 +683,7 @@ describe('landed pull requests on the lines', () => {
     expect(line.landed).toEqual([dayNumber('2022-08-01') - s.layout.startDay + 0.5, dayNumber('2023-01-15') - s.layout.startDay + 0.5])
     const tool = s.layout.lines[lineOf(s, 'upstream/tool')]
     expect(tool.landed).toEqual([tool.x])
-    expect(tool.seedling).toBe(true)
+    expect(tool.uncounted).toBe(true)
   })
 
   it('draws a filled accent station on each landed day once reached, ringing the start marker where it would cover its dot', () => {
@@ -700,7 +700,7 @@ describe('landed pull requests on the lines', () => {
     // the hollow start marker's dot is still drawn under it
     expect(markerOf(full, s, tool).length).toBeGreaterThan(0)
 
-    // the time-lapse: nothing before the line is sown, the first station between its two days
+    // the time-lapse: nothing before the line is reached, the first station between its two days
     const before = paint(s, { at: line.startDay - 1 })
     for (const lx of line.landed) expect(accentArcs(before, s, sx(s, lx), y, landedRadius(s.g))).toEqual([])
     const between = paint(s, { at: dayNumber('2022-12-01') })

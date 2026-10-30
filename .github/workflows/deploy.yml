@@ -106,7 +106,7 @@ jobs:
             exit 1
           }
           # The old domain should send old share links on, query string and all. Only a warning:
-          # the redirect is installed by hand (DEPLOY.md, "Moving from repogarden.latesailor.dev").
+          # the redirect is installed by hand (DEPLOY.md, "The old address").
           curl -fsSI "$OLD_SITE_URL/?repo=octocat/Hello-World" | grep -qi "^location: $SITE_URL/?repo=octocat/Hello-World" \
-            || echo "::warning::$OLD_SITE_URL does not redirect to $SITE_URL yet (DEPLOY.md, \"Moving from repogarden.latesailor.dev\")."
+            || echo "::warning::$OLD_SITE_URL does not redirect to $SITE_URL yet (DEPLOY.md, \"The old address\")."
 

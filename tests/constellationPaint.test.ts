@@ -2,7 +2,7 @@
  * The constellation's geometry and painter on a recording context: radii and plot rows, what it
  * fills first, that it draws every number finite and every colour from the theme, in all ten themes,
  * each kind of star, that hidden stars and their links draw nothing, how the hover and the selection
- * show, the bands and their names, what the time-lapse leaves out and how it grows a star, and that
+ * show, the bands and their names, what the time-lapse leaves out and how it draws a star in, and that
  * no repo name is ever drawn by it (the labels are useLifeLabels'). Then its label anchors, order and
  * keep-out boxes, its source (no colour literal, no namer), and its frame under the shared painter
  * (makeViewPaint): names only through the namer, no label for a hidden star, the time-lapse caption.
@@ -11,14 +11,14 @@ import { describe, expect, it } from 'vitest'
 import { THEMES, getTheme, type Theme } from '../src/theme/themes'
 import { buildLifeTimeline, dayNumber, type LifeTimeline } from '../src/profile/timeline'
 import { layoutConstellation, type ConstellationLayout, type LifeStar } from '../src/profile/constellationLayout'
-import { GLOW_PX, SEEDLING_R, STAR_FOOT_PX, STAR_MAX_R, STAR_MIN_R, constellationGeom, starPlotY, starRadius, type ConstellationGeom } from '../src/profile/constellationGeometry'
+import { GLOW_PX, UNCOUNTED_R, STAR_FOOT_PX, STAR_MAX_R, STAR_MIN_R, constellationGeom, starPlotY, starRadius, type ConstellationGeom } from '../src/profile/constellationGeometry'
 import {
   constellationKeepOut,
-  grownRadius,
+  revealedRadius,
   paintConstellation,
   starAnchor,
   starColour,
-  starGrownShare,
+  starRevealedShare,
   starLabelOrder,
   type ConstellationPaintInput,
 } from '../src/profile/constellationPaint'
@@ -104,7 +104,7 @@ function profile(over: Partial<ProfileData> = {}): ProfileData {
 /**
  * A token profile with one star of each kind: a starred one with a sparkle, a private repo, an
  * archived one, a fork (a twin), a repo they only contributed to with no language (hollow), and a
- * starred repo GitHub counted no commits to (a seedling), in five bands.
+ * starred repo GitHub counted no commits to (uncounted), in five bands.
  */
 const REPOS: ProfileRepo[] = [
   repo('Me/alpha', { createdAt: iso('2019-02-01'), stars: 120, activity: monthly('2019-02', '2021-06', 4) }),
@@ -113,11 +113,11 @@ const REPOS: ProfileRepo[] = [
   repo('Me/old-thing', { createdAt: iso('2019-06-01'), language: 'JavaScript', stars: 15, isArchived: true, activity: monthly('2019-06', '2019-12') }),
   repo('Me/forked-lib', { createdAt: iso('2021-01-10'), language: 'Go', isFork: true, activity: monthly('2021-01', '2021-03', 1) }),
   repo('someone/big-project', { createdAt: iso('2015-01-01'), firstActiveAt: iso('2021-02-01'), isOwn: false, language: null, activity: monthly('2021-02', '2023-02', 5) }),
-  repo('Me/empty-seedling', { createdAt: iso('2023-08-01'), stars: 5 }),
+  repo('Me/empty-uncounted', { createdAt: iso('2023-08-01'), stars: 5 }),
 ]
 
 const PRIVATE = 'me/secret-plans'
-const NAMES = ['alpha', 'beta', 'secret', 'old-thing', 'forked-lib', 'big-project', 'empty-seedling']
+const NAMES = ['alpha', 'beta', 'secret', 'old-thing', 'forked-lib', 'big-project', 'empty-uncounted']
 
 /** The canvas host's frame on a laptop screen. */
 const VIEW: LifeViewport = { width: 1280, height: 800, top: VIEW_TOP, ground: VIEW_GROUND, side: VIEW_SIDE }
@@ -182,15 +182,15 @@ function arcsAt(rec: RecordingCtx, x: number, y: number): Array<{ r: number; ent
 const centre = (s: Scene, i: number) => [s.g.x[i], s.g.y[i]] as const
 
 describe('constellation geometry', () => {
-  it('sizes a core from its weight, a seedling smallest, and its glow from its stars', () => {
-    expect(starRadius({ size: 0, seedling: false })).toBe(STAR_MIN_R)
-    expect(starRadius({ size: 1, seedling: false })).toBe(STAR_MAX_R)
-    expect(starRadius({ size: 0.5, seedling: false })).toBeCloseTo((STAR_MIN_R + STAR_MAX_R) / 2, 12)
-    expect(starRadius({ size: 0, seedling: true })).toBe(SEEDLING_R)
+  it('sizes a core from its weight, an uncounted repo smallest, and its glow from its stars', () => {
+    expect(starRadius({ size: 0, uncounted: false })).toBe(STAR_MIN_R)
+    expect(starRadius({ size: 1, uncounted: false })).toBe(STAR_MAX_R)
+    expect(starRadius({ size: 0.5, uncounted: false })).toBeCloseTo((STAR_MIN_R + STAR_MAX_R) / 2, 12)
+    expect(starRadius({ size: 0, uncounted: true })).toBe(UNCOUNTED_R)
     const s = scene()
     s.layout.stars.forEach((star, i) => {
       expect(s.g.r[i]).toBe(starRadius(star))
-      expect(s.g.r[i] >= SEEDLING_R && s.g.r[i] <= STAR_MAX_R).toBe(true)
+      expect(s.g.r[i] >= UNCOUNTED_R && s.g.r[i] <= STAR_MAX_R).toBe(true)
       expect(s.g.glow[i]).toBe(GLOW_PX * star.glow)
     })
   })
@@ -209,7 +209,7 @@ describe('constellation geometry', () => {
     })
     expect(s.g.bandTop[0]).toBe(VIEW.top)
     expect(s.g.bandFoot[s.layout.bands.length - 1]).toBe(foot)
-    // a zoom spreads stars apart along time and never moves or grows them up and down
+    // a zoom spreads stars apart along time and never moves or stretches them up and down
     const zoomed = panLifeCamera(zoomLifeCamera(s.input.camera, 4, VIEW.width / 2, s.layout.days, VIEW), 100, s.layout.days, VIEW)
     const z = constellationGeom(s.layout, zoomed, VIEW)
     expect([...z.y]).toEqual([...s.g.y])
@@ -283,9 +283,9 @@ describe('paintConstellation', () => {
     const ring = rec.calls('stroke').find((c) => c.style.strokeStyle === s.theme.fallback && c.style.lineWidth === 1.5)
     expect(ring).toBeDefined()
 
-    // a seedling: faint
-    const seed = indexOf(s, 'Me/empty-seedling')
-    expect(starOf(s, 'Me/empty-seedling').seedling).toBe(true)
+    // an uncounted repo: faint
+    const seed = indexOf(s, 'Me/empty-uncounted')
+    expect(starOf(s, 'Me/empty-uncounted').uncounted).toBe(true)
     const faint = arcsAt(rec, ...centre(s, seed)).find((arc) => arc.r === s.g.r[seed])!
     expect(faint.entry.style.globalAlpha).toBe(0.55)
 
@@ -425,30 +425,30 @@ describe('paintConstellation', () => {
     expect(marked.calls('stroke').filter((c) => c.style.strokeStyle === s.ink.hoverRing).length).toBe(before + 2)
   })
 
-  it('draws only what the time-lapse has sown, grown as far as it has got, and links once both are active', () => {
+  it('draws only what the time-lapse has reached, drawn as far as it has got, and links once both are active', () => {
     const s = scene()
     const none = paint(s, { at: s.layout.startDay - 1 })
     s.layout.stars.forEach((_star, i) => expect(arcsAt(none, ...centre(s, i))).toEqual([]))
     expect(none.calls('lineTo').filter((c) => c.style.lineWidth === 1 && c.style.globalAlpha === 0.22)).toHaveLength(0)
 
     const at = dayNumber('2020-06-15') + 0.5
-    const sown = s.layout.stars.filter((star) => star.startDay <= at)
-    expect(sown.length).toBeGreaterThan(0)
-    expect(sown.length).toBeLessThan(s.layout.stars.length)
+    const reached = s.layout.stars.filter((star) => star.startDay <= at)
+    expect(reached.length).toBeGreaterThan(0)
+    expect(reached.length).toBeLessThan(s.layout.stars.length)
     const rec = paint(s, { at })
     for (const n of numbersOf(rec.log)) expect(Number.isFinite(n)).toBe(true)
     s.layout.stars.forEach((star, i) => {
       const arcs = arcsAt(rec, ...centre(s, i))
       expect(arcs.length > 0, star.key).toBe(star.startDay <= at)
       if (star.startDay > at) return
-      const share = starGrownShare(star, at)
-      expect(arcs.some((arc) => arc.r === grownRadius(s.g.r[i], share)), star.key).toBe(true)
+      const share = starRevealedShare(star, at)
+      expect(arcs.some((arc) => arc.r === revealedRadius(s.g.r[i], share)), star.key).toBe(true)
     })
-    // a star still growing is drawn smaller than it ends
+    // a star still appearing is drawn smaller than it ends
     const alpha = indexOf(s, 'Me/alpha')
-    const share = starGrownShare(s.layout.stars[alpha], at)
+    const share = starRevealedShare(s.layout.stars[alpha], at)
     expect(share > 0 && share < 1).toBe(true)
-    expect(grownRadius(s.g.r[alpha], share)).toBeLessThan(s.g.r[alpha])
+    expect(revealedRadius(s.g.r[alpha], share)).toBeLessThan(s.g.r[alpha])
     // a link is drawn from its first shared day
     const drawnLinks = s.layout.links.filter((link) => at >= link.fromDay)
     const waiting = s.layout.links.filter((link) => at < link.fromDay)
@@ -473,40 +473,40 @@ describe('paintConstellation', () => {
   })
 })
 
-describe('starGrownShare', () => {
-  const star = { growthDays: [100, 110, 150, 160], growthShares: [0, 0.75, 0.75, 1] }
-  it('grows along each active span and rests between them', () => {
-    expect(starGrownShare(star, null)).toBe(1)
-    expect(starGrownShare(star, 90)).toBe(0)
-    expect(starGrownShare(star, 100)).toBe(0)
-    expect(starGrownShare(star, 105)).toBeCloseTo(0.375, 12)
-    expect(starGrownShare(star, 110)).toBe(0.75)
-    expect(starGrownShare(star, 130)).toBe(0.75)
-    expect(starGrownShare(star, 155)).toBeCloseTo(0.875, 12)
-    expect(starGrownShare(star, 160)).toBe(1)
-    expect(starGrownShare(star, 1e6)).toBe(1)
+describe('starRevealedShare', () => {
+  const star = { revealDays: [100, 110, 150, 160], revealShares: [0, 0.75, 0.75, 1] }
+  it('reveals along each active span and rests between them', () => {
+    expect(starRevealedShare(star, null)).toBe(1)
+    expect(starRevealedShare(star, 90)).toBe(0)
+    expect(starRevealedShare(star, 100)).toBe(0)
+    expect(starRevealedShare(star, 105)).toBeCloseTo(0.375, 12)
+    expect(starRevealedShare(star, 110)).toBe(0.75)
+    expect(starRevealedShare(star, 130)).toBe(0.75)
+    expect(starRevealedShare(star, 155)).toBeCloseTo(0.875, 12)
+    expect(starRevealedShare(star, 160)).toBe(1)
+    expect(starRevealedShare(star, 1e6)).toBe(1)
   })
 
-  it('draws a star just sown at a share of its size, and fully grown at its full size', () => {
-    expect(grownRadius(8, 0)).toBeCloseTo(8 * 0.35, 12)
-    expect(grownRadius(8, 0.25)).toBe(4)
-    expect(grownRadius(8, 1)).toBe(8)
+  it('draws a star just reached at a share of its size, and fully drawn at its full size', () => {
+    expect(revealedRadius(8, 0)).toBeCloseTo(8 * 0.35, 12)
+    expect(revealedRadius(8, 0.25)).toBe(4)
+    expect(revealedRadius(8, 1)).toBe(8)
   })
 })
 
 describe('constellation labels', () => {
-  it('anchors a label on its star, as grown by the time-lapse, and none before it is sown', () => {
+  it('anchors a label on its star, as drawn by the time-lapse, and none before it is reached', () => {
     const s = scene()
     const out = new Float32Array(3)
     s.layout.stars.forEach((_star, i) => {
       expect(starAnchor(s.layout, s.g, i, null, out)).toBe(true)
       expect([...out]).toEqual([...Float32Array.from([s.g.x[i], s.g.y[i], s.g.r[i] + 1])])
     })
-    const late = indexOf(s, 'Me/empty-seedling')
+    const late = indexOf(s, 'Me/empty-uncounted')
     const star = s.layout.stars[late]
     expect(starAnchor(s.layout, s.g, late, star.startDay - 1, out)).toBe(false)
     expect(starAnchor(s.layout, s.g, late, star.startDay + 0.5, out)).toBe(true)
-    expect(out[2]).toBeCloseTo(grownRadius(s.g.r[late], starGrownShare(star, star.startDay + 0.5)) + 1, 5)
+    expect(out[2]).toBeCloseTo(revealedRadius(s.g.r[late], starRevealedShare(star, star.startDay + 0.5)) + 1, 5)
   })
 
   it('offers labels by stars, then size, then paint order', () => {
@@ -613,7 +613,7 @@ describe("the constellation's frame under the shared painter", () => {
     expect(open.pickAt(s.g.x[i], s.g.y[i])).toBe(key)
   })
 
-  it('draws the time-lapse caption over the constellation, counting only the sown stars', () => {
+  it('draws the time-lapse caption over the constellation, counting only the reached stars', () => {
     const s = scene()
     const caption = (rec: RecordingCtx) => argsOf(rec, 'fillText').map(([text]) => String(text)).filter((text) => /^\d+ repos?$/.test(text))
     const early = painterFor(s, {}, false, 0).rec
@@ -633,7 +633,7 @@ describe('landed pull requests in the constellation', () => {
 
   /** Whether the accent diamond at the star's upper left is drawn: its top corner's moveTo. */
   function tickAt(rec: RecordingCtx, s: Scene, i: number, at: number | null): boolean {
-    const r = grownRadius(s.g.r[i], starGrownShare(s.layout.stars[i], at))
+    const r = revealedRadius(s.g.r[i], starRevealedShare(s.layout.stars[i], at))
     const d = (r + 3) * Math.SQRT1_2
     const [x, y] = [s.g.x[i] - d, s.g.y[i] - d - STAR_LANDED_PX]
     return rec.calls('moveTo').some((c) => Math.abs((c.args[0] as number) - x) < 1e-9 && Math.abs((c.args[1] as number) - y) < 1e-9)

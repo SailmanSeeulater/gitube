@@ -139,7 +139,7 @@ describe('RectGrid', () => {
     expect(tags).toEqual([1, 2])
   })
 
-  it('reset clears everything and the buffers grow past their initial capacity', () => {
+  it('reset clears everything and the buffers load past their initial capacity', () => {
     const g = new RectGrid(48)
     g.reset(500, 500)
     const initial = g.capacity

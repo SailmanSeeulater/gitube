@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import type { RepoRef } from '../api/parseRepoUrl'
 import { assignPalette, buildGraph } from '../graph'
-import { battle, repoStats, type BattleRow, type Side } from '../graph/battle'
-import { findWeeds } from '../graph/weeds'
+import { versus, repoStats, type VersusRow, type Side } from '../graph/versus'
+import { findCleanup } from '../graph/cleanup'
 import { useAppStore } from '../store/useAppStore'
 import type { Theme } from '../theme/themes'
 import type { GitHubFetchError, RepoData } from '../types'
@@ -27,7 +27,7 @@ export interface VsViewProps {
 const noop = () => {}
 
 /** A measure's value for the scoreboard. */
-function formatValue(row: BattleRow, value: number): string {
+function formatValue(row: VersusRow, value: number): string {
   if (!Number.isFinite(value)) return '–'
   if (row.key === 'perWeek') return value >= 10 ? value.toFixed(0) : value.toFixed(1)
   if (row.key === 'lastCommitDays') {
@@ -40,13 +40,13 @@ function formatValue(row: BattleRow, value: number): string {
 }
 
 /**
- * One repo's half of the battle: its metro map, named in the corner, crowned if it won. Until the
+ * One repo's half of the vs: its metro map, named in the corner, crowned if it won. Until the
  * metro engine is in (or if it cannot be loaded) the side is laid out organic.
  */
-function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: Theme; crowned: boolean; side: Side }) {
+function VsSide({ data, theme, crowned, side }: { data: RepoData; theme: Theme; crowned: boolean; side: Side }) {
   const graph = useMemo(() => buildGraph(data, 'skeleton'), [data])
   const palette = useMemo(() => assignPalette(data.branches.map((b) => b.name), data.defaultBranch, theme), [data, theme])
-  const thorns = useMemo(() => findWeeds(data).thorns, [data])
+  const spikes = useMemo(() => findCleanup(data).spikes, [data])
   const engine = useChunk(metroChunk, true)
   const metro = useMetroView(graph, data, 'skeleton', engine.status === 'ready' ? engine.value.metroLayout : null)
   return (
@@ -59,7 +59,7 @@ function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: The
         defaultBranch={data.defaultBranch}
         onNodeClick={noop}
         onBackgroundClick={noop}
-        thorns={thorns}
+        spikes={spikes}
         metro={metro}
       />
       <div
@@ -75,7 +75,7 @@ function BattleSide({ data, theme, crowned, side }: { data: RepoData; theme: The
 }
 
 /**
- * Two repos side by side as metro maps, over a scoreboard of measures (see graph/battle) with a
+ * Two repos side by side as metro maps, over a scoreboard of measures (see graph/versus) with a
  * winner per measure and overall. Drawn over the whole app; Escape or the close button ends it.
  */
 export default function VsView({ a, b, bRef, bFetching, bError, theme, onRetry, onClose }: VsViewProps) {
@@ -83,7 +83,7 @@ export default function VsView({ a, b, bRef, bFetching, bError, theme, onRetry, 
   // one clock per pairing, so "last commit" does not tick while you look
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => Date.now(), [a, b])
-  const fight = useMemo(() => (b ? battle(repoStats(a, now), repoStats(b, now)) : null), [a, b, now])
+  const fight = useMemo(() => (b ? versus(repoStats(a, now), repoStats(b, now)) : null), [a, b, now])
   const nameA = `${a.owner}/${a.repo}`
   const nameB = b ? `${b.owner}/${b.repo}` : `${bRef.owner}/${bRef.repo}`
 
@@ -119,11 +119,11 @@ export default function VsView({ a, b, bRef, bFetching, bError, theme, onRetry, 
       {/* one row that may shrink below its canvases, so the scoreboard always fits */}
       <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-[minmax(0,1fr)]">
         <section className="relative min-h-0 min-w-0 overflow-hidden border-r border-ui-border" aria-label={nameA}>
-          <BattleSide data={a} theme={theme} crowned={fight?.winner === 'a'} side="a" />
+          <VsSide data={a} theme={theme} crowned={fight?.winner === 'a'} side="a" />
         </section>
         <section className="relative min-h-0 min-w-0 overflow-hidden" aria-label={nameB}>
           {b ? (
-            <BattleSide data={b} theme={theme} crowned={fight?.winner === 'b'} side="b" />
+            <VsSide data={b} theme={theme} crowned={fight?.winner === 'b'} side="b" />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
               {bFetching ? (

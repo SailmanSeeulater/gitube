@@ -30,7 +30,7 @@ function placerArgs(source: string): string {
 
 describe('pull request marks and label placement', () => {
   it('keep out of everything the label placer reads', () => {
-    for (const name of ['labelRadius', 'labelRing', 'labelHard', 'labelLines', 'thornOf', 'labelHidden', 'paintPointerArea']) {
+    for (const name of ['labelRadius', 'labelRing', 'labelHard', 'labelLines', 'spikeOf', 'labelHidden', 'paintPointerArea']) {
       expect(declaration(graphSource, name), name).not.toMatch(/prMark/)
     }
     // (its own `marks` are the metro run counts drawn this frame, not these)
@@ -52,9 +52,9 @@ describe('pull request marks and label placement', () => {
     ])
   })
 
-  it('are drawn neither during the time-lapse nor in a battle', () => {
+  it('are drawn neither during the time-lapse nor in vs', () => {
     expect(app).toContain('prMarks={timelapseOpen ? null : marks}')
-    const battle = app.slice(app.indexOf('<VsView'), app.indexOf('/>', app.indexOf('<VsView')))
-    expect(battle).not.toMatch(/prMarks|pulls/i)
+    const versus = app.slice(app.indexOf('<VsView'), app.indexOf('/>', app.indexOf('<VsView')))
+    expect(versus).not.toMatch(/prMarks|pulls/i)
   })
 })

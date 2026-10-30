@@ -3,10 +3,10 @@ import type { Branch, PullSummary, RepoData, ViewMode } from '../types'
 import { track } from '../analytics/umami'
 import type { ContributorIndex } from '../graph/contributors'
 import { branchPrs, branchUnchecked, combineMarks, countPulls, lookupPlan } from '../graph/pulls'
-import type { WeedReport } from '../graph/weeds'
+import type { CleanupReport } from '../graph/cleanup'
 import type { PullsView } from '../hooks/usePulls'
 import { preload, type Chunk } from '../lazy/chunk'
-import { battleChunk, contributorsTabChunk, metroChunk, weedsTabChunk } from '../lazy/parts'
+import { vsChunk, contributorsTabChunk, metroChunk, cleanupTabChunk } from '../lazy/parts'
 import { useChunk } from '../lazy/useChunk'
 import { useAppStore, type LayoutMode, type PanelTab } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
@@ -18,10 +18,10 @@ import Legend from './Legend'
 import { ChunkPlaceholder, LazySlot, lazyPart } from './LazyPart'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, EyeOffIcon, LinkIcon, SearchIcon, SwordsIcon } from './icons'
 
-// the people and weeds tabs load when first shown, or as the pointer or focus reaches their tab
+// the people and cleanup tabs load when first shown, or as the pointer or focus reaches their tab
 const ContributorsTab = lazyPart(contributorsTabChunk)
-const WeedsTab = lazyPart(weedsTabChunk)
-const TAB_CHUNKS: Partial<Record<PanelTab, Chunk<unknown>>> = { contributors: contributorsTabChunk, weeds: weedsTabChunk }
+const CleanupTab = lazyPart(cleanupTabChunk)
+const TAB_CHUNKS: Partial<Record<PanelTab, Chunk<unknown>>> = { contributors: contributorsTabChunk, cleanup: cleanupTabChunk }
 /** a lazy tab's placeholder, in the list's place */
 const TAB_FRAME = 'min-h-0 flex-1 px-3 py-3'
 
@@ -30,9 +30,9 @@ export interface PanelProps {
   /** branch name -> colour in the active theme (App's palette, not graph.palette) */
   palette: Record<string, string>
   contributors: ContributorIndex
-  weeds: WeedReport
+  cleanup: CleanupReport
   /** starts a vs against the repo typed in; false when that is not a repo */
-  onBattle: (value: string) => boolean
+  onVs: (value: string) => boolean
   /** the repo's open pull requests (null for a saved file): row glyphs, the count line, search qualifiers */
   pulls?: PullsView | null
   /** some tip on the canvas carries a pull request mark (the legend then explains it) */
@@ -41,15 +41,15 @@ export interface PanelProps {
   prMarksKnown?: boolean
 }
 
-/** The ⚔ form under the panel header: which repo to battle. */
-function BattleForm({ onBattle, onDone }: { onBattle: (value: string) => boolean; onDone: () => void }) {
+/** The ⚔ form under the panel header: which repo to compare with (vs). */
+function VsForm({ onVs, onDone }: { onVs: (value: string) => boolean; onDone: () => void }) {
   const [value, setValue] = useState('')
   const [bad, setBad] = useState(false)
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault()
-        if (onBattle(value)) onDone()
+        if (onVs(value)) onDone()
         else setBad(true)
       }}
       className="flex flex-col gap-1 border-b border-ui-border px-3 py-2"
@@ -128,7 +128,7 @@ interface TabsProps {
   onChange: (tab: PanelTab) => void
   branchCount: number
   peopleCount: number
-  weedCount: number
+  leftoverCount: number
 }
 
 function preloadTab(tab: PanelTab): void {
@@ -136,11 +136,11 @@ function preloadTab(tab: PanelTab): void {
   if (chunk) preload(chunk)
 }
 
-function Tabs({ value, onChange, branchCount, peopleCount, weedCount }: TabsProps) {
+function Tabs({ value, onChange, branchCount, peopleCount, leftoverCount }: TabsProps) {
   const tabs: ReadonlyArray<{ id: PanelTab; label: string; count: number }> = [
     { id: 'branches', label: 'branches', count: branchCount },
     { id: 'contributors', label: 'people', count: peopleCount },
-    { id: 'weeds', label: 'cleanup', count: weedCount },
+    { id: 'cleanup', label: 'cleanup', count: leftoverCount },
   ]
   return (
     <div role="tablist" aria-label="Panel" className="flex gap-1 border-b border-ui-border px-2">
@@ -426,8 +426,8 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
   )
 }
 
-export default function Panel({ data, palette, contributors, weeds, onBattle, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
-  const [battleOpen, setBattleOpen] = useState(false)
+export default function Panel({ data, palette, contributors, cleanup, onVs, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
+  const [vsOpen, setVsOpen] = useState(false)
   const theme = useTheme()
   const panelOpen = useAppStore((s) => s.panelOpen)
   const togglePanel = useAppStore((s) => s.togglePanel)
@@ -524,14 +524,14 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         <button
           type="button"
           onClick={() => {
-            // the battle's code loads while the challenger is typed in
-            if (!battleOpen) preload(battleChunk)
-            setBattleOpen(!battleOpen)
+            // the vs view's code loads while the challenger is typed in
+            if (!vsOpen) preload(vsChunk)
+            setVsOpen(!vsOpen)
           }}
-          aria-expanded={battleOpen}
+          aria-expanded={vsOpen}
           title="vs: open another repo beside this one and score them"
           aria-label="vs"
-          className={`rounded p-1 hover:bg-ui-hover ${battleOpen ? 'text-ui-accent' : 'text-ui-muted hover:text-ui-text'}`}
+          className={`rounded p-1 hover:bg-ui-hover ${vsOpen ? 'text-ui-accent' : 'text-ui-muted hover:text-ui-text'}`}
         >
           <SwordsIcon />
         </button>
@@ -547,7 +547,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         </button>
       </header>
 
-      {battleOpen && <BattleForm onBattle={onBattle} onDone={() => setBattleOpen(false)} />}
+      {vsOpen && <VsForm onVs={onVs} onDone={() => setVsOpen(false)} />}
 
       <div className="flex gap-2 px-3 py-2.5">
         <div className="flex-1">
@@ -570,7 +570,7 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
         onChange={setPanelTab}
         branchCount={data.branches.length}
         peopleCount={peopleCount}
-        weedCount={weeds.weeds.length}
+        leftoverCount={cleanup.leftovers.length}
       />
 
       {panelTab === 'contributors' ? (
@@ -587,10 +587,10 @@ export default function Panel({ data, palette, contributors, weeds, onBattle, pu
             failed={peopleCode.status === 'failed'}
           />
         )
-      ) : panelTab === 'weeds' ? (
-        <LazySlot key="weeds" frame={TAB_FRAME} label="loading cleanup">
-          <WeedsTab
-            report={weeds}
+      ) : panelTab === 'cleanup' ? (
+        <LazySlot key="cleanup" frame={TAB_FRAME} label="loading cleanup">
+          <CleanupTab
+            report={cleanup}
             owner={data.owner}
             repo={data.repo}
             defaultBranch={data.defaultBranch}

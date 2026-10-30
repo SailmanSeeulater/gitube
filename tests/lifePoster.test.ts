@@ -2,7 +2,7 @@
  * The life poster (PROFILE_SPEC.md section 6 and Phase 5): which three milestones it shows and in
  * what order, its years, the avatar's URL and how it loads (an <img> with CORS, never fetch()), the
  * frame on a recording context (texts, the clipped avatar or its placeholder, the view in its
- * plot, the lock, theme colours only), the view painted off screen fully grown with no hover or
+ * plot, the lock, theme colours only), the view painted off screen fully drawn with no hover or
  * selection, and saving it: one PNG named after the login, then poster-export with no data, nothing
  * sent on a failure. Private names stay hidden in everything it draws or measures until revealed.
  */
@@ -40,12 +40,12 @@ import { LINES_VIEW } from '../src/profile/lifeViews'
 import { useAppStore } from '../src/store/useAppStore'
 import { THEMES, getTheme, type Theme } from '../src/theme/themes'
 import type { ProfileData } from '../src/types'
-import { KEPANO_NOW, grow, kepanoProfile, painterFor, setPerson, withPrivate, type Grown } from './helpers/personScene'
+import { KEPANO_NOW, load, kepanoProfile, painterFor, setPerson, withPrivate, type Loaded } from './helpers/personScene'
 import { recordingCtx, type CtxEntry, type RecordingCtx } from './helpers/recordingCtx'
 
 const theme = getTheme('obsidian')
 
-/** As in personGuards: the top-starred repo (a derived milestone names it), his own, one he contributed to, a seedling fork, an archived one. */
+/** As in personGuards: the top-starred repo (a derived milestone names it), his own, one he contributed to, an uncounted fork, an archived one. */
 const KEPANO_PRIVATE = ['kepano/obsidian-skills', 'kepano/tidy', 'obsidianmd/wordgard', 'kepano/bookcover-api', 'kepano/obsidian-highlights-sidebar']
 const KEPANO_STALE = ['kepano/aloha']
 const SECRET_NAMES = [...KEPANO_PRIVATE, ...KEPANO_STALE]
@@ -137,13 +137,13 @@ describe('posterMilestones', () => {
   })
 
   it('takes the top repo and two more from a real life', () => {
-    const g = grow(secret, KEPANO_NOW, theme)
+    const g = load(secret, KEPANO_NOW, theme)
     const picked = posterMilestones(g.timeline.milestones, g.name)
     expect(picked).toHaveLength(3)
     expect([...picked].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))).toEqual(picked)
     const top = g.timeline.milestones.find((m) => m.kind === 'top-repo')!
     expect(picked.find((m) => m.label === top.label)?.repo).toEqual({ text: PRIVATE_REPO_LABEL, locked: true })
-    expect(posterMilestones(g.timeline.milestones, grow(secret, KEPANO_NOW, theme, 'kepano').name).find((m) => m.label === top.label)?.repo).toEqual({
+    expect(posterMilestones(g.timeline.milestones, load(secret, KEPANO_NOW, theme, 'kepano').name).find((m) => m.label === top.label)?.repo).toEqual({
       text: 'kepano/obsidian-skills',
       locked: true,
     })
@@ -385,7 +385,7 @@ describe('paintPosterFrame', () => {
 
 // ---------- the view off screen (life lines) ----------
 
-function posterView(g: Grown, hidden: ReadonlySet<string> = new Set(), measured: string[] = []): PosterView {
+function posterView(g: Loaded, hidden: ReadonlySet<string> = new Set(), measured: string[] = []): PosterView {
   return {
     layout: g.layout,
     view: LINES_VIEW,
@@ -424,7 +424,7 @@ const drawnTexts = (log: readonly CtxEntry[]) =>
   log.flatMap((e) => (e.kind === 'call' && (e.name === 'fillText' || e.name === 'strokeText') ? [String(e.args[0])] : []))
 
 /** One frame by life lines' painter in the poster's viewport, fitted. */
-function referenceFrame(g: Grown, state: Parameters<typeof painterFor>[1], progress?: number): RecordingCtx {
+function referenceFrame(g: Loaded, state: Parameters<typeof painterFor>[1], progress?: number): RecordingCtx {
   const { painter } = painterFor(g, state, { timelapse: progress === undefined ? null : { progress: { current: progress } } })
   const rec = viewRec()
   painter.paint(rec.ctx, POSTER_VIEWPORT, fitLifeCamera(g.layout.days, POSTER_VIEWPORT), 16)
@@ -437,8 +437,8 @@ describe('paintPosterView', () => {
     setPerson({ hover: null, selected: null, hidden: new Set() })
   })
 
-  it('paints the view fully grown, until its labels settle', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+  it('paints the view fully drawn, until its labels settle', () => {
+    const g = load(kepano, KEPANO_NOW, theme)
     const rec = viewRec()
     paintPosterView(rec.ctx, POSTER_VIEWPORT, posterView(g))
     const frames = frameStarts(rec.log).length
@@ -455,14 +455,14 @@ describe('paintPosterView', () => {
   })
 
   it('stops at maxFrames', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const rec = viewRec()
     paintPosterView(rec.ctx, POSTER_VIEWPORT, posterView(g), 3)
     expect(frameStarts(rec.log)).toHaveLength(3)
   })
 
   it('draws no hover or selection, whatever the store holds', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const plain = viewRec()
     paintPosterView(plain.ctx, POSTER_VIEWPORT, posterView(g))
     const key = g.layout.lines[0].key
@@ -479,7 +479,7 @@ describe('paintPosterView', () => {
   })
 
   it('leaves out what the eyes hide', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const all = viewRec()
     paintPosterView(all.ctx, POSTER_VIEWPORT, posterView(g))
     // the line with the most parts
@@ -497,19 +497,19 @@ describe('paintPosterView', () => {
   it('draws and measures no private name while hidden, and the names once revealed', () => {
     const hiddenMeasured: string[] = []
     const hidden = viewRec()
-    paintPosterView(hidden.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme), new Set(), hiddenMeasured))
+    paintPosterView(hidden.ctx, POSTER_VIEWPORT, posterView(load(secret, KEPANO_NOW, theme), new Set(), hiddenMeasured))
     expectNoSecret([...hidden.texts(), ...hiddenMeasured], 'the hidden view')
     expect(drawnTexts(lastFrame(hidden))).toContain(PRIVATE_REPO_LABEL)
 
     // revealed for another login: still hidden
     const otherMeasured: string[] = []
     const other = viewRec()
-    paintPosterView(other.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme, 'someone-else'), new Set(), otherMeasured))
+    paintPosterView(other.ctx, POSTER_VIEWPORT, posterView(load(secret, KEPANO_NOW, theme, 'someone-else'), new Set(), otherMeasured))
     expectNoSecret([...other.texts(), ...otherMeasured], 'the view revealed for another login')
 
     const shownMeasured: string[] = []
     const shown = viewRec()
-    paintPosterView(shown.ctx, POSTER_VIEWPORT, posterView(grow(secret, KEPANO_NOW, theme, 'kepano'), new Set(), shownMeasured))
+    paintPosterView(shown.ctx, POSTER_VIEWPORT, posterView(load(secret, KEPANO_NOW, theme, 'kepano'), new Set(), shownMeasured))
     const shownText = [...shown.texts(), ...shownMeasured].join('\n')
     expect(SECRETS.some((s) => s.test(shownText))).toBe(true)
   })
@@ -517,7 +517,7 @@ describe('paintPosterView', () => {
 
 // ---------- composing and saving ----------
 
-function inputOf(g: Grown, hidden: ReadonlySet<string> = new Set()): PosterInput {
+function inputOf(g: Loaded, hidden: ReadonlySet<string> = new Set()): PosterInput {
   return { profile: g.profile, timeline: g.timeline, layout: g.layout, view: LINES_VIEW, theme: g.theme, colourOf: g.colourOf, name: g.name, hidden }
 }
 
@@ -578,7 +578,7 @@ function rig(over: Partial<PosterDeps> = {}): Rig {
 describe('composeLifePoster', () => {
   it('paints the view off screen, then frames it, at the poster scale', () => {
     const r = rig()
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const poster = composeLifePoster(inputOf(g), AVATAR, r.deps as PosterDeps)
     expect(r.canvases).toHaveLength(2)
     const [plot, frameRec] = r.recs
@@ -596,7 +596,7 @@ describe('composeLifePoster', () => {
   })
 
   it('throws without a 2D context', () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const deps = rig({ makeCanvas: (width, height) => ({ width, height, getContext: () => null }) as unknown as HTMLCanvasElement }).deps
     expect(() => composeLifePoster(inputOf(g), null, deps as PosterDeps)).toThrow('canvas 2D context unavailable')
   })
@@ -605,7 +605,7 @@ describe('composeLifePoster', () => {
 describe('saveLifePoster', () => {
   it('downloads one PNG named after the login, then sends poster-export with no data', async () => {
     const r = rig()
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     await saveLifePoster(inputOf(g), r.deps)
     expect(r.kit.canvasToPng).toHaveBeenCalledTimes(1)
     expect(r.kit.canvasToPng.mock.calls[0][0]).toBe(r.canvases[1])
@@ -621,7 +621,7 @@ describe('saveLifePoster', () => {
 
   it('keeps every private name out of the poster, its file name and its event while hidden', async () => {
     const r = rig()
-    const g = grow(secret, KEPANO_NOW, theme)
+    const g = load(secret, KEPANO_NOW, theme)
     // the eyes hide one of them too
     await saveLifePoster(inputOf(g, new Set([repoKey('kepano/tidy')])), r.deps)
     expectNoSecret([...r.recs.flatMap((rec) => rec.texts()), ...r.measured], 'the poster')
@@ -634,20 +634,20 @@ describe('saveLifePoster', () => {
 
   it('shows the private names once revealed for this login', async () => {
     const r = rig()
-    await saveLifePoster(inputOf(grow(secret, KEPANO_NOW, theme, 'kepano')), r.deps)
+    await saveLifePoster(inputOf(load(secret, KEPANO_NOW, theme, 'kepano')), r.deps)
     expect(r.recs[1].calls('fillText').map((c) => String(c.args[0]))).toContain('kepano/obsidian-skills')
     expect(r.kit.downloadBlob.mock.calls[0][1]).toBe('kepano-life-poster-2026-10-25.png')
   })
 
   it('draws the placeholder when the avatar fails, and still saves', async () => {
     const r = rig({ loadAvatar: async () => Promise.reject(new Error('no avatar')) })
-    await saveLifePoster(inputOf(grow(kepano, KEPANO_NOW, theme)), r.deps)
+    await saveLifePoster(inputOf(load(kepano, KEPANO_NOW, theme)), r.deps)
     expect(r.recs[1].calls('drawImage').map((c) => c.args[0])).toEqual([r.canvases[0]])
     expect(r.umamiTrack.mock.calls).toEqual([['poster-export']])
   })
 
   it('rejects and sends nothing when encoding, the exporters or the canvas fail', async () => {
-    const g = grow(kepano, KEPANO_NOW, theme)
+    const g = load(kepano, KEPANO_NOW, theme)
     const encoding = rig()
     encoding.kit.canvasToPng.mockRejectedValueOnce(new Error('could not encode the image'))
     await expect(saveLifePoster(inputOf(g), encoding.deps)).rejects.toThrow('could not encode the image')

@@ -11,7 +11,7 @@
  *
  * Pure: no DOM, no React. Positions come in as screen-px typed arrays and text widths from the
  * caller, so it runs (and is tested) in node. Nothing allocates per frame: the grids and arrays are
- * reused and only grow.
+ * reused and only get bigger.
  */
 
 // ---------------- collision grid ----------------
@@ -52,12 +52,12 @@ export class RectGrid {
     this.entries = 0
   }
 
-  /** Current capacity of the box arrays (grows by doubling). */
+  /** Current capacity of the box arrays (doubles when full). */
   get capacity(): number {
     return this.x0.length
   }
 
-  private growRects(): void {
+  private expandRects(): void {
     const m = this.x0.length * 2
     const f = (a: Float32Array) => {
       const b = new Float32Array(m)
@@ -77,7 +77,7 @@ export class RectGrid {
     this.stamp = new Int32Array(m)
   }
 
-  private growEntries(): void {
+  private expandEntries(): void {
     const m = this.next.length * 2
     const a = new Int32Array(m)
     a.set(this.next)
@@ -99,7 +99,7 @@ export class RectGrid {
 
   insert(x0: number, y0: number, x1: number, y1: number, tag: number): void {
     if (!(x0 <= x1 && y0 <= y1)) return // NaN or inverted
-    if (this.size >= this.x0.length) this.growRects()
+    if (this.size >= this.x0.length) this.expandRects()
     const r = this.size++
     this.x0[r] = x0
     this.y0[r] = y0
@@ -112,7 +112,7 @@ export class RectGrid {
     const r1 = this.rowOf(y1)
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
-        if (this.entries >= this.next.length) this.growEntries()
+        if (this.entries >= this.next.length) this.expandEntries()
         const c = row * this.cols + col
         const e = this.entries++
         this.ref[e] = r
@@ -842,7 +842,7 @@ export class LabelPlacer {
 
   /**
    * Lines (PlacerFrame.lineSegs) running through the box w x h at (bx, by), shrunk by 1 px and
-   * grown by half the line width, that do not touch node j (the label's own), plus the marks
+   * widened by half the line width, that do not touch node j (the label's own), plus the marks
    * (PlacerFrame.boxes) it overlaps; stops at limit.
    */
   private obstacleHits(bx: number, by: number, w: number, h: number, j: number, limit = 1 << 30): number {

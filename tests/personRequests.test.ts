@@ -37,12 +37,12 @@ function mark(owner: string): void {
 /**
  * PersonApp's request wiring as React runs it, one commit at a time, in the order PersonApp declares
  * it: the layout effect keyed by requestKey (the last one's cleanup first), then the refetch effect,
- * then usePersonAnalytics's effect. What PersonApp would call is recorded in calls, the grows sent in
- * grows.
+ * then usePersonAnalytics's effect. What PersonApp would call is recorded in calls, the loads sent in
+ * loads.
  */
 class PersonAppRun {
   readonly calls: string[] = []
-  readonly grows: EventData[] = []
+  readonly loads: EventData[] = []
   private readonly analytics = new PersonAnalytics()
   private tracker: RequestTracker | null = null
   private key: string | null = null
@@ -61,15 +61,15 @@ class PersonAppRun {
       this.key = key
     }
     if (this.tracker.refetchFor(key, shown.isFetching)) this.calls.push('refetch')
-    for (const [, data] of this.analytics.observe(analyticsInput(login, request, shown))) this.grows.push(data)
+    for (const [, data] of this.analytics.observe(analyticsInput(login, request, shown))) this.loads.push(data)
   }
 
   /** The status strip's refresh button. */
   refresh(): void {
     refreshProfile(this.login, {
-      noteGrow: (who) => {
-        this.calls.push(`noteGrow ${who}`)
-        this.analytics.noteGrow(who)
+      noteLoad: (who) => {
+        this.calls.push(`noteLoad ${who}`)
+        this.analytics.noteLoad(who)
       },
       refetch: () => this.calls.push('refetch'),
     })
@@ -140,10 +140,10 @@ describe('RequestTracker', () => {
 })
 
 describe('refreshProfile', () => {
-  it('notes the grow for the person on show, then fetches live', () => {
+  it('notes the load for the person on show, then fetches live', () => {
     const calls: string[] = []
-    refreshProfile('kepano', { noteGrow: (who) => calls.push(`noteGrow ${who}`), refetch: () => calls.push('refetch') })
-    expect(calls).toEqual(['noteGrow kepano', 'refetch'])
+    refreshProfile('kepano', { noteLoad: (who) => calls.push(`noteLoad ${who}`), refetch: () => calls.push('refetch') })
+    expect(calls).toEqual(['noteLoad kepano', 'refetch'])
   })
 })
 
@@ -172,14 +172,14 @@ describe("PersonApp's requests, as React runs them", () => {
   it('counts each request for the same login once it settles, by its own request number', () => {
     const app = new PersonAppRun()
     app.commit('kepano', 0, showing(kepano, T1))
-    expect(app.grows).toHaveLength(1)
+    expect(app.loads).toHaveLength(1)
     app.commit('kepano', 1, showing(kepano, T1))
     app.commit('kepano', 1, showing(kepano, T1, { isFetching: true }))
-    expect(app.grows).toHaveLength(1)
+    expect(app.loads).toHaveLength(1)
     app.commit('kepano', 1, showing(kepano, T2))
-    expect(app.grows).toHaveLength(2)
+    expect(app.loads).toHaveLength(2)
     app.commit('kepano', 1, showing(kepano, T2))
-    expect(app.grows).toHaveLength(2)
+    expect(app.loads).toHaveLength(2)
   })
 
   it('does not refetch a new login, which reads its cache first, and counts each switch', () => {
@@ -188,19 +188,19 @@ describe("PersonApp's requests, as React runs them", () => {
     app.commit('kepano', 0, showing(kepano, T2))
     app.commit('octocat', 0, showing(octo, T1))
     expect(app.calls).toEqual([])
-    expect(app.grows).toHaveLength(3)
+    expect(app.loads).toHaveLength(3)
   })
 
-  it('refreshes by noting a grow, then fetching live, and counts it once it lands', () => {
+  it('refreshes by noting a load, then fetching live, and counts it once it lands', () => {
     const app = new PersonAppRun()
     const cached = showing(kepano, SAVED, { cachedAt: SAVED })
     app.commit('kepano', 0, cached)
-    expect(app.grows).toEqual([{ mode: 'person', source: 'graphql', cached: true, token: true }])
+    expect(app.loads).toEqual([{ mode: 'person', source: 'graphql', cached: true, token: true }])
     app.refresh()
-    expect(app.calls).toEqual(['noteGrow kepano', 'refetch'])
+    expect(app.calls).toEqual(['noteLoad kepano', 'refetch'])
     app.commit('kepano', 0, { ...cached, isFetching: true })
     app.commit('kepano', 0, showing(kepano, T1))
-    expect(app.grows).toEqual([
+    expect(app.loads).toEqual([
       { mode: 'person', source: 'graphql', cached: true, token: true },
       { mode: 'person', source: 'graphql', cached: false, token: true },
     ])
@@ -209,12 +209,12 @@ describe("PersonApp's requests, as React runs them", () => {
   it('neither refetches nor counts a token change', () => {
     const app = new PersonAppRun()
     app.commit('kepano', 0, showing(kepanoRest, T1))
-    expect(app.grows).toHaveLength(1)
+    expect(app.loads).toHaveLength(1)
     // the token makes it another query, fetched from scratch, for the same login and request
     app.commit('kepano', 0, fetching)
     app.commit('kepano', 0, showing(kepano, T2))
     expect(app.calls).toEqual([])
-    expect(app.grows).toHaveLength(1)
+    expect(app.loads).toHaveLength(1)
   })
 
   it('starts every request clean, keeps the toggle through other renders, and hides names when a request ends', () => {
@@ -254,11 +254,11 @@ describe('PersonApp', () => {
     expect(personAppSource).toContain('const [tracker] = useState(() => new RequestTracker(asked))')
     expect(personAppSource).toContain('if (tracker.refetchFor(asked, isFetching)) refetch()')
     expect(personAppSource).toContain('}, [tracker, asked, isFetching, refetch])')
-    expect(personAppSource).toContain('const noteGrow = usePersonAnalytics(analyticsInput(login, request, fetched))')
-    expect(personAppSource).toContain('const refresh = useCallback(() => refreshProfile(login, { noteGrow, refetch }), [login, noteGrow, refetch])')
+    expect(personAppSource).toContain('const noteLoad = usePersonAnalytics(analyticsInput(login, request, fetched))')
+    expect(personAppSource).toContain('const refresh = useCallback(() => refreshProfile(login, { noteLoad, refetch }), [login, noteLoad, refetch])')
     // and in no other way
     expect(personAppSource.match(/\brefetch\(\)/g)).toHaveLength(1)
     expect(personAppSource.match(/usePersonAnalytics\(/g)).toHaveLength(1)
-    expect(personAppSource).not.toMatch(/noteGrow\(|resetFor\(/)
+    expect(personAppSource).not.toMatch(/noteLoad\(|resetFor\(/)
   })
 })
