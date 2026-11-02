@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LAYOUT_STORAGE_KEY, readStoredLayoutMode, useAppStore } from './useAppStore'
+import { LAYOUT_STORAGE_KEY, PANEL_OPEN_MIN_WIDTH, readStoredLayoutMode, startsWithPanelOpen, useAppStore } from './useAppStore'
 
 const reset = () =>
   useAppStore.setState({
@@ -253,4 +253,16 @@ describe('the core request budget (noteRate)', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('the side panel at first', () => {
+  it('starts closed on a phone-sized window and open on a wider one', () => {
+    expect(startsWithPanelOpen(375)).toBe(false)
+    expect(startsWithPanelOpen(PANEL_OPEN_MIN_WIDTH - 1)).toBe(false)
+    expect(startsWithPanelOpen(PANEL_OPEN_MIN_WIDTH)).toBe(true)
+    expect(startsWithPanelOpen(1440)).toBe(true)
+    // no window to measure (node, tests): open, as it always was
+    expect(startsWithPanelOpen(null)).toBe(true)
+    expect(startsWithPanelOpen(Number.NaN)).toBe(true)
+  })
 })

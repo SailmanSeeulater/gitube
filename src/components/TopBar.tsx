@@ -5,6 +5,11 @@ import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
 import { useAppStore } from '../store/useAppStore'
 import { getTheme } from '../theme/themes'
 import { DownloadIcon, KeyIcon, PaletteIcon, MetroIcon } from './icons'
+
+/** A classic token with no scopes reads everything public, which is all gitube needs without private repos. */
+const NEW_TOKEN_URL = 'https://github.com/settings/tokens/new?description=gitube'
+/** The app's own source, so a visitor can see where the token goes. */
+const SOURCE_URL = 'https://github.com/SailmanSeeulater/gitube'
 import { LazySlot, lazyPart } from './LazyPart'
 
 // both drop-downs load on first open, or as the pointer or focus reaches their button
@@ -334,6 +339,17 @@ export default function TopBar({
           <p className="leading-snug text-ui-muted">
             saved when you press Enter or leave the field. stored only in this browser (localStorage) and sent only to
             api.github.com. unlocks 5000 requests/hour and private repos.
+          </p>
+          <p className="leading-snug text-ui-muted">
+            public repos need no permissions:{' '}
+            <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer" className="text-ui-accent hover:underline">
+              create a token
+            </a>{' '}
+            with no boxes ticked. the code is{' '}
+            <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="text-ui-accent hover:underline">
+              public on GitHub
+            </a>
+            , so you can check.
           </p>
         </div>
       )}
