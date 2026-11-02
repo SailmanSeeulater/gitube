@@ -22,6 +22,7 @@ browser against the GitHub API: no clone, no server, no sign-up.
 - [How the data is fetched](#how-the-data-is-fetched)
 - [Privacy and analytics](#privacy-and-analytics)
 - [Stack](#stack)
+- [License](#license)
 
 ## Gallery
 
@@ -364,3 +365,7 @@ Vite 8, React 19, TypeScript 7, Tailwind v4, react-force-graph-2d (d3-force on
 canvas), @octokit/rest, TanStack Query, Zustand, Vitest.
 [PLAN.md](PLAN.md) has the original design notes and
 [PROFILE_SPEC.md](PROFILE_SPEC.md) person mode's.
+
+## License
+
+[MIT](LICENSE). The gallery's screenshots show public GitHub profiles and repos, which belong to their owners.

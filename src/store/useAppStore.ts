@@ -68,6 +68,7 @@ export interface AppState {
   search: string
   /** Hide branches whose tip is older than this many days. 0 = show all. */
   staleDays: number
+  /** The side panel: open at first on a wide window, closed on a phone (startsWithPanelOpen). */
   panelOpen: boolean
   /** Commit sha shown in the NodeInspector, null when closed. */
   inspectorNodeId: string | null
@@ -127,6 +128,17 @@ export interface AppActions {
 
 export type AppStore = AppState & AppActions
 
+/**
+ * Windows narrower than this (CSS px) open with the side panel closed: on a phone the 300 px panel
+ * would cover nearly the whole map, which is what a first visit should see. The panel button opens it.
+ */
+export const PANEL_OPEN_MIN_WIDTH = 720
+
+/** Whether the side panel starts open: on a window at least PANEL_OPEN_MIN_WIDTH wide, or with no window (tests, node). */
+export function startsWithPanelOpen(width: number | null = typeof window === 'undefined' ? null : window.innerWidth): boolean {
+  return width === null || !Number.isFinite(width) || width >= PANEL_OPEN_MIN_WIDTH
+}
+
 export const useAppStore = create<AppStore>()((set, get) => ({
   token: readStoredToken(),
   viewMode: 'skeleton',
@@ -137,7 +149,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
   panelTab: 'branches',
   search: '',
   staleDays: 0,
-  panelOpen: true,
+  panelOpen: startsWithPanelOpen(),
   inspectorNodeId: null,
   progress: null,
   hiddenLabels: 0,
