@@ -151,6 +151,10 @@ export interface MetroRoute {
   dashed: boolean
   /** collapsedCount of the link (skeleton view), 0 in full view. */
   hidden: number
+  /** Its width as a factor of the plain line's; 1 when left out. The coral tapers by it (graph/coral). */
+  weight?: number
+  /** How far its colour has faded towards the neutral, 0..1; 0 when left out. The coral bleaches a quiet arm by it. */
+  bleach?: number
 }
 
 export interface MetroLabel {
@@ -188,6 +192,8 @@ export interface MetroRun {
   room: number
   /** Vertical centre for a "+N" marker beside the line, or null when there is no free spot. */
   markerY: number | null
+  /** Horizontal centre of that marker when it is not over (x, y) itself: a layout whose lines run at any angle (graph/coral). */
+  markerX?: number
 }
 
 export interface MetroStub {
@@ -242,6 +248,16 @@ export interface MetroLayout {
   columns: number
   /** 'full' when the graph holds plain commits (threaded onto skeleton links), else 'skeleton'. */
   mode: 'skeleton' | 'full'
+  /**
+   * How the camera frames it. Left out: as a metro map, never so small that its lanes crowd, the
+   * newest end in view. 'whole': all of it, centred, however small (graph/coral, whose shape is
+   * the point).
+   */
+  fit?: 'whole'
+  /** Stations drawn faded, by how much (0..1): the coral's quiet arms. Left out: none. */
+  bleach?: ReadonlyMap<string, number>
+  /** Tips drawn with a glow: the coral's branches that moved lately. Left out: none. */
+  polyps?: ReadonlySet<string>
 }
 
 // ---------------------------------------------------------------- label names

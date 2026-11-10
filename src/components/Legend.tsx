@@ -3,6 +3,7 @@ import type { Theme } from '../theme/themes'
 import { useTheme } from '../theme/useTheme'
 import { PrRingPaths } from './PrGlyph'
 import type { PrMark } from '../types'
+import { coralSpecies } from '../graph/coralSpecies'
 
 type GlyphKind =
   | 'tip'
@@ -170,18 +171,37 @@ const PR_HINT = {
 /** The pull request item for each layout, on its tip glyph (organic: the empty sixth cell; else a seventh). */
 const PR_KINDS: Record<'organic' | 'metro', GlyphKind> = { organic: 'pr', metro: 'pr-station' }
 
+/** What the coral adds to the metro map's legend: its species, and what its width and colour say. */
+function CoralNote({ language }: { language: string | undefined }) {
+  const species = coralSpecies(language)
+  return (
+    <p className="mt-2 text-[11px] leading-snug text-ui-muted">
+      <span className="text-ui-text-dim">
+        {species.name}
+        {language ? ` (${language})` : ''}
+      </span>
+      : {species.shape}. thicker = more history above it. a glowing tip moved in the last 30 days; a pale arm has been quiet for up to a
+      year.
+    </p>
+  )
+}
+
 export interface LegendProps {
   /** some tip on the canvas carries a pull request mark: the legend explains it (one item, only then) */
   hasPrs?: boolean
   /** some of those marks have their review or checks known (else every one is the gapped neutral ring) */
   prKnown?: boolean
+  /** the repo's primary language, which picks the coral's species (the coral layout's note names it) */
+  language?: string
 }
 
-export default function Legend({ hasPrs = false, prKnown = false }: LegendProps) {
+export default function Legend({ hasPrs = false, prKnown = false, language }: LegendProps) {
   const theme = useTheme()
   const layout = useAppStore((s) => s.layoutMode)
-  const base = layout === 'metro' ? METRO_ITEMS : ITEMS
-  const prItem = { kind: PR_KINDS[layout], label: 'pull request', hint: prKnown ? PR_HINT.known : PR_HINT.unknown }
+  // the coral is drawn with the metro map's stations and lines
+  const stations = layout !== 'organic'
+  const base = stations ? METRO_ITEMS : ITEMS
+  const prItem = { kind: PR_KINDS[stations ? 'metro' : 'organic'], label: 'pull request', hint: prKnown ? PR_HINT.known : PR_HINT.unknown }
   const items = hasPrs ? [...base, prItem] : base
   return (
     <div>
@@ -193,6 +213,7 @@ export default function Legend({ hasPrs = false, prKnown = false }: LegendProps)
           </li>
         ))}
       </ul>
+      {layout === 'coral' && <CoralNote language={language} />}
       <p className="mt-2 text-[11px] leading-snug text-ui-muted">
         colour = branch that reaches a commit first. only live refs are shown; deleted branches are invisible to the API.
       </p>

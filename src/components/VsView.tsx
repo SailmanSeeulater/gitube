@@ -89,7 +89,7 @@ export default function VsView({ a, b, bRef, bFetching, bError, theme, onRetry, 
 
   return (
     <div role="dialog" aria-label={`vs: ${nameA} and ${nameB}`} className="absolute inset-0 z-30 flex flex-col bg-ui-bg text-[13px]">
-      <header className="flex items-center gap-2.5 border-b border-ui-border bg-ui-panel/95 px-4 py-2.5">
+      <header className="flex items-center gap-2.5 border-b border-ui-border ui-glass px-4 py-2.5">
         <span className="text-ui-accent">
           <SwordsIcon size={16} />
         </span>
@@ -151,7 +151,7 @@ export default function VsView({ a, b, bRef, bFetching, bError, theme, onRetry, 
       </div>
 
       {fight && (
-        <footer className="border-t border-ui-border bg-ui-panel/95 px-4 py-2.5">
+        <footer className="border-t border-ui-border ui-glass px-4 py-2.5">
           <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {fight.rows.map((row) => (
               <li key={row.key} title={row.hint} className="rounded-lg bg-ui-field px-2.5 py-1.5">

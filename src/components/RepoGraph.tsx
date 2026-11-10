@@ -5,7 +5,7 @@ import type { ContributorFocus } from '../graph/contributors'
 import { clockAt, revealProgress, linkRevealed, type Timeline } from '../graph/timeline'
 import { partialPolyline, partialQuad, popScale } from './timelapseDraw'
 import type { MetroStationKind as MetroStation } from '../graph/metro'
-import type { Theme } from '../theme/themes'
+import { blendHex, type Theme } from '../theme/themes'
 import { useAppStore } from '../store/useAppStore'
 import {
   FIT_MAX_ZOOM,
@@ -37,6 +37,8 @@ import {
   METRO_MIN_LINE_PX,
   METRO_MIN_ZOOM,
   METRO_TWEEN_MS,
+  bleachMix,
+  bleachStep,
   easeInOutCubic,
   isLinkDimmed,
   metroBadgeFontPx,
@@ -192,6 +194,10 @@ function drawBadge(
   ctx.fillText(text, mx, my + 0.5 * px)
   ctx.globalAlpha = 1
 }
+
+/** A live tip's glow on the coral (its polyp): how far past the tip it reaches, in screen px, and how strong it is. */
+const POLYP_GLOW_PX = 5
+const POLYP_GLOW_ALPHA = 0.28
 
 /** Spikes around a diverged tip. */
 const SPIKE_COUNT = 9
@@ -379,6 +385,24 @@ export default function RepoGraph({
   // theme switch hands force-graph new callbacks, which it answers with one redraw: graphData,
   // the simulation and the label placer are untouched. ----
   const colours = useMemo<RepoGraphColours>(() => ({ theme, palette, links: buildLinkColours(palette, theme) }), [theme, palette])
+  /**
+   * A colour bleached towards the theme's neutral (the coral's quiet arms), in a few steps and
+   * remembered per theme, so a frame builds no colour it has built before.
+   */
+  const bleached = useMemo(() => {
+    const made = new Map<string, string>()
+    return (colour: string, bleach: number): string => {
+      const step = bleachStep(bleach)
+      if (step === 0) return colour
+      const key = `${colour} ${step}`
+      let out = made.get(key)
+      if (out === undefined) {
+        out = blendHex(theme.fallback, colour, bleachMix(step))
+        made.set(key, out)
+      }
+      return out
+    }
+  }, [theme])
 
   useEffect(() => {
     prevNodesRef.current = index.nodeById
@@ -541,7 +565,10 @@ export default function RepoGraph({
       // a plain commit in metro full view is a bead sized to its line and its neighbours
       const bead = metro && kind === 'commit' && !node.isTip ? metroCommitGlyph(px, metro.commitGap.get(id)) : null
       const r = bead ? bead.r : metro ? metroStationRadius(kind, node.isTip) : nodeRadius(node.reach)
-      const colour = colours.palette[node.owner] ?? th.fallback
+      const own = colours.palette[node.owner] ?? th.fallback
+      // the coral's quiet arms are bleached, stations and all
+      const faded = metro?.bleach?.get(id) ?? 0
+      const colour = faded > 0 ? bleached(own, faded) : own
       const fill = node.isRoot && !node.isTip ? th.rootFill : colour
       const isHovered = hovered === id
       const isInspected = inspectorNodeId === id
@@ -582,6 +609,15 @@ export default function RepoGraph({
         // canvas-coloured core), stops as dots. The station colour contrasts hard with the canvas:
         // near-white on the dark themes, the text colour on the light ones.
         const ring = Math.max(1.5, 1.2 * px)
+        if (node.isTip && metro.polyps?.has(id)) {
+          // a live tip (the coral's polyp): a soft glow in its own colour around it
+          ctx.beginPath()
+          ctx.arc(x, y, r + POLYP_GLOW_PX * px, 0, TWO_PI)
+          ctx.fillStyle = colour
+          ctx.globalAlpha = alpha * POLYP_GLOW_ALPHA
+          ctx.fill()
+          ctx.globalAlpha = alpha
+        }
         ctx.beginPath()
         ctx.arc(x, y, r, 0, TWO_PI)
         if (node.isTip) {
@@ -692,7 +728,7 @@ export default function RepoGraph({
     // hoverVersion is intentionally a dependency: it forces a new callback identity on hover change.
     // tweening too: the frame after a metro tween must be redrawn with the routes (see paintMetro).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [index, colours, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeRevealed, spikeOf, prMarks],
+    [index, colours, bleached, reachSet, query, inspectorNodeId, hoverVersion, metro, tweening, nodeRevealed, spikeOf, prMarks],
   )
 
   const paintPointerArea = useCallback(
@@ -858,8 +894,9 @@ export default function RepoGraph({
         if (f <= 0) continue
         const dim = isLinkDimmed(r.source, r.target, hovered, reachSet, litLinks)
         ctx.globalAlpha = dim ? th.metroDimAlpha : r.muted ? th.metroMutedAlpha : th.metroLineAlpha
-        ctx.strokeStyle = palette[r.colorBranch] ?? th.fallback
-        ctx.lineWidth = r.muted || r.dashed ? width * 0.65 : width
+        ctx.strokeStyle = bleached(palette[r.colorBranch] ?? th.fallback, r.bleach)
+        // the coral's taper: a line as thick as the history it carries (1 on a metro map)
+        ctx.lineWidth = (r.muted || r.dashed ? width * 0.65 : width) * r.weight
         if (r.dashed !== dashed) {
           dashed = r.dashed
           ctx.setLineDash(dashed ? [Math.max(5, 4 * px), Math.max(4, 3 * px)] : NO_DASH)
@@ -881,7 +918,7 @@ export default function RepoGraph({
           // run markers wait for their route to finish drawing
           if (linkShown(b.source, b.target) < 1) continue
           ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.metroDimAlpha : 1
-          strokeRunBars(ctx, b, px, width, th)
+          strokeRunBars(ctx, b, px, width * b.weight, th)
         }
         const fontPx = metroBadgeFontPx(globalScale)
         if (fontPx >= METRO_BADGE_MIN_PX) {
@@ -895,9 +932,10 @@ export default function RepoGraph({
             ctx.globalAlpha = isLinkDimmed(b.source, b.target, hovered, reachSet, litLinks) ? th.dimAlpha : 1
             ctx.strokeStyle = th.derived.textHalo
             ctx.lineWidth = 2.5 * px
-            ctx.strokeText(b.text, b.x, b.textY)
+            const textX = b.textX ?? b.x
+            ctx.strokeText(b.text, textX, b.textY)
             ctx.fillStyle = th.derived.runMark
-            ctx.fillText(b.text, b.x, b.textY)
+            ctx.fillText(b.text, textX, b.textY)
             const halfW = ctx.measureText(b.text).width / 2 + px
             if (marks.rects.length < 4 * (marks.count + 1)) {
               const drawnShare = new Float32Array(Math.max(64, marks.rects.length * 2))
@@ -905,9 +943,9 @@ export default function RepoGraph({
               marks.rects = drawnShare
             }
             const q = 4 * marks.count++
-            marks.rects[q] = b.x - halfW
+            marks.rects[q] = textX - halfW
             marks.rects[q + 1] = b.textY - halfH
-            marks.rects[q + 2] = b.x + halfW
+            marks.rects[q + 2] = textX + halfW
             marks.rects[q + 3] = b.textY + halfH
           }
         }
@@ -915,7 +953,7 @@ export default function RepoGraph({
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, colours, reachSet, litLinks, hoverVersion, linkShown, nodeRevealed],
+    [metro, index, colours, bleached, reachSet, litLinks, hoverVersion, linkShown, nodeRevealed],
   )
 
   // Time-lapse frames paint their own background (the canvas is otherwise transparent over a CSS
@@ -1062,7 +1100,8 @@ export default function RepoGraph({
     // camera: fit the straight map now, so it and the nodes arrive together
     const { width, height } = sizeRef.current
     if (fg && width > 0 && height > 0 && metro.targets.size > 0) {
-      const { k, cx, cy } = metroFitTransform(metro.bbox, { width, height }, FIT_PAD, FIT_MAX_ZOOM, METRO_MIN_ZOOM)
+      // a coral is framed whole; a metro map keeps its lanes readable and shows its newest end
+      const { k, cx, cy } = metroFitTransform(metro.bbox, { width, height }, FIT_PAD, FIT_MAX_ZOOM, metro.wholeFit ? 0 : METRO_MIN_ZOOM)
       fg.centerAt(cx, cy, FIT_MS)
       fg.zoom(k, FIT_MS)
     }
@@ -1112,7 +1151,8 @@ export default function RepoGraph({
   // middle stretch of the view, it pans to put it just past the centre, never past either end of
   // the map (the zoom is left alone). Holding still matters: labels only appear while the camera rests.
   useEffect(() => {
-    if (!timelapse || !metro || !ready) return
+    // a layout framed whole (the coral) is all in view already
+    if (!timelapse || !metro || metro.wholeFit || !ready) return
     let raf = 0
     let busyUntil = 0
     let first = true

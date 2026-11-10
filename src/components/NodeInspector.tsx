@@ -64,7 +64,7 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
     <div
       role="dialog"
       aria-label={`Commit ${shortSha(commit.sha)}`}
-      className="absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel/95 p-3 text-[13px] shadow-soft backdrop-blur"
+      className="absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border ui-glass p-3 text-[13px] shadow-soft"
     >
       <div className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ownerColour }} title={`owned by ${node.owner}`} />

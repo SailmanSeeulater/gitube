@@ -26,7 +26,7 @@ export interface StatusStripProps {
 const preloadTimelapse = () => preload(timelapseChunk)
 
 const shell =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 text-[12px] shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border ui-glass text-[12px] shadow-soft'
 
 export default function StatusStrip({
   data,
@@ -40,6 +40,7 @@ export default function StatusStrip({
 }: StatusStripProps) {
   const progress = useAppStore((s) => s.progress)
   const hiddenLabels = useAppStore((s) => s.hiddenLabels)
+  const panelOpen = useAppStore((s) => s.panelOpen)
   // the core budget as the latest response put it (the graph's, or the pull requests' after it)
   const rate = useAppStore((s) => s.rate)
 
@@ -87,7 +88,13 @@ export default function StatusStrip({
   const remaining = rate?.remaining ?? progress?.rateLimitRemaining ?? null
 
   return (
-    <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
+    <div
+      className={`${shell} flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 ${
+        // beside the panel it keeps 16px + the panel's 312px + 16px clear, as the time-lapse bar does
+        graph && panelOpen ? 'max-w-[max(260px,calc(100vw-344px))]' : 'max-w-[calc(100vw-2rem)]'
+      }`}
+      role="status"
+    >
       {onTimelapse && (
         <button
           type="button"

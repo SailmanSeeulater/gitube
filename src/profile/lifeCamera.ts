@@ -51,6 +51,26 @@ export function zoomLifeCamera(c: LifeCamera, factor: number, atX: number, days:
   return clampLifeCamera({ k, tx: atX - world * k }, n, view)
 }
 
+/**
+ * The stretch of days between screen x0 and x1 (either way round), spread across the plot: what a
+ * drag across the view zooms into. Past LIFE_MAX_K the stretch cannot fill the plot, so it sits in
+ * its middle; a stretch with no width leaves the camera where it is.
+ */
+export function windowLifeCamera(c: LifeCamera, x0: number, x1: number, days: number, view: LifeViewport): LifeCamera {
+  const n = Math.max(1, days)
+  const inLife = (x: number) => Math.min(n, Math.max(0, screenToWorldX(c, x)))
+  const from = inLife(Math.min(x0, x1))
+  const to = inLife(Math.max(x0, x1))
+  if (!(to > from)) return clampLifeCamera(c, n, view)
+  const k = Math.min(LIFE_MAX_K, Math.max(fitK(n, view), plotWidth(view) / (to - from)))
+  return clampLifeCamera({ k, tx: view.width / 2 - ((from + to) / 2) * k }, n, view)
+}
+
+/** Whether the camera shows less than the whole life (the plot holds a part of it). */
+export function isZoomedLifeCamera(c: LifeCamera, days: number, view: LifeViewport): boolean {
+  return c.k > fitK(Math.max(1, days), view) * 1.0005
+}
+
 /** Pan by dx screen px. */
 export function panLifeCamera(c: LifeCamera, dx: number, days: number, view: LifeViewport): LifeCamera {
   return clampLifeCamera({ k: c.k, tx: c.tx + dx }, days, view)

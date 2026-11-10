@@ -281,7 +281,7 @@ export default function PersonPanel({
         onClick={togglePanel}
         title="Open panel"
         aria-label="Open panel"
-        className="absolute right-0 top-4 z-20 rounded-l-lg border border-r-0 border-ui-border bg-ui-panel/95 px-1.5 py-2.5 text-ui-muted shadow-soft backdrop-blur hover:text-ui-text"
+        className="absolute right-0 top-4 z-20 rounded-l-xl border border-r-0 border-ui-border ui-glass px-1.5 py-3 text-ui-muted shadow-soft hover:text-ui-text max-sm:top-[4.5rem]"
       >
         <ChevronLeftIcon />
       </button>
@@ -293,7 +293,7 @@ export default function PersonPanel({
   const avatar = `${profile.avatarUrl}${profile.avatarUrl.includes('?') ? '&' : '?'}s=${AVATAR_PX * 2}`
 
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 text-[13px] shadow-soft backdrop-blur">
+    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-ui-border ui-glass text-[13px] shadow-soft">
       <header className="flex items-start gap-2 border-b border-ui-border px-3 py-2.5">
         <img src={avatar} width={AVATAR_PX} height={AVATAR_PX} alt="" referrerPolicy="no-referrer" className="shrink-0 rounded-full bg-ui-hover" />
         <div className="min-w-0 flex-1">

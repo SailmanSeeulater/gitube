@@ -10,20 +10,56 @@ const GROUPS: ReadonlyArray<{ mode: ThemeMode; label: string }> = [
 /** The themes in the order the picker shows them (and the arrow keys walk them): dark, then light. */
 const ORDERED: readonly Theme[] = GROUPS.flatMap((group) => THEMES.filter((theme) => theme.mode === group.mode))
 
-/** The theme in miniature: its canvas, the default branch (accent) as a ringed tip, and three branch colours. */
+/** Tiles per row, which is also how far Up and Down move. */
+const COLUMNS = 4
+
+/**
+ * The theme in miniature, as the map draws it: its canvas, the default branch (accent) as a trunk
+ * running from a ringed origin to its tip, and two branches forking off in the first two colours.
+ */
 function Swatch({ theme }: { theme: Theme }) {
-  const [a, b, c] = theme.branchColors
+  const [a, b] = theme.branchColors
   return (
-    <svg width="40" height="22" viewBox="0 0 40 22" aria-hidden focusable="false" className="shrink-0">
-      <rect x="0.5" y="0.5" width="39" height="21" rx="5" fill={theme.canvas} stroke={theme.panelBorder} />
-      <line x1="10" y1="11" x2="34" y2="11" stroke={theme.accent} strokeOpacity={theme.linkAlpha} strokeWidth="1" />
-      <circle cx="10" cy="11" r="3.5" fill={theme.accent} />
-      <circle cx="10" cy="11" r="5.75" fill="none" stroke={theme.accent} strokeWidth="1.1" />
-      <circle cx="21" cy="11" r="2.5" fill={a} />
-      <circle cx="27.5" cy="11" r="2.5" fill={b} />
-      <circle cx="34" cy="11" r="2.5" fill={c} />
+    <svg viewBox="0 0 72 40" aria-hidden focusable="false" className="block h-auto w-full">
+      <rect x="0.5" y="0.5" width="71" height="39" rx="7.5" fill={theme.canvas} stroke={theme.panelBorder} />
+      <g fill="none" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 24H60" stroke={theme.accent} />
+        <path d="M24 24l8-10h14" stroke={a} />
+        <path d="M38 24l5 7h9" stroke={b} />
+      </g>
+      <circle cx="46" cy="14" r="2.7" fill={a} />
+      <circle cx="52" cy="31" r="2.7" fill={b} />
+      <circle cx="60" cy="24" r="3.3" fill={theme.accent} />
+      <circle cx="12" cy="24" r="3" fill={theme.canvas} stroke={theme.stationRing} strokeWidth="1.6" />
     </svg>
   )
+}
+
+/** Where each group starts in ORDERED, and how many themes it holds. */
+const SPANS: ReadonlyArray<{ start: number; count: number }> = GROUPS.map((group) => ({
+  start: ORDERED.findIndex((theme) => theme.mode === group.mode),
+  count: ORDERED.filter((theme) => theme.mode === group.mode).length,
+}))
+
+/**
+ * The tile one row down (rows = 1) or up (rows = -1) from index, staying in its column: within its
+ * group where there is such a row, else in the nearest row of the next group that way (its last
+ * tile when that row is short of the column). At the first or last row it stays put.
+ */
+export function step(index: number, rows: 1 | -1): number {
+  const g = SPANS.findIndex((span) => index >= span.start && index < span.start + span.count)
+  if (g < 0) return index
+  const span = SPANS[g]
+  const column = (index - span.start) % COLUMNS
+  const within = index + rows * COLUMNS
+  if (within >= span.start && within < span.start + span.count) return within
+  // the last row of a group may be short: from the row above it, land on its last tile
+  const lastRowStart = span.start + Math.floor((span.count - 1) / COLUMNS) * COLUMNS
+  if (rows === 1 && index < lastRowStart) return span.start + span.count - 1
+  const to = SPANS[g + rows]
+  if (to === undefined) return index
+  const rowStart = rows === 1 ? to.start : to.start + Math.floor((to.count - 1) / COLUMNS) * COLUMNS
+  return Math.min(rowStart + column, to.start + to.count - 1)
 }
 
 export interface ThemePickerProps {
@@ -39,8 +75,9 @@ export interface ThemePickerProps {
 }
 
 /**
- * Compact popover listing the ten themes in a Dark and a Light group, each with a swatch. A
- * single-select listbox: Up/Down/Home/End move and apply the theme at once (a switch is only a
+ * Popover showing every theme as a tile (a miniature map and its name), in a Dark and a Light
+ * group, with the chosen theme's one-line character underneath. A single-select listbox laid out
+ * as a grid: the arrow keys, Home and End move and apply the theme at once (a switch is only a
  * repaint, so previewing is cheap), Enter or Space confirms and closes, a click applies and keeps
  * the list open for comparing. Tabbing away closes it; Escape and a click outside close it too,
  * through TopBar (which also covers the picker's placeholder while it loads).
@@ -66,19 +103,26 @@ export default function ThemePicker({ id, value, onChange, onClose, buttonRef }:
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const current = ORDERED.findIndex((theme) => theme.id === value)
+    const last = ORDERED.length - 1
     let next: number
     switch (event.key) {
+      case 'ArrowRight':
+        next = Math.min(last, current + 1)
+        break
+      case 'ArrowLeft':
+        next = Math.max(0, current - 1)
+        break
       case 'ArrowDown':
-        next = Math.min(ORDERED.length - 1, current + 1)
+        next = step(current, 1)
         break
       case 'ArrowUp':
-        next = Math.max(0, current - 1)
+        next = step(current, -1)
         break
       case 'Home':
         next = 0
         break
       case 'End':
-        next = ORDERED.length - 1
+        next = last
         break
       case 'Enter':
       case ' ':
@@ -99,12 +143,15 @@ export default function ThemePicker({ id, value, onChange, onClose, buttonRef }:
     onClose(false)
   }
 
+  const current = ORDERED.find((theme) => theme.id === value)
+
   return (
     <div
       ref={listRef}
       id={id}
       role="listbox"
       aria-label="Colour theme"
+      aria-orientation="horizontal"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
       // Presses on the group headings, the padding or the scrollbar are inside the picker: keep
@@ -112,42 +159,57 @@ export default function ThemePicker({ id, value, onChange, onClose, buttonRef }:
       onMouseDown={(event) => {
         if (!(event.target as Element).closest('[role="option"]')) event.preventDefault()
       }}
-      className="ui-scroll max-h-[calc(100vh-5.5rem)] w-[232px] self-end overflow-y-auto rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
+      className="ui-glass ui-pop ui-scroll max-h-[calc(100dvh-5.5rem)] w-[352px] max-w-[calc(100vw-2rem)] self-end overflow-y-auto rounded-2xl border border-ui-border p-2 text-[12px] shadow-soft"
     >
       {GROUPS.map((group) => {
         const labelId = `${id}-${group.mode}`
+        const themes = ORDERED.filter((theme) => theme.mode === group.mode)
         return (
           <div key={group.mode} role="group" aria-labelledby={labelId}>
-            <div id={labelId} className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-wide text-ui-muted">
+            <div id={labelId} className="flex items-baseline gap-1.5 px-1.5 pb-1.5 pt-1 text-[11px] font-medium text-ui-text-dim">
               {group.label}
+              <span className="font-normal tabular-nums text-ui-muted">{themes.length}</span>
             </div>
-            {ORDERED.filter((theme) => theme.mode === group.mode).map((theme) => {
-              const selected = theme.id === value
-              return (
-                <div
-                  key={theme.id}
-                  ref={(el) => {
-                    if (el) optionRefs.current.set(theme.id, el)
-                    else optionRefs.current.delete(theme.id)
-                  }}
-                  role="option"
-                  aria-selected={selected}
-                  tabIndex={selected ? 0 : -1}
-                  title={theme.blurb}
-                  onClick={() => choose(theme)}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 transition-colors ${
-                    selected ? 'bg-ui-accent/10 text-ui-accent' : 'text-ui-text hover:bg-ui-hover'
-                  }`}
-                >
-                  <Swatch theme={theme} />
-                  <span className="min-w-0 flex-1 truncate">{theme.name}</span>
-                  {selected && <CheckIcon size={13} className="shrink-0" />}
-                </div>
-              )
-            })}
+            <div className="mb-2 grid grid-cols-4 gap-1">
+              {themes.map((theme) => {
+                const selected = theme.id === value
+                return (
+                  <div
+                    key={theme.id}
+                    ref={(el) => {
+                      if (el) optionRefs.current.set(theme.id, el)
+                      else optionRefs.current.delete(theme.id)
+                    }}
+                    role="option"
+                    aria-selected={selected}
+                    tabIndex={selected ? 0 : -1}
+                    title={theme.blurb}
+                    onClick={() => choose(theme)}
+                    className={`ui-press flex min-w-0 flex-col gap-1 rounded-[10px] p-1 ${selected ? 'bg-ui-accent/12' : 'hover:bg-ui-hover'}`}
+                  >
+                    <span className={`block rounded-lg ${selected ? 'outline-2 outline-offset-1 outline-ui-accent' : ''}`}>
+                      <Swatch theme={theme} />
+                    </span>
+                    <span
+                      className={`flex items-center justify-center gap-0.5 truncate text-[11px] leading-4 ${
+                        selected ? 'font-medium text-ui-accent' : 'text-ui-text-dim'
+                      }`}
+                    >
+                      {selected && <CheckIcon size={11} className="shrink-0" />}
+                      <span className="truncate">{theme.name}</span>
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
       })}
+      {current && (
+        <p className="border-t border-ui-border px-1.5 pb-1 pt-2 text-[11px] leading-snug text-ui-muted" aria-live="polite">
+          <span className="font-medium text-ui-text-dim">{current.name}.</span> {current.blurb}
+        </p>
+      )}
     </div>
   )
 }

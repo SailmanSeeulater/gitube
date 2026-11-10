@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent, type RefObject } from 'react'
 import { track } from '../analytics/umami'
 import { preload } from '../lazy/chunk'
 import { exportMenuChunk, themePickerChunk } from '../lazy/parts'
@@ -10,6 +10,8 @@ import { DownloadIcon, KeyIcon, PaletteIcon, MetroIcon } from './icons'
 const NEW_TOKEN_URL = 'https://github.com/settings/tokens/new?description=gitube'
 /** The app's own source, so a visitor can see where the token goes. */
 const SOURCE_URL = 'https://github.com/SailmanSeeulater/gitube'
+/** The page without a repo or a person in its address: the start screen. */
+const HOME_URL = './'
 import { LazySlot, lazyPart } from './LazyPart'
 
 // both drop-downs load on first open, or as the pointer or focus reaches their button
@@ -18,8 +20,24 @@ const ExportMenu = lazyPart(exportMenuChunk)
 const preloadThemePicker = () => preload(themePickerChunk)
 const preloadExportMenu = () => preload(exportMenuChunk)
 
+/** The bar's icon buttons: a 32px square (44px to a finger, see ui-hit) that tints when its drop-down is open. */
+const iconButton = (active: boolean) =>
+  `ui-hit ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+    active ? 'bg-ui-accent/12 text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
+  }`
+
+/** A phone-width window: the address field is short there, so its hint is too. */
+const NARROW = '(max-width: 479px)'
+const narrowQuery = () => (typeof window === 'undefined' || typeof window.matchMedia !== 'function' ? null : window.matchMedia(NARROW))
+function subscribeNarrow(onChange: () => void): () => void {
+  const query = narrowQuery()
+  query?.addEventListener('change', onChange)
+  return () => query?.removeEventListener('change', onChange)
+}
+const isNarrow = () => narrowQuery()?.matches ?? false
+
 /** The drop-downs' box, for their placeholder while they load (each sets its own width). */
-const DROPDOWN_FRAME = 'self-end rounded-xl border border-ui-border bg-ui-panel/95 px-3 py-2.5 shadow-soft backdrop-blur'
+const DROPDOWN_FRAME = 'self-end rounded-2xl border border-ui-border ui-glass px-3 py-2.5 shadow-soft'
 
 export interface TopBarProps {
   value: string
@@ -56,6 +74,7 @@ export default function TopBar({
   onOpenFile,
   besidePanel,
 }: TopBarProps) {
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false)
   const token = useAppStore((s) => s.token)
   const setToken = useAppStore((s) => s.setToken)
 
@@ -154,6 +173,20 @@ export default function TopBar({
     }
   }, [dropdown, closeTheme, closeExport])
 
+  // "/" puts the cursor in the address field, as on GitHub, unless something is being typed already.
+  useEffect(() => {
+    const onSlash = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (target !== null && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      event.preventDefault()
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+    window.addEventListener('keydown', onSlash)
+    return () => window.removeEventListener('keydown', onSlash)
+  }, [inputRef])
+
   const commitToken = () => {
     if (!dirty) return
     // Enter commits and then blurs, which commits again before a re-render: the store tells whether
@@ -189,44 +222,64 @@ export default function TopBar({
         besidePanel ? 'max-w-[max(240px,calc(100vw-336px))]' : 'max-w-[calc(100vw-2rem)]'
       }`}
     >
-      <div className="flex min-w-0 items-center gap-1 rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[13px] shadow-soft backdrop-blur">
-        <span className="pl-1.5 text-ui-muted" aria-hidden>
-          <MetroIcon size={15} />
-        </span>
+      <div
+        role="search"
+        className="ui-glass ui-field-frame flex min-w-0 items-center gap-1 rounded-2xl border border-ui-border p-1.5 text-[13px] shadow-soft"
+      >
+        <a
+          href={HOME_URL}
+          aria-label="gitube home"
+          title="gitube: start over"
+          className="ui-hit ui-press flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ui-accent hover:bg-ui-hover"
+        >
+          <MetroIcon size={17} />
+        </a>
         <input
           ref={inputRef}
           type="text"
+          inputMode="url"
+          enterKeyHint="go"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="owner/repo or a GitHub user"
+          placeholder={narrow ? 'repo or user' : 'owner/repo or username'}
           aria-label="GitHub repository or user"
+          aria-keyshortcuts="/"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="w-[280px] min-w-0 max-w-[55vw] shrink bg-transparent px-2 py-1 text-ui-text outline-none placeholder:text-ui-muted"
+          className="h-8 w-[280px] min-w-0 max-w-[55vw] shrink bg-transparent px-1.5 text-ui-text outline-none placeholder:text-ui-muted"
         />
+        {value === '' && (
+          <kbd
+            aria-hidden
+            className="pointer-events-none mr-1 hidden h-5 min-w-5 shrink-0 items-center justify-center rounded-md border border-ui-border px-1 font-sans text-[11px] text-ui-muted [@media(hover:hover)]:flex"
+          >
+            /
+          </kbd>
+        )}
         <button
           type="button"
           onClick={onSubmit}
           disabled={busy}
-          className="rounded-lg bg-ui-accent/15 px-3 py-1 font-medium text-ui-accent transition-colors hover:bg-ui-accent/25 disabled:cursor-progress disabled:opacity-60"
+          aria-busy={busy}
+          className="ui-press flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-ui-accent px-3.5 font-semibold text-ui-accent-text hover:opacity-90 disabled:cursor-progress disabled:opacity-70"
         >
+          {busy && <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />}
           {busy ? 'loading' : 'Go'}
         </button>
+        <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-ui-border max-sm:hidden" />
         <button
           type="button"
           onClick={onToggleToken}
           aria-pressed={tokenOpen}
           aria-label="GitHub token"
-          title={token ? 'Token set — click to edit' : 'Add a GitHub token (optional)'}
-          className={`relative rounded-lg p-1.5 transition-colors ${
-            tokenOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
-          }`}
+          title={token ? 'Token set. Click to edit' : 'Add a GitHub token (optional)'}
+          className={iconButton(tokenOpen)}
         >
-          <KeyIcon size={15} />
-          {token && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-ui-accent" aria-hidden />}
+          <KeyIcon size={16} />
+          {token && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-ui-accent ring-2 ring-ui-panel" aria-hidden />}
         </button>
         <button
           ref={themeButtonRef}
@@ -239,11 +292,9 @@ export default function TopBar({
           aria-controls={themeOpen ? themeListId : undefined}
           aria-label="Colour theme"
           title={`Theme: ${getTheme(themeId).name}`}
-          className={`rounded-lg p-1.5 transition-colors ${
-            themeOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
-          }`}
+          className={iconButton(themeOpen)}
         >
-          <PaletteIcon size={15} />
+          <PaletteIcon size={16} />
         </button>
         <button
           ref={exportButtonRef}
@@ -256,11 +307,9 @@ export default function TopBar({
           aria-controls={exportOpen ? exportMenuId : undefined}
           aria-label="Save or open"
           title="Save the graph or its data, or open a saved file"
-          className={`rounded-lg p-1.5 transition-colors ${
-            exportOpen ? 'bg-ui-hover text-ui-accent' : 'text-ui-muted hover:bg-ui-hover hover:text-ui-text'
-          }`}
+          className={iconButton(exportOpen)}
         >
-          <DownloadIcon size={15} />
+          <DownloadIcon size={16} />
         </button>
         <input
           ref={fileInputRef}
@@ -281,7 +330,7 @@ export default function TopBar({
       {/* the drop-downs' wrappers draw no box (contents): they mark what counts as inside */}
       {themeOpen && (
         <div ref={themeSlotRef} className="contents">
-          <LazySlot frame={`w-[232px] ${DROPDOWN_FRAME}`} label="loading themes">
+          <LazySlot frame={`w-[352px] max-w-[calc(100vw-2rem)] ${DROPDOWN_FRAME}`} label="loading themes">
             <ThemePicker id={themeListId} value={themeId} onChange={setThemeId} onClose={closeTheme} buttonRef={themeButtonRef} />
           </LazySlot>
         </div>
@@ -305,7 +354,7 @@ export default function TopBar({
       )}
 
       {tokenOpen && (
-        <div className="flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-1.5 rounded-xl border border-ui-border bg-ui-panel/95 p-2.5 text-[12px] shadow-soft backdrop-blur">
+        <div className="ui-glass ui-pop flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-2 rounded-2xl border border-ui-border p-3 text-[12px] shadow-soft">
           <div className="flex items-center gap-1.5">
             <input
               type="password"
@@ -318,7 +367,7 @@ export default function TopBar({
               autoComplete="off"
               autoFocus
               spellCheck={false}
-              className="min-w-0 flex-1 rounded-lg bg-ui-field px-2 py-1 font-mono text-ui-text outline-none placeholder:font-sans placeholder:text-ui-muted"
+              className="h-8 min-w-0 flex-1 rounded-lg bg-ui-field px-2.5 font-mono text-ui-text outline-none placeholder:font-sans placeholder:text-ui-muted"
             />
             {dirty ? (
               <span className="shrink-0 px-1 text-ui-accent" aria-live="polite">
@@ -329,7 +378,7 @@ export default function TopBar({
                 <button
                   type="button"
                   onClick={clearToken}
-                  className="rounded-lg px-2 py-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
+                  className="ui-press h-8 rounded-lg px-2.5 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
                 >
                   clear
                 </button>

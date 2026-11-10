@@ -13,7 +13,7 @@ import personAppSource from '../src/PersonApp.tsx?raw'
 import ErrorCard from '../src/components/ErrorCard'
 import { formatClock } from '../src/components/graphUtils'
 import * as icons from '../src/components/icons'
-import PersonInspector, { inspectorCard } from '../src/profile/PersonInspector'
+import PersonInspector, { inspectorCard, repoHref } from '../src/profile/PersonInspector'
 import PersonLegend, { GRAPHQL_FAILED, dataLimits } from '../src/profile/PersonLegend'
 import PersonPanel, { RepoRow, onRepoRowKey, type RepoRowProps } from '../src/profile/PersonPanel'
 import PersonStatus from '../src/profile/PersonStatus'
@@ -646,6 +646,9 @@ describe('PersonInspector', () => {
     expect(text).toContain('6 commits on 2 days')
     expect(text).toContain('2 stars · 1 fork')
     expect(html).toContain('href="https://github.com/Me/open"')
+    // and into repo mode: the repo's own map, as the address bar would name it
+    expect(html).toContain('href="./?repo=Me/open"')
+    expect(text).toContain('see its map on gitube')
     // hovered, not pinned: no close button
     expect(html).not.toContain('aria-label="Close"')
   })
@@ -857,6 +860,13 @@ describe('PersonPanel', () => {
     expect(text).toContain('7 repos')
     expect(html).toContain('href="https://github.com/Me"')
     expect(text).toContain('on GitHub since 2019-01-10')
+  })
+
+  it('links a repo into repo mode by its name, one path segment each', () => {
+    expect(repoHref('vuejs/core')).toBe('./?repo=vuejs/core')
+    expect(repoHref('Me/dot.files_2')).toBe('./?repo=Me/dot.files_2')
+    // nothing in a name can add a parameter or leave the query
+    expect(repoHref('a&b/c#d')).toBe('./?repo=a%26b/c%23d')
   })
 
   it('shows the names once revealed, still with no link to a private repo', () => {

@@ -287,6 +287,8 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   /** the nudges' "add a token" (the status strip, the error card, the empty life): the token field, in sight */
   const openToken = useCallback(() => showToken(true), [showToken])
   const openFile = useCallback((file: File) => onRepo({ file }), [onRepo])
+  // the inspector's link: a repo of theirs as a map, as if it had been typed in the bar
+  const openRepo = useCallback((nameWithOwner: string) => onRepo({ input: nameWithOwner }), [onRepo])
   /** the status strip's refresh: a new request for the person on show, from GitHub */
   const refresh = useCallback(() => refreshProfile(login, { noteLoad, refetch }), [login, noteLoad, refetch])
 
@@ -342,7 +344,10 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
 
       {!profile && isFetching && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-[13px] text-ui-muted">loading {login}…</p>
+          <p role="status" className="flex items-center gap-2.5 text-[13px] text-ui-muted">
+            <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-ui-border border-t-ui-accent" />
+            loading {login}…
+          </p>
         </div>
       )}
 
@@ -430,7 +435,9 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
         )
       )}
 
-      {profile && timeline && days && <PersonInspector profile={profile} timeline={timeline} days={days} colourOf={colourOf} name={name} />}
+      {profile && timeline && days && (
+        <PersonInspector profile={profile} timeline={timeline} days={days} colourOf={colourOf} name={name} onRepo={openRepo} />
+      )}
     </div>
   )
 }

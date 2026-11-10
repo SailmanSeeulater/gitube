@@ -182,3 +182,13 @@ describe('contributorFocus', () => {
     expect(focus.labels.size).toBe(0)
   })
 })
+
+describe('the people tab links a person to their life', () => {
+  it('offers person mode for an account, and for nobody else', async () => {
+    const { personHref } = await import('../src/components/ContributorsTab')
+    expect(personHref({ login: 'octocat', isBot: false })).toBe('./?user=octocat')
+    // a bot has an app page, not a coding life; a bare author name has no account at all
+    expect(personHref({ login: 'dependabot[bot]', isBot: true })).toBeNull()
+    expect(personHref({ login: null, isBot: false })).toBeNull()
+  })
+})

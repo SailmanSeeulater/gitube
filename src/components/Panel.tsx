@@ -6,7 +6,7 @@ import { branchPrs, branchUnchecked, combineMarks, countPulls, lookupPlan } from
 import type { CleanupReport } from '../graph/cleanup'
 import type { PullsView } from '../hooks/usePulls'
 import { preload, type Chunk } from '../lazy/chunk'
-import { vsChunk, contributorsTabChunk, metroChunk, cleanupTabChunk } from '../lazy/parts'
+import { vsChunk, contributorsTabChunk, coralChunk, metroChunk, cleanupTabChunk } from '../lazy/parts'
 import { useChunk } from '../lazy/useChunk'
 import { useAppStore, type LayoutMode, type PanelTab } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
@@ -33,6 +33,8 @@ export interface PanelProps {
   cleanup: CleanupReport
   /** starts a vs against the repo typed in; false when that is not a repo */
   onVs: (value: string) => boolean
+  /** opens a contributor's login in person mode (the people tab's link) */
+  onUser: (login: string) => void
   /** the repo's open pull requests (null for a saved file): row glyphs, the count line, search qualifiers */
   pulls?: PullsView | null
   /** some tip on the canvas carries a pull request mark (the legend then explains it) */
@@ -214,13 +216,15 @@ const VIEW_OPTIONS: ReadonlyArray<{ value: ViewMode; label: string }> = [
 const LAYOUT_OPTIONS: ReadonlyArray<{ value: LayoutMode; label: string }> = [
   { value: 'metro', label: 'metro' },
   { value: 'organic', label: 'organic' },
+  { value: 'coral', label: 'coral' },
 ]
 
 const STALE_SEGMENTS = STALE_OPTIONS.map((o) => ({ value: o.days, label: o.label }))
 
-/** the metro layout's engine is its own chunk: start on it when the pointer reaches the option */
+/** the metro and coral layouts' engines are chunks of their own: start on one when the pointer reaches its option */
 const preloadLayout = (mode: LayoutMode) => {
   if (mode === 'metro') preload(metroChunk)
+  else if (mode === 'coral') preload(coralChunk)
 }
 
 interface BranchRowProps {
@@ -426,7 +430,7 @@ function PrCountPhrase({ pulls, search, onSearch }: { pulls: PullsView; search: 
   )
 }
 
-export default function Panel({ data, palette, contributors, cleanup, onVs, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
+export default function Panel({ data, palette, contributors, cleanup, onVs, onUser, pulls = null, hasPrMarks = false, prMarksKnown = false }: PanelProps) {
   const [vsOpen, setVsOpen] = useState(false)
   const theme = useTheme()
   const panelOpen = useAppStore((s) => s.panelOpen)
@@ -446,8 +450,9 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
   const clearHiddenBranches = useAppStore((s) => s.clearHiddenBranches)
   const selectedBranch = useAppStore((s) => s.selectedBranch)
   const toggleSelectedBranch = useAppStore((s) => s.toggleSelectedBranch)
-  // metro picked, its engine still on the way (App loads it and keeps the old layout until then)
+  // metro or coral picked, its engine still on the way (App loads it and keeps the old layout until then)
   const metroLoading = useChunk(metroChunk, false).status === 'loading' && layoutMode === 'metro'
+  const coralLoading = useChunk(coralChunk, false).status === 'loading' && layoutMode === 'coral'
   const pickView = (view: ViewMode) => {
     if (view !== viewMode) track('view-mode', { view })
     setViewMode(view)
@@ -494,7 +499,7 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
         onClick={togglePanel}
         title="Open panel"
         aria-label="Open panel"
-        className="absolute right-0 top-4 z-20 rounded-l-lg border border-r-0 border-ui-border bg-ui-panel/95 px-1.5 py-2.5 text-ui-muted shadow-soft backdrop-blur hover:text-ui-text"
+        className="absolute right-0 top-4 z-20 rounded-l-xl border border-r-0 border-ui-border ui-glass px-1.5 py-3 text-ui-muted shadow-soft hover:text-ui-text max-sm:top-[4.5rem]"
       >
         <ChevronLeftIcon />
       </button>
@@ -504,7 +509,7 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
   const repoUrl = `https://github.com/${data.owner}/${data.repo}`
 
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 text-[13px] shadow-soft backdrop-blur">
+    <aside className="absolute bottom-3 right-3 top-3 z-20 flex w-[300px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-ui-border ui-glass text-[13px] shadow-soft">
       <header className="flex items-start gap-2 border-b border-ui-border px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <a
@@ -550,17 +555,17 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
       {vsOpen && <VsForm onVs={onVs} onDone={() => setVsOpen(false)} />}
 
       <div className="flex gap-2 px-3 py-2.5">
-        <div className="flex-1">
+        <div className="flex-[2]">
           <Segmented ariaLabel="View" options={VIEW_OPTIONS} value={viewMode} onChange={pickView} />
         </div>
-        <div className="flex-1" title="metro: straight lanes, like a tube map. organic: free physics">
+        <div className="flex-[3]" title="metro: straight lanes, like a tube map. organic: free physics. coral: grown upward like a sea fan">
           <Segmented
             ariaLabel="Layout"
             options={LAYOUT_OPTIONS}
             value={layoutMode}
             onChange={pickLayout}
             onIntent={preloadLayout}
-            pending={metroLoading ? 'metro' : null}
+            pending={metroLoading ? 'metro' : coralLoading ? 'coral' : null}
           />
         </div>
       </div>
@@ -576,7 +581,7 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
       {panelTab === 'contributors' ? (
         peopleCode.status === 'ready' ? (
           <LazySlot key="contributors" frame={TAB_FRAME} label="loading people">
-            <ContributorsTab contributors={contributors} palette={palette} now={now} />
+            <ContributorsTab contributors={contributors} palette={palette} now={now} onUser={onUser} />
           </LazySlot>
         ) : (
           // coming back to the tab, or the pointer reaching it, tries again
@@ -668,7 +673,7 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, pull
       )}
 
       <footer className="border-t border-ui-border px-3 py-2.5">
-        <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} />
+        <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} language={data.language} />
       </footer>
     </aside>
   )

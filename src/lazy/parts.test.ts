@@ -17,6 +17,7 @@ const LAZY_ONLY = [
   'components/ContributorsTab.tsx',
   'components/CleanupTab.tsx',
   'graph/metro.ts',
+  'graph/coral.ts',
   'graph/score.ts',
   'graph/versus.ts',
   'audio/musicBox.ts',
@@ -215,6 +216,7 @@ describe('lazy parts', () => {
         'export/exporters.ts',
         'export/video.ts',
         'graph/metro.ts',
+        'graph/coral.ts',
         'lazy/pullsPart.ts',
       ].sort(),
     )

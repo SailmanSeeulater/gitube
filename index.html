@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="application-name" content="gitube" />
+    <meta name="apple-mobile-web-app-title" content="gitube" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -27,6 +30,11 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p style="margin: 0; padding: 2rem; font: 15px/1.5 system-ui, sans-serif">
+        gitube draws its maps in your browser, so it needs JavaScript. Turn it on and reload the page.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

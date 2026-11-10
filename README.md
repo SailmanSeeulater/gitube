@@ -85,7 +85,22 @@ lane, oldest commits on the left. Forks and merges are interchanges, a branch
 cut off from its history starts with a dashed lead-in, and a merged branch
 that was since deleted runs on as a faint line. **Organic** lets the same
 graph settle under free force physics instead, which can read better for a
-tangled merge history.
+tangled merge history. **Coral** grows the repo upward like a sea fan: the
+default branch is the stalk, every other branch an arm that sweeps up and out
+to one side (the lower it forks, the further it reaches), and a merge is a
+faint dashed bridge back. Its arms never cross, and the whole coral is framed
+at once. Each repo grows its own, from four facts and nothing random:
+
+| What | Comes from | Shows as |
+|---|---|---|
+| Species | the repo's primary language | the growth form: **staghorn** (C, C++, Rust, Go: long, steep arms), **table coral** (Java, Kotlin, C#, Swift: flat and wide), **bush coral** (Python, R, shell, notebooks: short and dense), **sea fan** for everything else |
+| Taper | the history each line carries | thickness: a line is as wide as the square root of the commits above it, so the base is heavy and the tips fine |
+| Living tips | how long ago each branch moved | a tip that moved in the last 30 days glows; an arm with nothing recent on or above it fades, fully bleached after a year |
+| Sway | the repo's name | each arm's spacing, reach and gentle drift, hashed from `owner/repo`, so the same repo always grows the same coral |
+
+The language comes with the repo lookup the app already makes, so the coral
+costs no extra requests. A repo cached or saved before it was kept grows as a
+sea fan until it is fetched again.
 
 **Views.** **Skeleton** keeps branch tips, fork points, merges and roots, and
 folds straight runs of commits into one stretch with a `+N` count. **Full**
@@ -96,7 +111,8 @@ shows every fetched commit.
 - Hover a commit to light up its neighbours.
 - Pick a branch in the side panel to isolate its line, hide branches with the
   eye toggle, and filter out ones that have gone quiet (30 days, 90 days, a year).
-- The **people** tab ranks contributors by commits; pick one to light up their work.
+- The **people** tab ranks contributors by commits; pick one to light up their
+  work. Their expanded row links to GitHub and to their own life in person mode.
 - The **cleanup** tab lists merged branches nobody deleted, with the `git push`
   command to remove the ones you tick. It also lists **diverged** branches:
   far from the default branch on both sides, so a merge will likely hurt. The
@@ -120,6 +136,11 @@ and the like.
   repo-garden, gitube's old name, still open.
 - The address bar is a share link: it names the repo, the selected branch or
   person, and the other side of a vs.
+- **Themes.** The palette button opens 26 colour themes, 11 dark and 15 light,
+  from Obsidian (the default) to Coral and its dark sibling Reef. Each is
+  checked for contrast and for branch colours that stay apart, and they apply
+  to both modes. The choice is remembered in this browser.
+- Press `/` to jump to the address field. The mark at its left starts over.
 
 ## Person mode
 
@@ -152,6 +173,12 @@ The last five keep their own terminal colours whatever the theme. A link with
 
 **Around the canvas.**
 
+- **Zoom into a stretch of time** by dragging across it, as on a price chart:
+  the band names the dates, and letting go spreads them across the view.
+  Scroll or Shift-drag to move through time; double-click, press `0` or use
+  **reset zoom** for the whole life again. A finger still pans and pinches.
+- Click a repo to pin its card. A public repo's card links to GitHub and to
+  its own map in repo mode, the way a contributor in repo mode links here.
 - The side panel holds the repo list (search, hide, pick one to spotlight it),
   the milestones, and the legend, which ends with what GitHub's data leaves out.
 - **Replay** plays the life from its first day to today. Months with activity
@@ -300,7 +327,7 @@ Repo mode sends these:
 | Event | Data | Sent when |
 |---|---|---|
 | `load` | `mode: 'repo'`, `branches` (a bucket: `1`, `2-5`, `6-20`, `21-50`, `51-100`, `101+`), `cached`, `token`; `repo` only for a live fetch without a token | a repo's data arrived after Go, an example chip, a share link or a refresh: once per request. Not for a vs challenger, a token change, a background refetch or an opened file |
-| `layout-switch` | `layout`: `metro` or `organic` | another layout is picked |
+| `layout-switch` | `layout`: `metro`, `organic` or `coral` | another layout is picked |
 | `theme-switch` | `theme`: the theme's id | the theme picker closes on a different theme than it opened with |
 | `view-mode` | `view`: `skeleton` or `full` | another view is picked |
 | `timelapse-play` | none | the replay is opened |

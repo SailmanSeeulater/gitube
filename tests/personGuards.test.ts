@@ -259,6 +259,8 @@ describe('private repo names', () => {
       expect(panel.toLowerCase()).toContain(key)
       expect(inspector.toLowerCase()).toContain(key)
       expect(inspector.toLowerCase()).not.toContain(`href="https://github.com/${key}"`)
+      // nor a link into repo mode, which would carry the name into the address bar
+      expect(inspector).not.toContain('?repo=')
       const short = key.slice(key.indexOf('/') + 1)
       for (const view of VIEWS) {
         const { rec } = paintView(g, view, { hover: { kind: 'repo', key } })

@@ -80,26 +80,37 @@ const byId = (id: string): Theme => {
 }
 
 describe('theme set', () => {
-  it('has ten themes with unique ids, in THEME_IDS order', () => {
-    expect(THEMES).toHaveLength(10)
+  it('has twenty-six themes with unique ids and names, in THEME_IDS order', () => {
+    expect(THEMES).toHaveLength(26)
     const ids = THEMES.map((t) => t.id)
-    expect(new Set(ids).size).toBe(10)
+    expect(new Set(ids).size).toBe(26)
     expect(ids).toEqual([...THEME_IDS])
-    expect(new Set(THEMES.map((t) => t.name)).size).toBe(10)
+    expect(new Set(THEMES.map((t) => t.name)).size).toBe(26)
+    for (const id of ids) expect(id).toMatch(/^[a-z]+$/)
   })
 
-  it('has exactly two dark themes, Obsidian and Midnight; the other eight are light', () => {
-    expect(THEMES.filter((t) => t.mode === 'dark').map((t) => t.id)).toEqual(['obsidian', 'midnight'])
-    expect(THEMES.filter((t) => t.mode === 'light').map((t) => t.id)).toEqual([
-      'paper',
-      'slate',
-      'sage',
-      'sand',
-      'rose',
-      'sky',
-      'contrast',
-      'solar',
-    ])
+  it('lists its eleven dark themes first, Obsidian and Midnight leading; the other fifteen are light', () => {
+    const dark = ['obsidian', 'midnight', 'reef', 'fjord', 'ember', 'forest', 'plum', 'carbon', 'mocha', 'aurora', 'dusk']
+    const light = ['coral', 'paper', 'slate', 'sage', 'sand', 'rose', 'sky', 'contrast', 'solar', 'porcelain', 'lilac', 'tide', 'latte', 'dawn', 'citron']
+    expect(THEMES.filter((t) => t.mode === 'dark').map((t) => t.id)).toEqual(dark)
+    expect(THEMES.filter((t) => t.mode === 'light').map((t) => t.id)).toEqual(light)
+    expect(THEMES.map((t) => t.id)).toEqual([...dark, ...light])
+  })
+
+  it('has Coral in both modes: Coral by day, and Reef, its dark sibling, on the same coral hue', () => {
+    const [coral, reef] = [byId('coral'), byId('reef')]
+    expect(coral.mode).toBe('light')
+    expect(reef.mode).toBe('dark')
+    const hue = (hex: string) => hexToOklch(hex)[2]
+    expect(Math.abs(hue(coral.accent) - hue(reef.accent))).toBeLessThan(12)
+    for (const theme of [coral, reef]) {
+      expect(hue(theme.accent)).toBeGreaterThan(15)
+      expect(hue(theme.accent)).toBeLessThan(45)
+    }
+  })
+
+  it('writes on a solid accent fill in a colour that reads on it (the Go button)', () => {
+    for (const theme of THEMES) expect(contrastRatio(theme.accentText, theme.accent), theme.id).toBeGreaterThanOrEqual(4.5)
   })
 
   it('defaults to Obsidian, for unknown and missing ids too', () => {

@@ -44,6 +44,12 @@ export interface RepoData {
   truncated: boolean
   /** Which SHAs are known to have parents we did not fetch. */
   truncatedAt: string[]
+  /**
+   * The repo's primary language as GitHub names it ('TypeScript'); left out when it has none, and
+   * in data loaded before this was kept (an older cache entry or saved file). Picks the coral's
+   * species (graph/coralSpecies).
+   */
+  language?: string
 }
 
 export type FetchStage = 'repo' | 'branches' | 'compare' | 'trunk' | 'done'

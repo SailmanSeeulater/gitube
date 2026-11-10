@@ -219,7 +219,7 @@ export default function TimelapseBar({ onClose, graph, data, timeline, progress,
     <div
       role="group"
       aria-label="Time-lapse"
-      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-ui-border bg-ui-panel/95 px-2.5 py-2 text-[12px] shadow-soft backdrop-blur ${
+      className={`absolute bottom-4 left-4 z-20 flex w-[460px] flex-col gap-1 rounded-xl border border-ui-border ui-glass px-2.5 py-2 text-[12px] shadow-soft ${
         besidePanel ? 'max-w-[max(260px,calc(100vw-344px))]' : 'max-w-[calc(100vw-2rem)]'
       }`}
     >

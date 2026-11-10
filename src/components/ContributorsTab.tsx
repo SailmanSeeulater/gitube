@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { Contributor, ContributorIndex } from '../graph/contributors'
 import { useAppStore } from '../store/useAppStore'
 import { useTheme } from '../theme/useTheme'
 import { relativeTime } from './graphUtils'
-import { ExternalIcon, SearchIcon } from './icons'
+import { ExternalIcon, MetroIcon, SearchIcon } from './icons'
 
 export interface ContributorsTabProps {
   contributors: ContributorIndex
@@ -11,6 +11,8 @@ export interface ContributorsTabProps {
   palette: Record<string, string>
   /** one timestamp per loaded repo, shared with the branch list */
   now: number
+  /** open this login in person mode (their repos through the years) */
+  onUser: (login: string) => void
 }
 
 /** Branches listed under an expanded row before "+N more". */
@@ -51,6 +53,11 @@ function profileUrl(c: Contributor): string | null {
   if (!c.login) return null
   const bot = /^(.*)\[bot\]$/i.exec(c.login)
   return bot ? `https://github.com/apps/${bot[1]}` : `https://github.com/${c.login}`
+}
+
+/** The link that opens an account in person mode; null for a bot or a name with no account, which have no life to draw. */
+export function personHref(c: Pick<Contributor, 'login' | 'isBot'>): string | null {
+  return c.login && !c.isBot ? `./?user=${encodeURIComponent(c.login)}` : null
 }
 
 function Avatar({ contributor }: { contributor: Contributor }) {
@@ -160,12 +167,20 @@ interface DetailsProps {
   fallback: string
   windowStart: string
   windowEnd: string
+  onUser: (login: string) => void
 }
 
-function ContributorDetails({ contributor: c, palette, fallback, windowStart, windowEnd }: DetailsProps) {
+function ContributorDetails({ contributor: c, palette, fallback, windowStart, windowEnd, onUser }: DetailsProps) {
   const shown = c.branches.slice(0, MAX_BRANCHES_SHOWN)
   const more = c.branches.length - shown.length
   const profile = profileUrl(c)
+  const person = personHref(c)
+  // a plain click switches to person mode in place; with a modifier (or the middle button) the link opens as a link does
+  const openPerson = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!c.login || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onUser(c.login)
+  }
   return (
     <div className="mx-1 mb-1.5 mt-0.5 rounded-md bg-ui-field px-2.5 py-2 text-[11px] text-ui-muted">
       <div className="flex justify-between gap-2">
@@ -213,12 +228,23 @@ function ContributorDetails({ contributor: c, palette, fallback, windowStart, wi
           <span className="truncate">@{c.login}</span> on GitHub <ExternalIcon size={11} className="shrink-0" />
         </a>
       )}
+      {person && (
+        <a
+          href={person}
+          onClick={openPerson}
+          title={`Open @${c.login} in person mode: their repos as lines through the years`}
+          className="mt-1.5 flex max-w-full items-center gap-1.5 text-ui-accent hover:underline"
+        >
+          <MetroIcon size={12} className="shrink-0" />
+          <span className="truncate">see their life on gitube</span>
+        </a>
+      )}
     </div>
   )
 }
 
 /** The side panel's leaderboard: who wrote the loaded commits, and where. Selecting a row highlights their commits on the graph. */
-export default function ContributorsTab({ contributors, palette, now }: ContributorsTabProps) {
+export default function ContributorsTab({ contributors, palette, now, onUser }: ContributorsTabProps) {
   const fallback = useTheme().fallback
   const selected = useAppStore((s) => s.selectedContributor)
   const toggleSelected = useAppStore((s) => s.toggleSelectedContributor)
@@ -306,6 +332,7 @@ export default function ContributorsTab({ contributors, palette, now }: Contribu
                 fallback={fallback}
                 windowStart={contributors.windowStart}
                 windowEnd={contributors.windowEnd}
+                onUser={onUser}
               />
             )}
           </li>
