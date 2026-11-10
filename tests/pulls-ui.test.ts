@@ -75,6 +75,7 @@ function panel(pulls: PullsView | null, hasPrMarks = false, prMarksKnown = false
       contributors: buildContributors(data),
       cleanup: findCleanup(data),
       onVs: () => true,
+      onUser: () => undefined,
       pulls,
       hasPrMarks,
       prMarksKnown,

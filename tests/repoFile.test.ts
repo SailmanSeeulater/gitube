@@ -33,6 +33,20 @@ describe('repo files', () => {
     expect(JSON.parse(serializeRepoFile(data, now)).format).toBe('gitube')
   })
 
+  it("keeps the repo's language when it is a language's name, and opens a file without one", () => {
+    const data = hexRepo()
+    for (const language of ['TypeScript', 'C++', 'C#', 'Jupyter Notebook', 'Objective-C']) {
+      expect(parseRepoFile(serializeRepoFile({ ...data, language })).data.language).toBe(language)
+    }
+    // saved before the language was kept, or holding something that is not a name: opened without it
+    expect('language' in parseRepoFile(serializeRepoFile(data)).data).toBe(false)
+    for (const bad of ['', '<img src=x>', 'a'.repeat(41), 7, null, ['Rust']]) {
+      const file = JSON.parse(serializeRepoFile(data))
+      file.data.language = bad
+      expect('language' in parseRepoFile(JSON.stringify(file)).data, String(bad)).toBe(false)
+    }
+  })
+
   it('opens a file saved under the old name, repo-garden, as it always did', () => {
     const data = hexRepo()
     const old = JSON.parse(serializeRepoFile(data, new Date('2026-10-21T12:00:00Z')))

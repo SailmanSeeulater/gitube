@@ -91,7 +91,7 @@ export default function ExportMenu({ id, canExport, canExportData = canExport, o
       aria-label="Save or open"
       onKeyDown={onKeyDown}
       onBlur={onBlur}
-      className="w-[260px] self-end rounded-xl border border-ui-border bg-ui-panel/95 p-1.5 text-[12px] shadow-soft backdrop-blur"
+      className="ui-glass ui-pop w-[260px] self-end rounded-2xl border border-ui-border p-1.5 text-[12px] shadow-soft"
     >
       <Item
         icon={<ImageIcon size={14} />}

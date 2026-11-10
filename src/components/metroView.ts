@@ -59,6 +59,10 @@ export interface MetroDrawRoute {
   dashed: boolean
   /** 0: muted and dashed (drawn first), 1: lane changes, 2: plain lines (drawn last, on top) */
   layer: 0 | 1 | 2
+  /** its width as a factor of the plain line's (the coral's taper); 1 on a metro map */
+  weight: number
+  /** how far its colour has faded towards the neutral, 0..1 (the coral's quiet arms); 0 on a metro map */
+  bleach: number
 }
 
 /** A skeleton link that hides commits ('+N'), in graph units. */
@@ -78,10 +82,14 @@ export interface MetroBadge {
    * are taken), and only the bars on the line are drawn
    */
   textY: number | null
+  /** centre of the '+N' text across, when the layout put it beside a line that is not level; over x otherwise */
+  textX?: number
   /** length of the horizontal carrier the run sits on (0: none) */
   room: number
   hidden: number
   text: string
+  /** the width of the route it breaks, as a factor of the plain line's (see MetroDrawRoute.weight) */
+  weight: number
 }
 
 /**
@@ -204,6 +212,11 @@ export interface MetroView {
   commitGap: Map<string, number>
   /** bbox of the stations and stubs in graph units, for fit-to-view */
   bbox: { x: [number, number]; y: [number, number] }
+  /** the camera frames all of it, centred, however small (see MetroLayout.fit); a metro map keeps its lanes readable instead */
+  wholeFit: boolean
+  /** stations drawn faded, by how much (0..1), and tips drawn with a glow: the coral's quiet arms and live tips; null on a metro map */
+  bleach: ReadonlyMap<string, number> | null
+  polyps: ReadonlySet<string> | null
 }
 
 export function routeLayer(route: { muted: boolean; dashed: boolean; kind: string }): 0 | 1 | 2 {
@@ -240,6 +253,8 @@ export function buildMetroView(layout: MetroLayout, nodes: ReadonlyArray<{ id: s
       muted: r.muted,
       dashed: r.dashed,
       layer: routeLayer(r),
+      weight: r.weight ?? 1,
+      bleach: r.bleach ?? 0,
     }
   })
   routes.sort((a, c) => a.layer - c.layer || a.linkIndex - c.linkIndex)
@@ -286,9 +301,11 @@ export function buildMetroView(layout: MetroLayout, nodes: ReadonlyArray<{ id: s
       target: r.target,
       ...at,
       textY: run.markerY === null ? null : Y(run.markerY),
+      ...(run.markerX === undefined ? {} : { textX: X(run.markerX) }),
       room: run.room * scale,
       hidden: run.hidden,
       text: `+${run.hidden}`,
+      weight: r.weight,
     })
   }
 
@@ -348,6 +365,9 @@ export function buildMetroView(layout: MetroLayout, nodes: ReadonlyArray<{ id: s
     segTgt: segTgt.subarray(0, m),
     commitGap,
     bbox,
+    wholeFit: layout.fit === 'whole',
+    bleach: layout.bleach ?? null,
+    polyps: layout.polyps ?? null,
   }
 }
 
@@ -464,6 +484,21 @@ export function metroRevealTransform(
     if (t.k >= Math.min(cam.k, minZoom) - 1e-9) return t
   }
   return inView(primary) ? null : frame(primary)
+}
+
+/** A bleached line or station keeps this much of its own colour at full bleach; the rest is the theme's neutral. */
+export const BLEACH_KEEP = 0.22
+/** Bleach is drawn in this many steps, so a frame mixes each colour a handful of times at most. */
+export const BLEACH_STEPS = 6
+
+/** The step (0..BLEACH_STEPS) a bleach of 0..1 is drawn at; 0 is the colour untouched. */
+export function bleachStep(bleach: number): number {
+  return bleach > 0 ? Math.max(1, Math.round(Math.min(1, bleach) * BLEACH_STEPS)) : 0
+}
+
+/** How much of the neutral a bleach step mixes in, 0..1 - BLEACH_KEEP. */
+export function bleachMix(step: number): number {
+  return (step / BLEACH_STEPS) * (1 - BLEACH_KEEP)
 }
 
 /** Smooth start and stop for the node tween, t in [0, 1]. */

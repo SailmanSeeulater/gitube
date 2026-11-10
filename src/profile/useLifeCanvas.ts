@@ -1,7 +1,9 @@
 /**
  * The canvas host person mode's views share: a canvas that fills its box at the device's pixel
  * ratio, an x-only camera over the life's days (lifeCamera.ts) that the wheel, a drag, a pinch and
- * the keyboard move, and frames painted on demand. A frame is painted only when something asks for
+ * the keyboard move, and frames painted on demand. A mouse drag marks a stretch of time and zooms
+ * into it on release (the brush, drawn over the view while it is dragged); with Shift held, and
+ * for a finger or a pen, a drag pans. A frame is painted only when something asks for
  * one (invalidate, a camera move, a new size, a new paint function); frames keep coming only while
  * the camera glides or the paint asks for more (labels settling, the time-lapse playing).
  *
@@ -9,10 +11,39 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { LifeCamera, LifeViewport } from './lifeTypes'
-import { clampLifeCamera, fitLifeCamera, panLifeCamera, resizeLifeCamera, zoomLifeCamera } from './lifeCamera'
+import {
+  clampLifeCamera,
+  fitLifeCamera,
+  isZoomedLifeCamera,
+  panLifeCamera,
+  resizeLifeCamera,
+  screenToWorldX,
+  windowLifeCamera,
+  zoomLifeCamera,
+} from './lifeCamera'
 
 /** Paints one frame (the context has the device pixel transform set); true asks for another. */
 export type LifePaint = (ctx: CanvasRenderingContext2D, view: LifeViewport, camera: LifeCamera, dtMs: number) => boolean
+
+/** How the brush (the stretch of time a mouse drag marks) is drawn. */
+export interface LifeBrushStyle {
+  /** the band and its two edges */
+  accent: string
+  /** the label's text, and the plate behind it */
+  text: string
+  plateFill: string
+  plateRing: string
+  /** the label's font, as the canvas takes it */
+  font: string
+  /** what the stretch between world x from and to (days since the life's start) is called; '' for no label */
+  label: (from: number, to: number) => string
+}
+
+/** The brush while it is dragged: the day it was pressed on (world x) and where the pointer is (screen x). */
+export interface LifeBrush {
+  anchor: number
+  x: number
+}
 
 export interface LifeCanvasOptions {
   /** the world's width: the life's days */
@@ -24,6 +55,8 @@ export interface LifeCanvasOptions {
   paint: LifePaint
   /** a new value fits the camera to the whole life again (a new profile) */
   fitKey?: unknown
+  /** how the brush is drawn; its identity may change with every render */
+  brush: LifeBrushStyle
 }
 
 export interface LifeCanvasHandle {
@@ -39,6 +72,8 @@ export interface LifeCanvasHandle {
   invalidate: () => void
   /** the last press dragged or pinched the camera, so the click that ends it is not a click */
   wasDrag: () => boolean
+  /** the camera shows a part of the life, not all of it: there is something to zoom back out of */
+  zoomed: boolean
 }
 
 /** a refit's glide, and a key's */
@@ -52,6 +87,58 @@ const WHEEL_ZOOM = 0.0015
 const PINCH_WHEEL_ZOOM = 0.01
 /** a press moving less than this is a click, not a drag */
 const DRAG_PX = 4
+/** a brush narrower than this on release zooms nowhere: too small to have been meant */
+export const BRUSH_MIN_PX = 8
+/** the brush's band is its accent at this alpha */
+const BRUSH_FILL_ALPHA = 0.16
+/** the brush's label: its height, its padding and its gap from the top of the plot */
+const BRUSH_LABEL_H = 20
+const BRUSH_LABEL_PAD = 7
+
+/** The screen x a brush spans, left to right, kept inside the plot. */
+export function brushSpan(brush: LifeBrush, camera: LifeCamera, view: LifeViewport): [number, number] {
+  const inPlot = (x: number) => Math.min(view.width - view.side, Math.max(view.side, x))
+  const a = inPlot(camera.tx + brush.anchor * camera.k)
+  const b = inPlot(brush.x)
+  return a <= b ? [a, b] : [b, a]
+}
+
+/**
+ * Draws the brush over a painted frame: a band of the accent down the whole view between the press
+ * and the pointer, an edge at each end, and what the stretch is called on a plate at its top.
+ */
+export function paintBrush(ctx: CanvasRenderingContext2D, view: LifeViewport, camera: LifeCamera, brush: LifeBrush, style: LifeBrushStyle): void {
+  const [x0, x1] = brushSpan(brush, camera, view)
+  ctx.save()
+  ctx.globalAlpha = BRUSH_FILL_ALPHA
+  ctx.fillStyle = style.accent
+  ctx.fillRect(x0, 0, x1 - x0, view.height)
+  ctx.globalAlpha = 1
+  ctx.fillStyle = style.accent
+  ctx.fillRect(Math.round(x0), 0, 1, view.height)
+  ctx.fillRect(Math.round(x1) - 1, 0, 1, view.height)
+  const text = style.label(screenToWorldX(camera, x0), screenToWorldX(camera, x1))
+  if (text !== '') {
+    ctx.font = style.font
+    ctx.textBaseline = 'middle'
+    ctx.textAlign = 'center'
+    const w = Math.ceil(ctx.measureText(text).width) + 2 * BRUSH_LABEL_PAD
+    // over the brush's middle, kept inside the canvas
+    const cx = Math.min(view.width - w / 2 - 4, Math.max(w / 2 + 4, (x0 + x1) / 2))
+    const y = view.top + 6
+    ctx.fillStyle = style.plateFill
+    ctx.strokeStyle = style.plateRing
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(cx - w / 2, y, w, BRUSH_LABEL_H, 6)
+    else ctx.rect(cx - w / 2, y, w, BRUSH_LABEL_H)
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = style.text
+    ctx.fillText(text, cx, y + BRUSH_LABEL_H / 2 + 0.5)
+  }
+  ctx.restore()
+}
 
 /** The camera on its way from one place to another. */
 export interface LifeGlide {
@@ -99,6 +186,12 @@ export class CanvasLoop {
   dpr = 1
   paint: LifePaint = () => false
   dragged = false
+  /** the brush while a mouse drag marks a stretch of time, drawn over every frame; null otherwise */
+  brush: LifeBrush | null = null
+  brushStyle: LifeBrushStyle | null = null
+  /** whether the last frame showed a part of the life, and who hears when that changes */
+  zoomed = false
+  onZoomed: ((zoomed: boolean) => void) | null = null
   private glide: LifeGlide | null = null
   private raf = 0
   private last = -1
@@ -165,6 +258,12 @@ export class CanvasLoop {
     }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
     const more = this.paint(ctx, view, this.camera, dt)
+    if (this.brush && this.brushStyle) paintBrush(ctx, view, this.camera, this.brush, this.brushStyle)
+    const zoomed = isZoomedLifeCamera(this.glide ? this.glide.to : this.camera, this.days, view)
+    if (zoomed !== this.zoomed) {
+      this.zoomed = zoomed
+      this.onZoomed?.(zoomed)
+    }
     if (more || this.glide) this.invalidate()
     else this.last = -1
   }
@@ -175,11 +274,22 @@ function pixelRatio(): number {
 }
 
 export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
-  const { days, top, ground, side, paint, fitKey } = opts
+  const { days, top, ground, side, paint, fitKey, brush } = opts
   const hostRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [loop] = useState(() => new CanvasLoop())
   const [size, setSize] = useState({ width: 0, height: 0, dpr: 1 })
+  const [zoomed, setZoomed] = useState(false)
+  useLayoutEffect(() => {
+    loop.onZoomed = setZoomed
+    return () => {
+      loop.onZoomed = null
+    }
+  }, [loop])
+  // the latest render's brush style: read when a frame draws the brush
+  useLayoutEffect(() => {
+    loop.brushStyle = brush
+  }, [loop, brush])
   const view = useMemo<LifeViewport | null>(
     () => (size.width > 0 && size.height > 0 ? { width: size.width, height: size.height, top, ground, side } : null),
     [size, top, ground, side],
@@ -243,16 +353,23 @@ export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
     const canvas = canvasRef.current
     if (!canvas) return
     const pointers = new Map<number, { x: number; y: number }>()
-    let drag: { x: number; camera: LifeCamera; moved: boolean } | null = null
+    // one pointer down: it pans the camera, or (a mouse without Shift) brushes a stretch of time to zoom into
+    let drag: { x: number; camera: LifeCamera; moved: boolean; brush: boolean } | null = null
     let pinch: { dist: number; mid: number; camera: LifeCamera } | null = null
     const localX = (clientX: number) => clientX - canvas.getBoundingClientRect().left
-    const startDrag = (x: number) => {
-      drag = loop.camera ? { x, camera: loop.camera, moved: false } : null
+    const startDrag = (x: number, brush = false) => {
+      drag = loop.camera ? { x, camera: loop.camera, moved: false, brush } : null
+    }
+    const endBrush = () => {
+      if (loop.brush === null) return
+      loop.brush = null
+      loop.invalidate()
     }
     const startPinch = () => {
       const [a, b] = [...pointers.values()]
       pinch = loop.camera ? { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mid: localX((a.x + b.x) / 2), camera: loop.camera } : null
       drag = null
+      endBrush()
     }
 
     const onWheel = (e: WheelEvent) => {
@@ -272,7 +389,7 @@ export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
       canvas.setPointerCapture?.(e.pointerId)
       loop.hold()
-      if (pointers.size === 1) startDrag(e.clientX)
+      if (pointers.size === 1) startDrag(e.clientX, e.pointerType === 'mouse' && !e.shiftKey)
       else if (pointers.size === 2) startPinch()
     }
     const onMove = (e: PointerEvent) => {
@@ -295,6 +412,14 @@ export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
       if (!drag.moved && Math.abs(dx) < DRAG_PX) return
       drag.moved = true
       loop.dragged = true
+      if (drag.brush) {
+        // the press keeps its day and the other end follows the pointer, even if the wheel moves the camera meanwhile
+        const camera = loop.camera ?? drag.camera
+        loop.brush = { anchor: loop.brush?.anchor ?? screenToWorldX(camera, localX(drag.x)), x: localX(e.clientX) }
+        canvas.style.cursor = 'ew-resize'
+        loop.invalidate()
+        return
+      }
       canvas.style.cursor = 'grabbing'
       loop.set(panLifeCamera(drag.camera, dx, loop.days, v))
     }
@@ -304,12 +429,26 @@ export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
       const rest = [...pointers.values()]
       if (rest.length === 1) startDrag(rest[0].x)
       else if (rest.length === 0) {
+        // a brush let go zooms into what it marked; one cancelled (the pointer was taken away) does not
+        const { brush, camera, view: v } = loop
+        if (brush && camera && v && e.type === 'pointerup') {
+          const [x0, x1] = brushSpan(brush, camera, v)
+          if (x1 - x0 >= BRUSH_MIN_PX) loop.set(windowLifeCamera(camera, x0, x1, loop.days, v), FIT_GLIDE_MS)
+        }
+        endBrush()
         drag = null
         canvas.style.cursor = ''
       }
     }
     const onDoubleClick = () => loop.fit(FIT_GLIDE_MS)
     const onKey = (e: KeyboardEvent) => {
+      // Escape lets go of a brush without zooming
+      if (e.key === 'Escape' && loop.brush) {
+        drag = null
+        endBrush()
+        canvas.style.cursor = ''
+        return
+      }
       const { view: v, camera } = loop
       if (!v || !camera || e.altKey || e.ctrlKey || e.metaKey) return
       const centre = v.width / 2
@@ -361,7 +500,8 @@ export function useLifeCanvas(opts: LifeCanvasOptions): LifeCanvasHandle {
       fit: (glideMs) => loop.fit(glideMs),
       invalidate: loop.invalidate,
       wasDrag: () => loop.dragged,
+      zoomed,
     }),
-    [loop, view],
+    [loop, view, zoomed],
   )
 }

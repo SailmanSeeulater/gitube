@@ -116,9 +116,12 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
   // ---------- 1. repo ----------
   throwIfAborted()
   let defaultBranch: string
+  let language: string | null = null
   try {
     const repoRes = await octokit.repos.get({ owner, repo })
     defaultBranch = repoRes.data.default_branch
+    // the same answer names the primary language: kept, at no request of its own
+    language = typeof repoRes.data.language === 'string' && repoRes.data.language !== '' ? repoRes.data.language : null
   } catch (err) {
     throw toFetchError(err, ctx(`looking up ${owner}/${repo}`))
   }
@@ -367,6 +370,7 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
     commits,
     truncated,
     truncatedAt: [...truncatedAt],
+    ...(language === null ? {} : { language }),
   }
 }
 

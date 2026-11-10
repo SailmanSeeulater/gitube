@@ -2,7 +2,8 @@
  * The canvas every person-mode view shares (PROFILE_SPEC.md section 5): life lines, the
  * constellation or a console view, as def says, along one time axis. Hover a repo or its label for the repo,
  * or the ground for the day (the inspector follows the hover in usePersonStore), click to select,
- * drag or scroll to move through time.
+ * drag across a stretch of time to zoom into it (as a price chart does), scroll or Shift-drag to
+ * move through time, and double-click, press 0 or use "reset zoom" for the whole life again.
  *
  * It reads and writes usePersonStore's hidden repos, hover, selection and focus. The canvas paints
  * from the store directly, so a hover repaints without a render; the frame, the hit test and the
@@ -23,12 +24,15 @@ import { lifeInk } from './lifeInk'
 import { VIEW_GROUND, VIEW_SIDE, VIEW_TOP } from './lifeGeometry'
 import { revealLifeCamera } from './lifeCamera'
 import { makeViewPaint } from './lifePaint'
-import type { LifeLabelSet } from './useLifeLabels'
-import { useLifeCanvas } from './useLifeCanvas'
+import { dayKey } from './timeline'
+import { LIFE_LABEL_FONT, type LifeLabelSet } from './useLifeLabels'
+import { useLifeCanvas, type LifeBrushStyle } from './useLifeCanvas'
 import { usePersonStore } from './usePersonStore'
 
 /** the glide that brings a repo or a day the panel asked for into view */
 const FOCUS_GLIDE_MS = 420
+/** the glide back to the whole life from "reset zoom" */
+const RESET_GLIDE_MS = 320
 
 export interface LifeViewProps<L extends LifeViewModel = LifeViewModel> {
   /** the view on show */
@@ -59,6 +63,30 @@ export function lifeViewLabel(title: string, login: string, count: number, timel
   return `${title} of ${login}: ${count} repo${count === 1 ? '' : 's'}${years}`
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** a stretch shorter than this is named by its days, a longer one by its months */
+const WINDOW_DAYS_AS_DAYS = 92
+
+/**
+ * What a stretch of the life is called while a drag marks it: world x from and to (days since
+ * startDay) as "3 Mar – 19 Apr 2019" for a short one, "Mar 2019 – Aug 2021" for a long one. Dates
+ * and nothing else: no repo is named.
+ */
+export function lifeWindowLabel(startDay: number, from: number, to: number): string {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || !(to > from)) return ''
+  const first = dayKey(startDay + Math.floor(from + 1e-6))
+  const last = dayKey(startDay + Math.max(Math.floor(from + 1e-6), Math.ceil(to - 1e-6) - 1))
+  const part = (key: string) => ({ year: key.slice(0, 4), month: MONTHS[+key.slice(5, 7) - 1], date: String(+key.slice(8, 10)) })
+  const a = part(first)
+  const b = part(last)
+  if (to - from < WINDOW_DAYS_AS_DAYS) {
+    if (first === last) return `${a.date} ${a.month} ${a.year}`
+    return a.year === b.year ? `${a.date} ${a.month} – ${b.date} ${b.month} ${b.year}` : `${a.date} ${a.month} ${a.year} – ${b.date} ${b.month} ${b.year}`
+  }
+  if (a.year === b.year) return a.month === b.month ? `${a.month} ${a.year}` : `${a.month} – ${b.month} ${b.year}`
+  return `${a.month} ${a.year} – ${b.month} ${b.year}`
+}
+
 export default function LifeView<L extends LifeViewModel>({ def, layout, timeline, theme, colourOf, name, login, timelapse = null }: LifeViewProps<L>) {
   const ink = useMemo(() => viewInk(lifeInk(theme), def), [theme, def])
   /** the pointer over the canvas while no button is down; null otherwise */
@@ -87,6 +115,19 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
   }, [def, painter])
   const { hitAt, pickAt } = painter
 
+  // the brush (a drag's stretch of time) in the view's own ink, so it reads on a console view's screen too
+  const brush = useMemo<LifeBrushStyle>(
+    () => ({
+      accent: ink.accent,
+      text: ink.text,
+      plateFill: ink.labelPlateFill,
+      plateRing: ink.labelPlateRing,
+      font: LIFE_LABEL_FONT,
+      label: (from, to) => lifeWindowLabel(layout.startDay, from, to),
+    }),
+    [ink, layout.startDay],
+  )
+
   // a new person (or a life that now starts elsewhere) is fitted; a refetch of the same one, or
   // another view of it, keeps the camera
   const canvas = useLifeCanvas({
@@ -96,6 +137,7 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
     side: VIEW_SIDE,
     paint: painter.paint,
     fitKey: `${login.toLowerCase()} ${layout.startDay}`,
+    brush,
   })
   const { invalidate, getCamera, getView, setCamera, wasDrag, fit } = canvas
 
@@ -141,7 +183,7 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
   }
 
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
-    // no hover while a drag pans the camera
+    // no hover while a drag brushes a stretch of time or pans the camera
     if (e.buttons !== 0) {
       pointerRef.current = null
       return
@@ -175,7 +217,7 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
   const label = lifeViewLabel(def.title, login, def.scene.items(layout).length, timeline)
 
   return (
-    <div ref={canvas.hostRef} className="h-full w-full">
+    <div ref={canvas.hostRef} className="relative h-full w-full">
       <canvas
         ref={canvas.canvasRef}
         role="img"
@@ -187,6 +229,18 @@ export default function LifeView<L extends LifeViewModel>({ def, layout, timelin
         onClick={onClick}
         onKeyDown={onKeyDown}
       />
+      {canvas.zoomed && !lapsing && (
+        // under the bar's row and clear of the panel's handle; placed by style, as person mode adds no class of its own
+        <button
+          type="button"
+          onClick={() => fit(RESET_GLIDE_MS)}
+          title="Show the whole life again (double-click the view, or press 0)"
+          style={{ position: 'absolute', top: 72, right: 44 }}
+          className="ui-glass ui-press z-10 flex items-center gap-1.5 rounded-lg border border-ui-border px-2.5 py-1 text-[12px] text-ui-text-dim shadow-soft hover:text-ui-text"
+        >
+          reset zoom
+        </button>
+      )}
     </div>
   )
 }

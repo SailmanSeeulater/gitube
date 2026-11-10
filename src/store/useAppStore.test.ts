@@ -192,6 +192,12 @@ describe('useAppStore', () => {
     expect(readStoredLayoutMode()).toBe('metro')
     useAppStore.getState().setLayoutMode('organic')
     expect(readStoredLayoutMode()).toBe('organic')
+    // coral is saved and read back like the others, and the toggle leaves it for metro
+    useAppStore.getState().setLayoutMode('coral')
+    expect(store.get(LAYOUT_STORAGE_KEY)).toBe('coral')
+    expect(readStoredLayoutMode()).toBe('coral')
+    useAppStore.getState().toggleLayoutMode()
+    expect(useAppStore.getState().layoutMode).toBe('metro')
     // anything else saved opens on metro, the default
     for (const saved of ['bogus', 'Organic']) {
       store.set(LAYOUT_STORAGE_KEY, saved)

@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, type MouseEvent } from 'react'
 import type { ProfileData } from '../types'
-import { CloseIcon, ExternalIcon } from '../components/icons'
+import { CloseIcon, ExternalIcon, MetroIcon } from '../components/icons'
 import { dayDetail, type DayIndex } from './dayIndex'
 import type { LifeHover, RepoNamer, ShownName } from './lifeTypes'
 import { GRAPHQL_FAILED } from './PersonLegend'
@@ -17,10 +17,17 @@ export interface PersonInspectorProps {
   colourOf: (language: string | null) => string
   /** the only way a repo name reaches the inspector */
   name: RepoNamer
+  /** open a repo ('owner/name') in repo mode: its branches as a map. Left out, the card's link still opens it, as a link. */
+  onRepo?: (nameWithOwner: string) => void
+}
+
+/** The link that opens a repo in repo mode, as the address bar would name it. */
+export function repoHref(nameWithOwner: string): string {
+  return `./?repo=${nameWithOwner.split('/').map(encodeURIComponent).join('/')}`
 }
 
 const shell =
-  'absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border bg-ui-panel/95 p-3 text-[13px] shadow-soft backdrop-blur'
+  'absolute bottom-16 left-4 z-20 w-[340px] max-w-[calc(100vw-2rem)] rounded-xl border border-ui-border ui-glass p-3 text-[13px] shadow-soft'
 
 /** A card that only follows the hover lets the pointer through: opened under it, it would take the hover and close, again and again. */
 const hoverShell = `${shell} pointer-events-none`
@@ -48,14 +55,21 @@ function Name({ shown, className }: { shown: ShownName; className: string }) {
   )
 }
 
-function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
+function RepoCard({ lane, profile, colour, shown, pinned, onClose, onRepo }: {
   lane: Lane
   profile: ProfileData
   colour: string
   shown: ShownName
   pinned: boolean
   onClose: () => void
+  onRepo?: (nameWithOwner: string) => void
 }) {
+  // a plain click switches to repo mode in place; with a modifier (or the middle button) the link opens as a link does
+  const openRepo = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!onRepo || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onRepo(lane.repo)
+  }
   const graphql = profile.source === 'graphql'
   const kinds: string[] = []
   if (!lane.isOwn) kinds.push('contributed')
@@ -149,6 +163,20 @@ function RepoCard({ lane, profile, colour, shown, pinned, onClose }: {
           </a>
         )}
       </div>
+      {/* ...nor one into repo mode, which would put its name in the address bar */}
+      {!shown.locked && (
+        <div className="mt-1.5 flex justify-end text-[12px]">
+          <a
+            href={repoHref(lane.repo)}
+            onClick={openRepo}
+            title="Open this repo in repo mode: its branches as a map"
+            className="flex items-center gap-1.5 text-ui-accent hover:underline"
+          >
+            <MetroIcon size={12} className="shrink-0" />
+            see its map on gitube
+          </a>
+        </div>
+      )}
     </div>
   )
 }
@@ -277,7 +305,7 @@ export function inspectorCard(hover: LifeHover, selected: string | null): Inspec
  * selected repo (inspectorCard). Every name comes through the namer, and dates are GitHub's day
  * keys as written.
  */
-export default function PersonInspector({ profile, timeline, days, colourOf, name }: PersonInspectorProps) {
+export default function PersonInspector({ profile, timeline, days, colourOf, name, onRepo }: PersonInspectorProps) {
   const hover = usePersonStore((s) => s.hover)
   const selected = usePersonStore((s) => s.selected)
   const select = usePersonStore((s) => s.select)
@@ -299,6 +327,7 @@ export default function PersonInspector({ profile, timeline, days, colourOf, nam
       shown={name(lane.repo)}
       pinned={card.pinned}
       onClose={() => select(null)}
+      onRepo={onRepo}
     />
   )
 }

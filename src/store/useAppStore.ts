@@ -6,7 +6,7 @@ import { isThemeId, type ThemeId } from '../theme/themes'
 import { LAYOUT_STORAGE_KEY, TOKEN_STORAGE_KEY } from '../storageKeys'
 
 /** How the repo is laid out: pinned to a straight metro map (the default), or free force physics. */
-export type LayoutMode = 'metro' | 'organic'
+export type LayoutMode = 'metro' | 'organic' | 'coral'
 
 /** Which list the side panel shows. */
 export type PanelTab = 'branches' | 'contributors' | 'cleanup'
@@ -26,7 +26,8 @@ function readStoredToken(): string {
 export function readStoredLayoutMode(): LayoutMode {
   try {
     if (typeof localStorage === 'undefined') return 'metro'
-    return localStorage.getItem(LAYOUT_STORAGE_KEY) === 'organic' ? 'organic' : 'metro'
+    const saved = localStorage.getItem(LAYOUT_STORAGE_KEY)
+    return saved === 'organic' || saved === 'coral' ? saved : 'metro'
   } catch {
     return 'metro'
   }
@@ -55,7 +56,7 @@ export interface AppState {
   /** GitHub personal access token, '' when unset. Persisted under TOKEN_STORAGE_KEY. */
   token: string
   viewMode: ViewMode
-  /** organic (force physics) or metro (straight lanes). Persisted under LAYOUT_STORAGE_KEY. */
+  /** metro (straight lanes), organic (force physics) or coral (a fan grown upward). Persisted under LAYOUT_STORAGE_KEY. */
   layoutMode: LayoutMode
   /** Branch names hidden via the eye toggle. Replaced immutably on every change. */
   hiddenBranches: ReadonlySet<string>

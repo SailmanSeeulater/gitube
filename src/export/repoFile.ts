@@ -45,6 +45,8 @@ const SHA_RE = /^[0-9a-f]{4,64}$/i
 /** GitHub logins: alphanumerics and hyphens; app accounts end in [bot]. */
 const LOGIN_RE = /^[A-Za-z0-9-]{1,39}(\[bot\])?$/
 const AVATAR_HOST = 'avatars.githubusercontent.com'
+/** A language as GitHub names one: 'C++', 'Jupyter Notebook', 'F#', 'Objective-C'. */
+const LANGUAGE_RE = /^[A-Za-z0-9][A-Za-z0-9 +#.'*_-]{0,39}$/
 
 type Json = Record<string, unknown>
 
@@ -157,11 +159,13 @@ export function parseRepoFile(text: string): RepoFile {
   if (typeof raw.truncated !== 'boolean') fail('the truncation flag is missing')
   if (!Array.isArray(raw.truncatedAt)) fail('the truncation list is missing')
   const truncatedAt = raw.truncatedAt.map((s, i) => sha(s, `truncation entry ${i + 1}`))
+  // optional (files saved before it was kept have none); a name, never markup: it is only looked up and shown as text
+  const language = typeof raw.language === 'string' && LANGUAGE_RE.test(raw.language) ? raw.language : null
 
   return {
     format: REPO_FILE_FORMAT,
     version: REPO_FILE_VERSION,
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
-    data: { owner, repo, defaultBranch, branches, commits, truncated: raw.truncated, truncatedAt },
+    data: { owner, repo, defaultBranch, branches, commits, truncated: raw.truncated, truncatedAt, ...(language === null ? {} : { language }) },
   }
 }

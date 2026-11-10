@@ -21,7 +21,7 @@ export interface PersonStatusProps {
 }
 
 const shell =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 text-[12px] shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border ui-glass text-[12px] shadow-soft'
 
 const warnChip = 'rounded-md border border-ui-warn/40 bg-ui-warn/10 px-1.5 py-px text-[11px] text-ui-warn'
 
@@ -35,6 +35,7 @@ const warnChip = 'rounded-md border border-ui-warn/40 bg-ui-warn/10 px-1.5 py-px
 export default function PersonStatus({ profile, timeline, cachedAt, hasToken, onRefresh, onAddToken, onTimelapse }: PersonStatusProps) {
   // the core budget as the latest response put it; GraphQL points never land here
   const rate = useAppStore((s) => s.rate)
+  const panelOpen = useAppStore((s) => s.panelOpen)
   const repos = timeline.lanes.length
   // years from GitHub's day keys, read as written
   const from = timeline.start.slice(0, 4)
@@ -53,7 +54,13 @@ export default function PersonStatus({ profile, timeline, cachedAt, hasToken, on
   const remaining = rate?.remaining ?? null
 
   return (
-    <div className={`${shell} flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5`} role="status">
+    <div
+      className={`${shell} flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 ${
+        // beside the panel it keeps 16px + the panel's 312px + 16px clear, as the time-lapse bar does
+        panelOpen ? 'max-w-[max(260px,calc(100vw-344px))]' : 'max-w-[calc(100vw-2rem)]'
+      }`}
+      role="status"
+    >
       {onTimelapse && (
         <button
           type="button"

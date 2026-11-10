@@ -49,6 +49,9 @@ export const cleanupTabChunk = defineChunk(() => import('../components/CleanupTa
 /** The metro layout engine (graph/metro), loaded when metro is picked or was the saved layout. */
 export const metroChunk = defineChunk(() => import('../graph/metro'))
 
+/** The coral layout engine (graph/coral, which shares metro's types and run widths), loaded when coral is picked or was the saved layout. */
+export const coralChunk = defineChunk(() => import('../graph/coral'))
+
 /**
  * The pull request overlay's GitHub client (api/pulls) and the node inspector's pull request block,
  * one chunk, loaded as soon as a repo's data is in (usePulls), so it is there before a tip is opened.

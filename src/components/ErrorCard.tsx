@@ -107,10 +107,10 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
   return (
     <div
       role="alert"
-      className="absolute left-1/2 top-1/2 z-20 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-ui-border bg-ui-panel/95 p-4 text-[13px] shadow-soft backdrop-blur"
+      className="absolute left-1/2 top-1/2 z-20 w-[340px] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-ui-border ui-glass ui-pop p-4 text-[13px] shadow-soft"
     >
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 shrink-0 text-ui-muted">
+        <span className="mt-0.5 shrink-0 text-ui-warn">
           <AlertIcon size={16} />
         </span>
         <div className="min-w-0 flex-1">
@@ -120,7 +120,7 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             <button
               type="button"
               onClick={onAddToken}
-              className="mt-3 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25"
+              className="ui-press mt-3 rounded-lg bg-ui-accent px-3 py-1.5 text-[12px] font-semibold text-ui-accent-text hover:opacity-90"
             >
               {copy.tokenAction}
             </button>
@@ -129,7 +129,7 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             <button
               type="button"
               onClick={onReload}
-              className="mt-3 rounded-lg bg-ui-accent/15 px-2.5 py-1 text-[12px] font-medium text-ui-accent hover:bg-ui-accent/25"
+              className="ui-press mt-3 rounded-lg bg-ui-accent px-3 py-1.5 text-[12px] font-semibold text-ui-accent-text hover:opacity-90"
             >
               {copy.reloadAction}
             </button>
@@ -140,7 +140,7 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="shrink-0 rounded p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
+            className="ui-hit ui-press shrink-0 rounded-md p-1 text-ui-muted hover:bg-ui-hover hover:text-ui-text"
           >
             <CloseIcon />
           </button>

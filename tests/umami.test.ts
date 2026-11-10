@@ -31,7 +31,7 @@ const OPAQUE = 'Zq7Wm3Kx9Pt2Lv5Rn8Hy4Jc6'
 /** A share link's query string: a repo, a branch and a contributor, any of them private with a token. */
 const SEARCH = '?repo=acme/secret&branch=x&by=alice'
 
-const LAYOUTS = Object.keys({ organic: 1, metro: 1 } satisfies Record<LayoutMode, 1>)
+const LAYOUTS = Object.keys({ organic: 1, metro: 1, coral: 1 } satisfies Record<LayoutMode, 1>)
 const VIEWS = Object.keys({ skeleton: 1, full: 1 } satisfies Record<ViewMode, 1>)
 const FETCH_ERROR_CODES = Object.keys({
   not_found: 1,

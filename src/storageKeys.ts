@@ -6,7 +6,7 @@
 
 /** The GitHub personal access token. */
 export const TOKEN_STORAGE_KEY = 'gitube:token'
-/** The repo layout: 'metro' or 'organic'. */
+/** The repo layout: 'metro', 'organic' or 'coral'. */
 export const LAYOUT_STORAGE_KEY = 'gitube:layout'
 /** The colour theme's id. */
 export const THEME_STORAGE_KEY = 'gitube:theme'

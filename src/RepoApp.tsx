@@ -11,7 +11,7 @@ import type { ContributorFocus, ContributorIndex } from './graph'
 import type { Graph, RepoData } from './types'
 import { releaseAudio, readSound, unlockAudio } from './audio/context'
 import { preload } from './lazy/chunk'
-import { vsChunk, contributorsTabChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
+import { vsChunk, contributorsTabChunk, coralChunk, exportersChunk, metroChunk, timelapseChunk } from './lazy/parts'
 import { useChunk } from './lazy/useChunk'
 import { readShareState, writeShareState, type ShareState } from './share/shareUrl'
 import { track } from './analytics/umami'
@@ -29,7 +29,7 @@ import EmptyState from './components/EmptyState'
 import NodeInspector, { type InspectorPulls } from './components/NodeInspector'
 import { staleBranchNames } from './components/graphUtils'
 import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
-import { useMetroView } from './components/useMetroView'
+import { useMetroView, type MetroLayoutFn } from './components/useMetroView'
 
 /** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
 const PANEL_INSET = 324
@@ -40,7 +40,7 @@ const VsView = lazyPart(vsChunk)
 
 /** The time-lapse controls' placeholder while they load, where they will be (and the status strip was). */
 const TIMELAPSE_FRAME =
-  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border bg-ui-panel/95 px-3 py-2 shadow-soft backdrop-blur'
+  'absolute bottom-4 left-4 z-20 rounded-xl border border-ui-border ui-glass px-3 py-2 shadow-soft'
 /** The vs view's placeholder: vs covers the app, so its placeholder does. */
 const VS_FRAME = 'absolute inset-0 z-30 flex items-center justify-center bg-ui-bg'
 
@@ -247,20 +247,32 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const getGraphCanvas = useCallback(() => canvasHostRef.current?.querySelector('canvas') ?? null, [])
 
   // ---- layouts ----
-  // Metro's engine is a chunk of its own, loaded once metro is picked (or was the saved layout).
-  // Until it is in, the canvas keeps the layout it had and then tweens across as before; a repo
-  // about to appear for the first time waits for it, so the metro default never flashes organic.
-  const metroWanted = layoutMode === 'metro'
-  const metroEngine = useChunk(metroChunk, metroWanted)
-  const metroLayout = metroWanted && metroEngine.status === 'ready' ? metroEngine.value.metroLayout : null
+  // Metro and coral each have an engine in a chunk of its own, loaded once the layout is picked (or
+  // was the saved one). Until it is in, the canvas keeps the layout it had and then tweens across as
+  // before; a repo about to appear for the first time waits for it, so the metro default never
+  // flashes organic. Both engines answer in the same terms (a MetroLayout), so from here on the
+  // canvas takes either as its `metro`.
+  const metroWanted = layoutMode !== 'organic'
+  const metroEngine = useChunk(metroChunk, layoutMode === 'metro')
+  const coralEngine = useChunk(coralChunk, layoutMode === 'coral')
+  const engineStatus = layoutMode === 'coral' ? coralEngine.status : metroEngine.status
+  // the coral tells a live branch from a quiet one by today's date, read once so the layout holds still
+  const [coralNow] = useState(() => Date.now())
+  const coralGrow = coralEngine.status === 'ready' ? coralEngine.value.coralLayout : null
+  const coralLayout = useMemo<MetroLayoutFn | null>(
+    () => (coralGrow ? (laidGraph, laidData, opts) => coralGrow(laidGraph, laidData, { ...opts, now: coralNow }) : null),
+    [coralGrow, coralNow],
+  )
+  const metroLayout: MetroLayoutFn | null =
+    layoutMode === 'metro' && metroEngine.status === 'ready' ? metroEngine.value.metroLayout : layoutMode === 'coral' ? coralLayout : null
   const drawnLayoutRef = useRef<LayoutMode>(metroWanted ? 'organic' : layoutMode)
-  /** the layout on the canvas: layoutMode, except that metro waits for its engine */
+  /** the layout on the canvas: layoutMode, except that metro and coral wait for their engine */
   const drawnLayout: LayoutMode = metroWanted && !metroLayout ? drawnLayoutRef.current : layoutMode
   useEffect(() => {
     drawnLayoutRef.current = drawnLayout
   }, [drawnLayout])
   const graphShownRef = useRef(false)
-  const holdGraph = metroWanted && !metroLayout && metroEngine.status !== 'failed' && !graphShownRef.current
+  const holdGraph = metroWanted && !metroLayout && engineStatus !== 'failed' && !graphShownRef.current
   const showGraph = graph !== null && !holdGraph
   useEffect(() => {
     graphShownRef.current = showGraph
@@ -272,13 +284,14 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   // started that new try, so this waits for its outcome. A failure changes the status again, and
   // this runs again.
   useEffect(() => {
-    if (!metroWanted || metroChunk.state().status !== 'failed') return
+    if (!metroWanted || (layoutMode === 'coral' ? coralChunk : metroChunk).state().status !== 'failed') return
+    // the layout on the canvas, unless that is the one that just failed (a saved layout on a first load)
     const shown = drawnLayoutRef.current
-    useAppStore.setState({ layoutMode: shown === 'metro' ? 'organic' : shown })
+    useAppStore.setState({ layoutMode: shown === layoutMode ? 'organic' : shown })
     setChunkFailed(true)
-  }, [metroWanted, metroEngine.status])
+  }, [metroWanted, layoutMode, engineStatus])
 
-  // metro mode: the straight layout of exactly this graph (null in the other layouts)
+  // metro or coral: that engine's layout of exactly this graph (null in organic)
   const metro = useMetroView(graph, data ?? null, viewMode, metroLayout)
 
   // Branch colours in the active theme. Kept out of the graph memo so a theme switch is a repaint:
@@ -553,7 +566,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
       {showEmpty && <EmptyState onPick={pickExample} />}
       {showLoading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="animate-pulse text-[13px] text-ui-muted">
+          <p role="status" className="flex items-center gap-2.5 text-[13px] text-ui-muted">
+            <span aria-hidden className="h-4 w-4 animate-spin rounded-full border-2 border-ui-border border-t-ui-accent" />
             loading {shownOwner}/{shownRepo}…
           </p>
         </div>
@@ -593,6 +607,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           contributors={contributors}
           cleanup={cleanup}
           onVs={startVs}
+          onUser={onUser}
           pulls={opened ? null : pulls}
           hasPrMarks={marks.size > 0 && !timelapseOpen}
           prMarksKnown={prMarksKnown}

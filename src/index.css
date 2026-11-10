@@ -22,14 +22,96 @@
   --color-ui-warn: var(--ui-warn);
   --color-ui-danger: var(--ui-danger);
   --color-ui-success: var(--ui-success);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --shadow-soft: var(--ui-shadow);
+  /* one easing for every hover, press and fade: quick out of the gate, soft landing */
+  --ease-ui: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-timing-function: var(--ease-ui);
+  --default-transition-duration: 140ms;
 }
 
 html, body, #root { height: 100%; margin: 0; }
-html { overscroll-behavior: none; }
-body { background: var(--color-ui-bg); color: var(--color-ui-text); font-family: var(--font-sans); overflow: hidden; }
+html { overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  background: var(--color-ui-bg);
+  color: var(--color-ui-text);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  -webkit-tap-highlight-color: transparent;
+}
 #root { position: relative; }
+
+::selection { background: color-mix(in srgb, var(--color-ui-accent) 28%, transparent); }
+
+/* Everything that acts on a click says so (Tailwind 4 leaves buttons on the default arrow). */
+button:not(:disabled), [role="button"], [role="option"], [role="tab"], [role="radio"], [role="menuitem"], summary, label[for] { cursor: pointer; }
+button, [role="option"], [role="tab"], [role="radio"], [role="menuitem"] { touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+/*
+ * Floating surfaces (the bar, the panels, the cards): the theme's panel colour as frosted glass,
+ * so the map stays faintly present under them. The blur carries the legibility, so the fill can
+ * be lighter than a flat panel would need; where backdrop-filter is missing the fill is near solid.
+ */
+@utility ui-glass {
+  background-color: color-mix(in srgb, var(--color-ui-panel) 96%, transparent);
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background-color: color-mix(in srgb, var(--color-ui-panel) 84%, transparent);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+}
+
+/* A control gives a little under the finger or the pointer. */
+@utility ui-press {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-ui);
+  &:active:not(:disabled) { transform: scale(0.96); }
+}
+
+/* Icon buttons keep their drawn size and grow an invisible 44px target on touch screens (WCAG 2.5.5). */
+@utility ui-hit {
+  position: relative;
+  @media (pointer: coarse) {
+    &::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%); }
+  }
+}
+
+/* The drop-downs and cards arrive rather than appear. */
+@keyframes ui-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ui-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* a line drawing itself in: on a path with pathLength="1" */
+@keyframes ui-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@utility ui-pop { animation: ui-pop 160ms var(--ease-ui) both; transform-origin: top center; }
+@utility ui-fade { animation: ui-fade 320ms var(--ease-ui) both; }
+@utility ui-draw { stroke-dasharray: 1; animation: ui-draw 700ms var(--ease-ui) both; }
+@utility ui-rise { animation: ui-rise 420ms var(--ease-ui) both; }
+
+/* iOS zooms the page into any field typed in below 16px: on touch screens fields are 16px. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
 
 /* Quiet scrollbars for panel lists */
 .ui-scroll { scrollbar-width: thin; scrollbar-color: var(--color-ui-border) transparent; }
@@ -43,7 +125,11 @@ body { background: var(--color-ui-bg); color: var(--color-ui-text); font-family:
 .force-graph-container canvas.clickable { cursor: pointer; }
 .force-graph-container .graph-tooltip { display: none; }
 
-:focus-visible { outline: 1px solid var(--color-ui-accent); outline-offset: 1px; }
+:focus-visible { outline: 2px solid var(--color-ui-accent); outline-offset: 2px; }
+/* a text field inside a frame (the bar, a search field) lights the frame, not a ring of its own */
+input.bg-transparent:focus-visible { outline: none; }
+label:has(> input.bg-transparent:focus-visible),
+.ui-field-frame:has(input.bg-transparent:focus-visible) { outline: 2px solid color-mix(in srgb, var(--color-ui-accent) 65%, transparent); outline-offset: -1px; }
 
 /* A theme switch recolours everything in one step (src/theme/applyTheme.ts sets this for that restyle). */
 :root[data-theme-switching] *,
