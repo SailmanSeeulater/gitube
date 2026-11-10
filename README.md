@@ -26,8 +26,8 @@ browser against the GitHub API: no clone, no server, no sign-up.
 
 ## Gallery
 
-A well-known repo in repo mode, then well-known developers' public profiles in
-each of person mode's views. Click a picture to open it live. The profiles were
+Two well-known repos in repo mode, then well-known developers' public profiles
+in each of person mode's views. Click a picture to open it live. The profiles were
 captured without a token, so a repo's size is how long it was active rather
 than its commit count.
 
@@ -36,6 +36,12 @@ than its commit count.
     <td colspan="2">
       <a href="https://gitube.latesailor.dev/?repo=vuejs/core"><img src="docs/screenshots/vuejs-core-metro.jpg" alt="vuejs/core in repo mode as a metro map: branches on straight lanes forking off main"></a>
       <br><b>repo mode</b> · <code>vuejs/core</code> as a metro map, the default layout: the newest end of 83 branches, each on its own lane off <code>main</code>, with the fix branches fanning out near the tip and spikes on the ones far apart from it. Opening it live takes about 85 requests, more than GitHub allows in an hour without a token.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <a href="https://gitube.latesailor.dev/?repo=junegunn/fzf"><img src="docs/screenshots/fzf-coral.jpg" alt="junegunn/fzf in repo mode as a coral: master as the stalk, its branches sweeping up and out like a staghorn's arms"></a>
+      <br><b>coral</b> · <code>junegunn/fzf</code> grown as a coral. It is written in Go, so it grows as staghorn, with long, steep arms. <code>master</code> is the stalk and thickest at the base, where it carries the most history; the lower a branch forks, the further it reaches. Tips that moved in the last month glow. Its 16 branches take about 20 requests, so it opens live without a token: pick <b>coral</b> in the panel.
     </td>
   </tr>
   <tr>
