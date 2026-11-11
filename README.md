@@ -9,6 +9,8 @@ browser against the GitHub API: no clone, no server, no sign-up.
 
 **Live:** https://gitube.latesailor.dev (the old address, repogarden.latesailor.dev, redirects there with share links intact)
 
+If you like it, a ⭐ on this repo would be really appreciated.
+
 [![Andrej Karpathy's coding life as life lines: one line per repo, from convnetjs and char-rnn to minGPT, nanoGPT and llm.c](docs/screenshots/karpathy-lines.jpg)](https://gitube.latesailor.dev/?user=karpathy&view=lines)
 
 <sub>Andrej Karpathy's fifteen years on GitHub as [life lines](https://gitube.latesailor.dev/?user=karpathy&view=lines): each line a repo, from where it began, thick while active and thin while dormant.</sub>
@@ -22,6 +24,7 @@ browser against the GitHub API: no clone, no server, no sign-up.
 - [How the data is fetched](#how-the-data-is-fetched)
 - [Privacy and analytics](#privacy-and-analytics)
 - [Stack](#stack)
+- [Made by](#made-by)
 - [License](#license)
 
 ## Gallery
@@ -398,6 +401,15 @@ Vite 8, React 19, TypeScript 7, Tailwind v4, react-force-graph-2d (d3-force on
 canvas), @octokit/rest, TanStack Query, Zustand, Vitest.
 [PLAN.md](PLAN.md) has the original design notes and
 [PROFILE_SPEC.md](PROFILE_SPEC.md) person mode's.
+
+## Made by
+
+gitube is made by Perfect Phanitchaleun:
+[portfolio](https://latesailor.dev) ·
+[LinkedIn](https://www.linkedin.com/in/perfect-phanitchaleun) ·
+[GitHub](https://github.com/SailmanSeeulater).
+
+If gitube is useful to you, a ⭐ on this repo would be really appreciated.
 
 ## License
 

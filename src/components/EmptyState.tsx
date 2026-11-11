@@ -3,7 +3,7 @@ import { recentRepos, sharedRepoStore, type RecentRepo } from '../api/repoCache'
 import { useTheme } from '../theme/useTheme'
 import type { Theme } from '../theme/themes'
 import { relativeTime } from './graphUtils'
-import { ExternalIcon, MetroIcon } from './icons'
+import { ExternalIcon, MetroIcon, StarIcon } from './icons'
 
 export interface EmptyStateProps {
   /** a repo ('owner/repo') or a login was picked: fill the address field and load it */
@@ -12,6 +12,14 @@ export interface EmptyStateProps {
 
 /** The app's own source, linked from the start screen. */
 const SOURCE_URL = 'https://github.com/SailmanSeeulater/gitube'
+
+/** Who made gitube, and where to find them. */
+const MAKER = 'Perfect Phanitchaleun'
+const MAKER_LINKS: ReadonlyArray<{ label: string; href: string }> = [
+  { label: 'Portfolio', href: 'https://latesailor.dev' },
+  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/perfect-phanitchaleun' },
+  { label: 'GitHub', href: 'https://github.com/SailmanSeeulater' },
+]
 
 const REPOS: ReadonlyArray<{ value: string; note: string }> = [
   { value: 'octocat/Hello-World', note: 'tiny' },
@@ -158,6 +166,29 @@ export default function EmptyState({ onPick }: EmptyStateProps) {
             </a>
           </p>
         </div>
+
+        <footer className="ui-rise flex w-full max-w-[420px] flex-col items-center gap-3 border-t border-ui-border pt-5 text-[12px] text-ui-muted [animation-delay:260ms]">
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span>
+              Made by <span className="font-medium text-ui-text-dim">{MAKER}</span>
+            </span>
+            {MAKER_LINKS.map((link) => (
+              <span key={link.label} className="inline-flex items-center gap-2">
+                <span aria-hidden className="text-ui-border">
+                  ·
+                </span>
+                <a href={link.href} target="_blank" rel="noreferrer" className="text-ui-accent hover:underline">
+                  {link.label}
+                </a>
+              </span>
+            ))}
+          </p>
+          <p className="text-pretty">If gitube is useful to you, a star on GitHub would be really appreciated.</p>
+          <a href={SOURCE_URL} target="_blank" rel="noreferrer" className={chip}>
+            <StarIcon size={14} className="text-ui-accent" />
+            <span>Star gitube on GitHub</span>
+          </a>
+        </footer>
       </div>
     </main>
   )
