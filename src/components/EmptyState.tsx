@@ -2,12 +2,20 @@ import { useEffect, useState } from 'react'
 import { recentRepos, sharedRepoStore, type RecentRepo } from '../api/repoCache'
 import { useTheme } from '../theme/useTheme'
 import type { Theme } from '../theme/themes'
-import { relativeTime } from './graphUtils'
+import { useRateBudget } from '../hooks/useRateBudget'
+import { SAMPLES, type Sample } from '../samples/samples'
+import { formatClock, relativeTime } from './graphUtils'
 import { ExternalIcon, MetroIcon, StarIcon } from './icons'
 
 export interface EmptyStateProps {
   /** a repo ('owner/repo') or a login was picked: fill the address field and load it */
   onPick: (example: string) => void
+  /** a snapshot sample was picked: open it without a request */
+  onSample: (sample: Sample) => void
+  /** 'owner/repo' of a sample on its way in, if any */
+  sampleLoading?: string | null
+  /** opens the token panel */
+  onAddToken?: () => void
 }
 
 /** The app's own source, linked from the start screen. */
@@ -21,15 +29,16 @@ const MAKER_LINKS: ReadonlyArray<{ label: string; href: string }> = [
   { label: 'GitHub', href: 'https://github.com/SailmanSeeulater' },
 ]
 
-const REPOS: ReadonlyArray<{ value: string; note: string }> = [
-  { value: 'octocat/Hello-World', note: 'tiny' },
-  { value: 'vitejs/vite', note: 'bigger' },
-]
-
 const PEOPLE: ReadonlyArray<{ value: string; note: string }> = [
   { value: 'torvalds', note: 'since 2011' },
   { value: 'karpathy', note: '15 years' },
 ]
+
+/**
+ * The fewest requests a person view can take without a token (3 to 9: README, "A person"). Below
+ * it the people chips grey out until the budget refills.
+ */
+const PERSON_MIN_REQUESTS = 3
 
 /** Recent chips shown at most. */
 const MAX_RECENT = 4
@@ -71,11 +80,63 @@ function HeroMap({ theme }: { theme: Theme }) {
 }
 
 /**
+ * How much of GitHub's hourly budget is left, so a click never lands on a rate limit unannounced:
+ * "58 of 60 free requests left this hour", or, once spent, when it refills and what still works.
+ */
+function BudgetLine({
+  budget,
+  reset,
+  onAddToken,
+}: {
+  budget: { remaining: number | null; limit: number | null }
+  reset: string
+  onAddToken?: () => void
+}) {
+  if (budget.remaining === null) return null
+  const free = budget.limit === null || budget.limit <= 60
+  const of = budget.limit !== null ? ` of ${budget.limit.toLocaleString('en-US')}` : ''
+  if (budget.remaining < PERSON_MIN_REQUESTS) {
+    return (
+      <p role="status" className="text-pretty text-[12px] text-ui-warn">
+        GitHub's free requests are used up{reset ? ` until ${reset}` : ' for this hour'}. The repo samples still open instantly
+        {onAddToken ? (
+          <>
+            , or{' '}
+            <button type="button" onClick={onAddToken} className="font-medium text-ui-accent hover:underline">
+              add a token
+            </button>{' '}
+            for 5,000 an hour.
+          </>
+        ) : (
+          '.'
+        )}
+      </p>
+    )
+  }
+  return (
+    <p className="flex items-center justify-center gap-1.5 text-[12px] text-ui-muted">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-ui-accent" />
+      <span className="tabular-nums">
+        {budget.remaining.toLocaleString('en-US')}
+        {of} {free ? 'free requests' : 'requests'} left this hour
+      </span>
+      <span aria-hidden className="text-ui-border">
+        ·
+      </span>
+      <span>samples use none</span>
+    </p>
+  )
+}
+
+/**
  * The start screen, shown until something is loaded: what gitube is, in a line, and one click into
  * either mode (an example repo, an example person, or a repo opened here before).
  */
-export default function EmptyState({ onPick }: EmptyStateProps) {
+export default function EmptyState({ onPick, onSample, sampleLoading = null, onAddToken }: EmptyStateProps) {
   const theme = useTheme()
+  const budget = useRateBudget()
+  const reset = formatClock(budget.resetAt)
+  const spent = budget.remaining !== null && budget.remaining < PERSON_MIN_REQUESTS
   // repos loaded in this browser before; loading one again within a day costs no requests
   const [recent, setRecent] = useState<RecentRepo[]>([])
   useEffect(() => {
@@ -111,21 +172,41 @@ export default function EmptyState({ onPick }: EmptyStateProps) {
         </div>
 
         <div className="ui-rise flex w-full max-w-[520px] flex-col gap-3 [animation-delay:120ms]">
+          <BudgetLine budget={budget} reset={reset} onAddToken={onAddToken} />
           <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap sm:justify-start">
-            <span className={rowLabel}>Repos</span>
-            {REPOS.map((example) => (
-              <button key={example.value} type="button" onClick={() => onPick(example.value)} className={chip}>
-                <span className="truncate font-mono text-[12px]">{example.value}</span>
-                <span className={chipNote}>{example.note}</span>
-              </button>
-            ))}
+            <span className={rowLabel} title="snapshots served with gitube: they open instantly and use no GitHub requests">
+              Repos
+            </span>
+            {SAMPLES.map((sample) => {
+              const name = `${sample.owner}/${sample.repo}`
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => onSample(sample)}
+                  disabled={sampleLoading !== null}
+                  title="a snapshot: opens instantly, no GitHub requests"
+                  className={`${chip} disabled:opacity-60`}
+                >
+                  <span className="truncate font-mono text-[12px]">{name}</span>
+                  <span className={chipNote}>{sampleLoading === name ? 'opening…' : sample.note}</span>
+                </button>
+              )
+            })}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2 sm:flex-nowrap sm:justify-start">
             <span className={rowLabel}>People</span>
             {PEOPLE.map((example) => (
-              <button key={example.value} type="button" onClick={() => onPick(example.value)} className={chip}>
+              <button
+                key={example.value}
+                type="button"
+                onClick={() => onPick(example.value)}
+                disabled={spent}
+                title={spent ? `needs 3 to 9 GitHub requests; the free ones refill${reset ? ` at ${reset}` : ' within the hour'}` : 'loads live: 3 to 9 GitHub requests'}
+                className={`${chip} disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-ui-border`}
+              >
                 <span className="truncate font-mono text-[12px]">{example.value}</span>
-                <span className={chipNote}>{example.note}</span>
+                <span className={chipNote}>{spent && reset ? `after ${reset}` : example.note}</span>
               </button>
             ))}
           </div>

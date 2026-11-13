@@ -20,6 +20,10 @@ import { LIFE_VIEWS } from '../src/profile/lifeViews'
 import type { PersonView } from '../src/share/shareUrl'
 import { GitHubFetchError, type FetchProgress, type ProfileData, type ProfileRepo } from '../src/types'
 import { FAKE_TOKEN, setApp, setPerson, textOf } from './helpers/personScene'
+import { SAMPLES } from '../src/samples/samples'
+
+/** the rate limit card's sample buttons, after any token button */
+const SAMPLE_NAMES = SAMPLES.map((s) => `${s.owner}/${s.repo}`)
 
 const noop = () => {}
 const RESET = '2024-06-15T21:05:00Z'
@@ -203,7 +207,9 @@ describe('a fetch that failed', () => {
     expect(textOf(html)).toContain('GitHub rate limit reached')
     expect(textOf(html)).toContain(`resets at ${formatClock(RESET)}`)
     expect(textOf(html)).toContain('a personal access token allows 5000')
-    expect(buttons(html)).toEqual(['add a token'])
+    // and meanwhile a repo sample, which costs no requests
+    expect(textOf(html)).toContain('meanwhile, open a sample')
+    expect(buttons(html)).toEqual(['add a token', ...SAMPLE_NAMES])
   })
 
   it("says the token's own budget ran out for a rate limit with one, with the reset time and no token button", () => {
@@ -211,13 +217,13 @@ describe('a fetch that failed', () => {
     const html = card(personApp('octo', FAKE_TOKEN, { error }))
     expect(textOf(html)).toContain(`resets at ${formatClock(RESET)}. this token's 5000 requests an hour are used up.`)
     expect(textOf(html)).not.toContain('anonymous')
-    expect(buttons(html)).toEqual([])
+    expect(buttons(html)).toEqual(SAMPLE_NAMES)
     // a pause, not a budget: no token lifts it, with or without one
     const secondary = new GitHubFetchError('GitHub API secondary rate limit exceeded while looking up octo.', 'rate_limited', RESET)
     for (const token of ['', FAKE_TOKEN]) {
       const pause = card(personApp('octo', token, { error: secondary }))
       expect(textOf(pause)).toContain('GitHub asked for a short pause')
-      expect(buttons(pause)).toEqual([])
+      expect(buttons(pause)).toEqual(SAMPLE_NAMES)
     }
   })
 

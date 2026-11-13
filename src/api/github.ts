@@ -35,6 +35,15 @@ const DEFAULT_BRANCH_LIMIT = 250
 const DEFAULT_MAX_BRANCHES = 200
 const COMPARE_CONCURRENCY = 6
 /**
+ * Requests a repo fetch leaves unspent when GitHub's hourly budget runs low, so a person view or a
+ * pull request check still works afterwards. Only bites without a token (60 an hour).
+ */
+export const SPARE_REQUESTS = 10
+/** Requests held back for the default branch's walk when the comparisons are cut to the budget. */
+const TRUNK_RESERVE = 2
+/** Branches made by bots go last when the budget cannot compare them all. */
+const BOT_BRANCH = /^(dependabot|renovate|copilot|snyk|gh-readonly-queue)\/|^gh-pages$/i
+/**
  * Minimum trunk commits to fetch before the "all merge-bases covered" early stop may kick in.
  * Only applies when at least one merge base is known; with none (trunk-only repo, or every
  * compare skipped) the walk runs to trunkLimit, as FetchOptions.trunkLimit promises.
@@ -169,7 +178,25 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
   }
 
   // ---------- 3. compare every non-default branch against the default branch ----------
-  const others = kept.filter((b) => b.name !== defaultBranch)
+  let others = kept.filter((b) => b.name !== defaultBranch)
+  const wanted = others.length
+
+  // ---------- budget ----------
+  // A comparison per branch can cost more than the hour has left (60 without a token). Rather than
+  // run out half way and draw nothing, compare what fits and keep SPARE_REQUESTS unspent. GitHub's
+  // listing gives no dates, so people's branches go before bots' and the rest keep listing order.
+  let budgetSkipped = 0
+  let limitHit = false
+  const budgetLeft = state.remaining
+  if (budgetLeft !== null) {
+    const room = Math.max(0, budgetLeft - SPARE_REQUESTS - TRUNK_RESERVE)
+    if (others.length > room) {
+      others = byPriority(others).slice(0, room)
+      budgetSkipped = wanted - others.length
+      emit('compare', 0, others.length, `Only ${budgetLeft} requests left this hour: comparing ${others.length} of ${wanted} branches`)
+    }
+  }
+
   const compared: Array<Branch | null> = others.map(() => null)
   const mergeBases = new Set<string>()
   let compareDone = 0
@@ -192,6 +219,14 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
 
   await runPool(others, COMPARE_CONCURRENCY, async (branch, index) => {
     throwIfAborted()
+    // The budget ran out mid-way (the hour was shared with another tab, say): leave the rest out
+    // and keep what is in, with the default branch's walk still to come.
+    if (limitHit || (state.remaining !== null && state.remaining <= TRUNK_RESERVE)) {
+      budgetSkipped += 1
+      compareDone += 1
+      emit('compare', compareDone, others.length, `Left out ${branch.name}: GitHub's hourly budget ran low`)
+      return
+    }
     const basehead = `${defaultBranch}...${branch.name}`
     let data
     try {
@@ -227,8 +262,15 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
         emit('compare', compareDone, others.length, `Skipped ${branch.name}: GitHub returned HTTP ${status}${tooLarge}`)
         return
       }
-      // 401/403/429, network failures and anything unexpected still fail the whole fetch.
-      throw toFetchError(err, ctx(`comparing ${basehead}`))
+      // A rate limit leaves this branch (and the ones after it) out; the map draws what is in.
+      // 401/403, network failures and anything unexpected still fail the whole fetch.
+      const failure = toFetchError(err, ctx(`comparing ${basehead}`))
+      if (failure.code !== 'rate_limited') throw failure
+      limitHit = true
+      budgetSkipped += 1
+      compareDone += 1
+      emit('compare', compareDone, others.length, `Left out ${branch.name}: GitHub's rate limit was reached`)
+      return
     }
 
     const mergeBase = addCommit(data.merge_base_commit)
@@ -276,6 +318,12 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
 
   while (trunkCount < trunkLimit) {
     throwIfAborted()
+    // Past the first page, a walk running into the spare stops where it is: the map loses older
+    // history (dashed roots), not the requests a person view would need next.
+    if (page > 1 && (limitHit || (state.remaining !== null && state.remaining <= SPARE_REQUESTS))) {
+      trunkCutShort = true
+      break
+    }
     let data: RawCommit[]
     let headers: HeaderBag
     try {
@@ -283,7 +331,12 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
       data = res.data
       headers = res.headers as HeaderBag
     } catch (err) {
-      throw toFetchError(err, ctx(`reading commits on ${defaultBranch}`))
+      const failure = toFetchError(err, ctx(`reading commits on ${defaultBranch}`))
+      // the first page is the map's spine: without it there is nothing to draw
+      if (page === 1 || failure.code !== 'rate_limited') throw failure
+      limitHit = true
+      trunkCutShort = true
+      break
     }
 
     const room = trunkLimit - trunkCount
@@ -371,7 +424,13 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
     truncated,
     truncatedAt: [...truncatedAt],
     ...(language === null ? {} : { language }),
+    ...(budgetSkipped > 0 ? { budgetCut: { compared: branches.length - 1, skipped: budgetSkipped, resetAt: state.resetAt } } : {}),
   }
+}
+
+/** People's branches first, then bots' (dependabot/..., renovate/..., gh-pages), each in listing order. */
+function byPriority<T extends { name: string }>(branches: ReadonlyArray<T>): T[] {
+  return [...branches.filter((b) => !BOT_BRANCH.test(b.name)), ...branches.filter((b) => BOT_BRANCH.test(b.name))]
 }
 
 // ---------- helpers ----------
