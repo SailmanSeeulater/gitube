@@ -50,6 +50,21 @@ export interface RepoData {
    * species (graph/coralSpecies).
    */
   language?: string
+  /**
+   * Set when GitHub's hourly budget ran too low to compare every branch: the fetch drew what it
+   * could instead of failing. Never cached or saved (a later load should try for all of them).
+   */
+  budgetCut?: BudgetCut
+}
+
+/** Branches a repo fetch left out to stay within the hourly request budget. */
+export interface BudgetCut {
+  /** non-default branches compared and drawn */
+  compared: number
+  /** non-default branches left out */
+  skipped: number
+  /** when the budget refills (ISO), if GitHub said */
+  resetAt: string | null
 }
 
 export type FetchStage = 'repo' | 'branches' | 'compare' | 'trunk' | 'done'

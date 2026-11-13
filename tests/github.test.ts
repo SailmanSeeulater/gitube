@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchRepoData } from '../src/api/github'
+import { SPARE_REQUESTS, fetchRepoData } from '../src/api/github'
 import { buildGraph } from '../src/graph'
 import { GitHubFetchError } from '../src/types'
 import type { FetchProgress } from '../src/types'
@@ -544,7 +544,7 @@ describe('fetchRepoData', () => {
     expect(progress[progress.length - 1].stage).toBe('done')
   })
 
-  it('still fails the whole fetch when a compare hits a network error or a rate limit', async () => {
+  it('still fails the whole fetch when a compare hits a network error', async () => {
     const inner = makeFetch(standardRouter)
     const dropped: typeof globalThis.fetch = async (input, init) => {
       const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -553,16 +553,60 @@ describe('fetchRepoData', () => {
     }
     const e1 = await expectFetchError(fetchRepoData(REF, { fetch: dropped }))
     expect(e1.code).toBe('network')
+  })
 
-    const limited = makeFetch(
-      (url, init) =>
-        url.pathname.includes('/compare/')
-          ? { status: 403, body: { message: 'API rate limit exceeded for 1.2.3.4.' } }
-          : standardRouter(url, init),
-      { remaining: '0' },
+  it('draws what it has when the compares hit the rate limit, and says how many branches were left out', async () => {
+    const limited = makeFetch((url, init) =>
+      url.pathname.includes('/compare/')
+        ? { status: 403, body: { message: 'API rate limit exceeded for 1.2.3.4.' }, headers: { 'x-ratelimit-remaining': '0' } }
+        : standardRouter(url, init),
     )
-    const e2 = await expectFetchError(fetchRepoData(REF, { fetch: limited.fetch }))
-    expect(e2.code).toBe('rate_limited')
+    const data = await fetchRepoData(REF, { fetch: limited.fetch })
+    expect(data.branches.map((b) => b.name)).toEqual(['main'])
+    expect(data.budgetCut).toEqual({ compared: 0, skipped: 2, resetAt: new Date(Number(RATE_RESET) * 1000).toISOString() })
+    // the trunk's first page is drawn; once the limit is hit, it does not page on
+    expect(limited.calls.filter((c) => c.url.includes('/commits?')).length).toBe(1)
+    expect(data.truncated).toBe(true)
+    expect(data.branches.every((b) => b.tipSha in data.commits)).toBe(true)
+  })
+
+  it('compares only what the hourly budget allows, keeping requests spare', async () => {
+    // 13 left after the listing: 10 spare and 2 for the trunk leave room for one compare
+    const { fetch, calls } = makeFetch(standardRouter, { remaining: String(SPARE_REQUESTS + 3) })
+    const progress: FetchProgress[] = []
+    const data = await fetchRepoData(REF, { fetch, onProgress: (p) => progress.push(p) })
+    expect(calls.filter((c) => c.url.includes('/compare/'))).toHaveLength(1)
+    expect(data.branches).toHaveLength(2)
+    expect(data.budgetCut).toMatchObject({ compared: 1, skipped: 1 })
+    expect(progress.some((p) => p.message.includes('comparing 1 of 2 branches'))).toBe(true)
+
+    // with a token's budget nothing is cut
+    const roomy = makeFetch(standardRouter)
+    const full = await fetchRepoData(REF, { fetch: roomy.fetch })
+    expect(full.budgetCut).toBeUndefined()
+    expect(full.branches).toHaveLength(3)
+  })
+
+  it("puts bots' branches last when the budget cuts the compares", async () => {
+    const withBot = [{ name: 'dependabot/npm/x', commit: { sha: F2, url: '' }, protected: false }, ...branchesFixture]
+    const { fetch, calls } = makeFetch(
+      (url, init) => (url.pathname === '/repos/owner/repo/branches' ? { body: withBot } : standardRouter(url, init)),
+      { remaining: String(SPARE_REQUESTS + 4) },
+    )
+    await fetchRepoData(REF, { fetch })
+    const compared = calls.filter((c) => c.url.includes('/compare/')).map((c) => decodeURIComponent(c.url))
+    expect(compared).toHaveLength(2)
+    expect(compared.some((u) => u.includes('dependabot'))).toBe(false)
+  })
+
+  it('still fails when the rate limit hits the first page of the default branch', async () => {
+    const limited = makeFetch((url, init) =>
+      url.pathname === '/repos/owner/repo/commits'
+        ? { status: 403, body: { message: 'API rate limit exceeded for 1.2.3.4.' }, headers: { 'x-ratelimit-remaining': '0' } }
+        : standardRouter(url, init),
+    )
+    const e = await expectFetchError(fetchRepoData(REF, { fetch: limited.fetch }))
+    expect(e.code).toBe('rate_limited')
   })
 
   it('falls back to the first trunk commit when the listed default-branch sha was rewritten before the trunk walk', async () => {

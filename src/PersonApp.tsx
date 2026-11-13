@@ -7,6 +7,7 @@ import { useAppStore } from './store/useAppStore'
 import { useTheme } from './theme/useTheme'
 import TopBar from './components/TopBar'
 import ErrorCard from './components/ErrorCard'
+import { SAMPLES, type Sample } from './samples/samples'
 import { reloadPage } from './components/LazyPart'
 import StatusStrip from './components/StatusStrip'
 import { useProfileData } from './profile/useProfileData'
@@ -289,6 +290,8 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
   const openFile = useCallback((file: File) => onRepo({ file }), [onRepo])
   // the inspector's link: a repo of theirs as a map, as if it had been typed in the bar
   const openRepo = useCallback((nameWithOwner: string) => onRepo({ input: nameWithOwner }), [onRepo])
+  // a rate limit's way out: a repo sample costs no requests
+  const openSample = useCallback((sample: Sample) => onRepo({ sample }), [onRepo])
   /** the status strip's refresh: a new request for the person on show, from GitHub */
   const refresh = useCallback(() => refreshProfile(login, { noteLoad, refetch }), [login, noteLoad, refetch])
 
@@ -401,6 +404,8 @@ export default function PersonApp({ login, request, view: linkedView, focusInput
           hint={errorCopy.hint}
           onAddToken={errorCopy.tokenAction ? openToken : undefined}
           onDismiss={profile ? () => setClosedError(error) : undefined}
+          samples={error.code === 'rate_limited' ? SAMPLES : undefined}
+          onSample={openSample}
         />
       )}
 

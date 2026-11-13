@@ -109,7 +109,8 @@ export function useRepoData(ref: RepoRef | null): UseRepoDataResult {
         },
         signal,
       })
-      if (repoStore) void remember(repoStore, repo, Date.now())
+      // a map cut to the hourly budget is not kept: the next load (or a token) should try for all of it
+      if (repoStore && !repo.budgetCut) void remember(repoStore, repo, Date.now())
       return { repo, cachedAt: null }
     },
   })

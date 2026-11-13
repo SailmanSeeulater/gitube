@@ -26,6 +26,7 @@ import Panel from './components/Panel'
 import StatusStrip from './components/StatusStrip'
 import ErrorCard from './components/ErrorCard'
 import EmptyState from './components/EmptyState'
+import { SAMPLES, sampleFile, type Sample } from './samples/samples'
 import NodeInspector, { type InspectorPulls } from './components/NodeInspector'
 import { staleBranchNames } from './components/graphUtils'
 import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
@@ -50,7 +51,7 @@ function sameRepo(a: RepoRef | null, b: RepoRef): boolean {
 }
 
 /** What person mode hands over: a repo typed there, or a saved file opened or dropped there. */
-export type RepoInitial = { input: string } | { file: File }
+export type RepoInitial = { input: string } | { file: File } | { sample: Sample }
 
 export interface RepoAppProps {
   /** a login was loaded: the router switches to person mode */
@@ -68,8 +69,13 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
   const [repoRef, setRepoRef] = useState<RepoRef | null>(initialShare.repo)
   const [invalidUrl, setInvalidUrl] = useState(false)
   const [tokenOpen, setTokenOpen] = useState(false)
-  /** A repo opened from a saved file; it stands in for fetched data until the next Go. */
-  const [opened, setOpened] = useState<{ data: RepoData; savedAt: string } | null>(null)
+  /**
+   * A repo opened from a saved file, or from a snapshot sample served with the site (sample: true);
+   * it stands in for fetched data until the next Go.
+   */
+  const [opened, setOpened] = useState<{ data: RepoData; savedAt: string; sample?: boolean } | null>(null)
+  /** 'owner/repo' of a sample on its way in */
+  const [sampleLoading, setSampleLoading] = useState<string | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   /** a part of the app that loads on demand could not be fetched, even on its retry: offer a reload */
   const [chunkFailed, setChunkFailed] = useState(false)
@@ -483,6 +489,40 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     [resetForNewRepo, loadExporters],
   )
 
+  /**
+   * A snapshot sample opens like a saved file, fetched from this site rather than GitHub, so it costs
+   * no requests: the start screen's repo chips and the rate limit card offer them.
+   */
+  const openSample = useCallback(
+    async (sample: Sample) => {
+      const name = `${sample.owner}/${sample.repo}`
+      setSampleLoading(name)
+      try {
+        const kit = await loadExporters()
+        if (!kit) return
+        try {
+          const res = await fetch(`${import.meta.env.BASE_URL}${sampleFile(sample)}`)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const saved = kit.parseRepoFile(await res.text())
+          resetForNewRepo()
+          setOpened({ data: saved.data, savedAt: saved.savedAt, sample: true })
+          setRepoRef(null)
+          setInput(name)
+          setInvalidUrl(false)
+          setFileError(null)
+        } catch {
+          setFileError(`the ${name} sample could not be loaded. press Go to load it live from GitHub.`)
+        }
+      } finally {
+        setSampleLoading(null)
+      }
+    },
+    [resetForNewRepo, loadExporters],
+  )
+  const loadLive = useCallback(() => {
+    if (data) load(`${data.owner}/${data.repo}`)
+  }, [data, load])
+
   // a saved .json dropped anywhere on the page opens it
   useEffect(() => {
     const carriesFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false
@@ -513,12 +553,13 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     if (initialRun.current || !initial) return
     initialRun.current = true
     if ('file' in initial) void openFile(initial.file)
+    else if ('sample' in initial) void openSample(initial.sample)
     else {
       pickExample(initial.input)
       // typed in person mode, whose input the switch replaced: keep typing in this one
       inputRef.current?.focus()
     }
-  }, [initial, openFile, pickExample])
+  }, [initial, openFile, openSample, pickExample])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -563,7 +604,7 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         )}
       </div>
 
-      {showEmpty && <EmptyState onPick={pickExample} />}
+      {showEmpty && <EmptyState onPick={pickExample} onSample={openSample} sampleLoading={sampleLoading} onAddToken={openToken} />}
       {showLoading && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p role="status" className="flex items-center gap-2.5 text-[13px] text-ui-muted">
@@ -597,7 +638,14 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         <ErrorCard code="export_failed" message={exportError} onDismiss={() => setExportError(null)} />
       )}
       {!invalidUrl && !chunkFailed && fileError === null && exportError === null && error && !isFetching && (
-        <ErrorCard code={error.code} message={error.message} resetAt={error.resetAt} onAddToken={openToken} />
+        <ErrorCard
+          code={error.code}
+          message={error.message}
+          resetAt={error.resetAt}
+          onAddToken={openToken}
+          samples={error.code === 'rate_limited' ? SAMPLES : undefined}
+          onSample={openSample}
+        />
       )}
 
       {data && graph && contributors && cleanup && (
@@ -646,6 +694,8 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
           graph={graph}
           isFetching={isFetching}
           fileSavedAt={opened ? opened.savedAt : null}
+          fileIsSample={opened?.sample === true}
+          onLoadLive={opened ? loadLive : undefined}
           cachedAt={cachedAt}
           onRefresh={refresh}
           onTimelapse={graph ? openTimelapse : undefined}

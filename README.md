@@ -254,6 +254,29 @@ GitHub allows 60 requests an hour without a token, and 5,000 with one.
 
 That is roughly one request per branch.
 
+**When the hour runs low.** Without a token, a big repo can need more requests
+than the hour has left: vitejs/vite takes about 85, and the budget is 60.
+After the listing, gitube compares only as many branches as fit, keeping 10
+requests spare so a person view or a pull request check still works. People's
+branches go before bots' (`dependabot/…`, `renovate/…`), since the listing
+gives no dates. If the limit still hits mid-way, the map draws what it has.
+Either way the status strip says **partial · N of M branches**, with the time
+the budget refills. A partial map is not cached or saved, so the next load
+tries for all of it.
+
+**The start screen** asks GitHub how much of the hour is left
+(`GET /rate_limit`, which costs nothing) and shows it: *58 of 60 free requests
+left this hour*. Once it is spent, the people chips grey out until it refills.
+
+**Samples.** The repo chips, and the rate limit card, open snapshots served
+with the site (`public/samples`), so they cost no requests at all. The status
+strip marks them **sample**, with **load live** to fetch today's branches.
+Refresh them with a token:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) npx tsx scripts/samples.ts
+```
+
 Open pull requests come after the map (`src/api/pulls.ts`):
 
 - **Without a token:** `GET /repos/{o}/{r}/pulls` costs 1 request per 100 open

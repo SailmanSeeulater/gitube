@@ -30,7 +30,9 @@ export class RepoFileError extends Error {
 }
 
 export function serializeRepoFile(data: RepoData, now: Date = new Date()): string {
-  const file: RepoFile = { format: REPO_FILE_FORMAT, version: REPO_FILE_VERSION, savedAt: now.toISOString(), data }
+  // a budget cut describes one fetch's hour, not the repo: a saved file leaves it out
+  const { budgetCut: _cut, ...kept } = data
+  const file: RepoFile = { format: REPO_FILE_FORMAT, version: REPO_FILE_VERSION, savedAt: now.toISOString(), data: kept }
   return JSON.stringify(file)
 }
 

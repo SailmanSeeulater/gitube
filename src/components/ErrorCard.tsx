@@ -1,3 +1,4 @@
+import type { Sample } from '../samples/samples'
 import type { GitHubFetchError } from '../types'
 import { formatClock } from './graphUtils'
 import { AlertIcon, CloseIcon } from './icons'
@@ -22,6 +23,9 @@ export interface ErrorCardProps {
   title?: string
   /** shown in place of the code's own hint */
   hint?: string
+  /** snapshot samples to open meanwhile (they cost no requests): offered on a rate limit */
+  samples?: ReadonlyArray<Sample>
+  onSample?: (sample: Sample) => void
 }
 
 interface Copy {
@@ -102,7 +106,18 @@ function copyFor(code: ErrorCode, resetAt: string | null | undefined, message: s
   }
 }
 
-export default function ErrorCard({ code, message, resetAt, onAddToken, onReload, onDismiss, title, hint }: ErrorCardProps) {
+export default function ErrorCard({
+  code,
+  message,
+  resetAt,
+  onAddToken,
+  onReload,
+  onDismiss,
+  title,
+  hint,
+  samples,
+  onSample,
+}: ErrorCardProps) {
   const copy = copyFor(code, resetAt, message)
   return (
     <div
@@ -133,6 +148,23 @@ export default function ErrorCard({ code, message, resetAt, onAddToken, onReload
             >
               {copy.reloadAction}
             </button>
+          )}
+          {samples && samples.length > 0 && onSample && (
+            <div className="mt-3 border-t border-ui-border pt-3">
+              <p className="text-[12px] text-ui-muted">meanwhile, open a sample (no requests):</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {samples.map((sample) => (
+                  <button
+                    key={`${sample.owner}/${sample.repo}`}
+                    type="button"
+                    onClick={() => onSample(sample)}
+                    className="ui-press rounded-full border border-ui-border bg-ui-panel px-2.5 py-1 font-mono text-[11px] text-ui-text hover:border-ui-accent/60"
+                  >
+                    {sample.owner}/{sample.repo}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
         {onDismiss && (

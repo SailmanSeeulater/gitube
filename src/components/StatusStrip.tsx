@@ -12,6 +12,10 @@ export interface StatusStripProps {
   isFetching: boolean
   /** the data came from a saved file: when it was saved (ISO, '' if unknown); null for live data */
   fileSavedAt?: string | null
+  /** the saved file is one of the site's snapshot samples (samples/samples.ts), not the visitor's */
+  fileIsSample?: boolean
+  /** load the file's repo live from GitHub instead (Go does the same) */
+  onLoadLive?: () => void
   /** the data came from this browser's cache: when it was fetched (ISO); null for a live fetch */
   cachedAt?: string | null
   /** fetch the repo from GitHub again, skipping the cache */
@@ -33,6 +37,8 @@ export default function StatusStrip({
   graph,
   isFetching,
   fileSavedAt = null,
+  fileIsSample = false,
+  onLoadLive,
   cachedAt = null,
   onRefresh,
   onTimelapse,
@@ -139,12 +145,30 @@ export default function StatusStrip({
           history truncated
         </span>
       )}
+      {data.budgetCut && (
+        <span
+          className="rounded-md border border-ui-warn/40 bg-ui-warn/10 px-1.5 py-px text-[11px] text-ui-warn"
+          title={`GitHub's hourly budget ran low, so ${data.budgetCut.skipped} branch${data.budgetCut.skipped === 1 ? ' was' : 'es were'} left out and a few requests kept spare.${formatClock(data.budgetCut.resetAt) ? ` It refills at ${formatClock(data.budgetCut.resetAt)};` : ''} a token allows 5,000 an hour.`}
+        >
+          partial · {data.budgetCut.compared} of {data.budgetCut.compared + data.budgetCut.skipped} branches
+        </span>
+      )}
       {fileSavedAt !== null && (
         <span
-          className="rounded-md border border-ui-border px-1.5 py-px text-[11px] text-ui-text-dim"
-          title={`Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Go to load it live from GitHub.`}
+          className="flex items-center gap-1.5 rounded-md border border-ui-border px-1.5 py-px text-[11px] text-ui-text-dim"
+          title={
+            fileIsSample
+              ? `A snapshot served with gitube${fileSavedAt ? ` (taken ${formatDateTime(fileSavedAt)})` : ''}, so it used no GitHub requests. Load live for today's branches: about one request per branch.`
+              : `Opened from a saved file${fileSavedAt ? ` (saved ${formatDateTime(fileSavedAt)})` : ''}. Press Go to load it live from GitHub.`
+          }
         >
-          from file{fileSavedAt && relativeTime(fileSavedAt) ? ` · saved ${relativeTime(fileSavedAt)}` : ''}
+          {fileIsSample ? 'sample' : 'from file'}
+          {fileSavedAt && relativeTime(fileSavedAt) ? ` · ${fileIsSample ? 'snapshot' : 'saved'} ${relativeTime(fileSavedAt)}` : ''}
+          {onLoadLive && (
+            <button type="button" onClick={onLoadLive} className="text-ui-accent hover:underline">
+              load live
+            </button>
+          )}
         </span>
       )}
       {cachedAt !== null && fileSavedAt === null && (
