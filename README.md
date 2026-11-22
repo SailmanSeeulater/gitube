@@ -127,6 +127,12 @@ shows every fetched commit.
   far from the default branch on both sides, so a merge will likely hurt. The
   map marks them with spikes.
 
+**Releases.** A tagged commit is a named station: a capsule across its line,
+with the tag in a pill beside it (`v2.3`, or `v2.3 +1` when two tags share the
+commit). It stays a station in skeleton view instead of folding into a run, so
+a coral shows which arms grew after which release. Where the names would
+crowd, the newest ones win; click the station for every tag.
+
 **Pull requests.** Open pull requests show on the tips they come from. The
 tip's ring splits into review (left) and checks (right): green, amber (half
 lit while running) or red (broken), dotted for a draft. Until a pull request is
@@ -140,6 +146,10 @@ and the like.
   and **rec** saves that as a silent video.
 - **vs** (the swords in the side panel) opens a second repo beside this one and
   scores the two, measure by measure.
+- **Poster.** Saves the map (metro or coral) as a PNG framed like a transit
+  poster: the repo as its title, its numbers, a key of its lines with when
+  each last moved, and the date.
+- **SVG.** Saves the map alone as an SVG, sharp at any size, for a README.
 - Save the picture as a PNG, or the data as a `.json` file. Drop a saved file
   on the page to open it again with no API requests. Files saved by
   repo-garden, gitube's old name, still open.
@@ -248,7 +258,10 @@ GitHub allows 60 requests an hour without a token, and 5,000 with one.
    its own commits.
 4. A walk of the default branch's history, stopping once every fork point is
    connected.
-5. `src/graph` turns the commits into nodes and child-to-parent links, colours
+5. `GET /repos/{o}/{r}/tags`, one page: the newest hundred tags, kept where
+   they land on a fetched commit. Skipped when only the spare 10 requests are
+   left, and a failure here never stops the map.
+6. `src/graph` turns the commits into nodes and child-to-parent links, colours
    each commit by the first branch that reaches it, and folds straight runs in
    skeleton view.
 
@@ -363,7 +376,7 @@ Repo mode sends these:
 | `theme-switch` | `theme`: the theme's id | the theme picker closes on a different theme than it opened with |
 | `view-mode` | `view`: `skeleton` or `full` | another view is picked |
 | `timelapse-play` | none | the replay is opened |
-| `export` | `format`: `png`, `webm` (also when Safari records mp4), `json` or `repo-file` | a file is saved, or a saved file is opened (`repo-file`) |
+| `export` | `format`: `png`, `poster`, `svg`, `webm` (also when Safari records mp4), `json` or `repo-file` | a file is saved, or a saved file is opened (`repo-file`) |
 | `vs-start` | none | a vs is started from the side panel (not from a share link) |
 | `pr-overlay` | `state`: `on` or `off` | once per answer from GitHub about the repo's open pull requests |
 | `share-copy` | none | the share link is copied |

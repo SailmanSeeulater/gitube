@@ -30,6 +30,7 @@ import {
 import { TIP_RING_PX, useLabelPlacer, type LabelLines, type LabelMarks } from './useLabelPlacer'
 import { PR_RING_METRO_CUT, drawPrRing, prRingFor } from './prMark'
 import { branchQueryText } from './branchQuery'
+import { releaseText } from './releases'
 import {
   METRO_BADGE_MIN_PX,
   METRO_BEAD_RING_PX,
@@ -197,6 +198,15 @@ function drawBadge(
 
 /** A live tip's glow on the coral (its polyp): how far past the tip it reaches, in screen px, and how strong it is. */
 const POLYP_GLOW_PX = 5
+// a release (tagged commit): its station is a capsule, and its name sits in a pill under it (or over
+// it), all in screen px
+const RELEASE_FONT_PX = 10
+const RELEASE_PILL_H_PX = 16
+const RELEASE_PAD_PX = 6
+const RELEASE_GAP_PX = 4
+/** half the height of a release's capsule station, and half its width, in graph units */
+const RELEASE_STATION_HALF_H = 6
+const RELEASE_STATION_HALF_W = 3.5
 const POLYP_GLOW_ALPHA = 0.28
 
 /** Spikes around a diverged tip. */
@@ -263,6 +273,28 @@ function drawTimelapseHud(ctx: CanvasRenderingContext2D, timelapse: RepoGraphTim
   ctx.fillStyle = theme.accent
   ctx.fillRect(0, H - 3, W * progress, 3)
   ctx.restore()
+}
+
+/** box (x0, y0, x1, y1) overlaps one of the boxes in flat */
+function overlapsBox(flat: readonly number[], x0: number, y0: number, x1: number, y1: number): boolean {
+  for (let q = 0; q < flat.length; q += 4) {
+    if (x0 < flat[q + 2] && x1 > flat[q] && y0 < flat[q + 3] && y1 > flat[q + 1]) return true
+  }
+  return false
+}
+
+/** Adds a box (graph units) to the ones the label placer keeps names off. */
+function pushMark(marks: LabelMarks, x0: number, y0: number, x1: number, y1: number): void {
+  if (marks.rects.length < 4 * (marks.count + 1)) {
+    const grown = new Float32Array(Math.max(64, marks.rects.length * 2))
+    grown.set(marks.rects)
+    marks.rects = grown
+  }
+  const q = 4 * marks.count++
+  marks.rects[q] = x0
+  marks.rects[q + 1] = y0
+  marks.rects[q + 2] = x1
+  marks.rects[q + 3] = y1
 }
 
 export default function RepoGraph({
@@ -379,6 +411,13 @@ export default function RepoGraph({
       tipLabelLower,
       freshIds,
     }
+  }, [graph])
+
+  /** tagged commits, newest first: their release names are drawn under them on a metro map or coral */
+  const releases = useMemo(() => {
+    const tagged = graph.nodes.filter((node) => node.tags !== undefined && node.tags.length > 0)
+    tagged.sort((a, b) => (a.commit.date < b.commit.date ? 1 : a.commit.date > b.commit.date ? -1 : a.id < b.id ? -1 : 1))
+    return tagged.map((node) => ({ id: node.id, text: releaseText(node.tags ?? []) }))
   }, [graph])
 
   // ---- colours, keyed on the theme and its palette only. The paint callbacks depend on them, so a
@@ -638,6 +677,22 @@ export default function RepoGraph({
             ctx.lineWidth = ring
             ctx.stroke()
           }
+        } else if (node.tags && kind !== 'interchange' && kind !== 'origin') {
+          // a release: a capsule across its line (upright on a metro map's level lines, level on a
+          // coral's rising stalk), in the station colour around a core, like a named stop
+          const [hw, hh] = metro.wholeFit ? [RELEASE_STATION_HALF_H, RELEASE_STATION_HALF_W] : [RELEASE_STATION_HALF_W, RELEASE_STATION_HALF_H]
+          const round = Math.min(hw, hh)
+          ctx.beginPath()
+          ctx.roundRect(x - hw, y - hh, 2 * hw, 2 * hh, round)
+          ctx.fillStyle = th.stationRing
+          ctx.fill()
+          // the ring thickens with the zoom-out like every station's, but never past half the
+          // capsule (roundRect throws on a negative radius)
+          const inset = Math.min(Math.max(1.5, 1.2 * px), round / 2)
+          ctx.beginPath()
+          ctx.roundRect(x - hw + inset, y - hh + inset, 2 * (hw - inset), 2 * (hh - inset), round - inset)
+          ctx.fillStyle = th.derived.stationCore
+          ctx.fill()
         } else if (kind === 'interchange') {
           ctx.fillStyle = th.stationRing
           ctx.fill()
@@ -937,23 +992,71 @@ export default function RepoGraph({
             ctx.fillStyle = th.derived.runMark
             ctx.fillText(b.text, textX, b.textY)
             const halfW = ctx.measureText(b.text).width / 2 + px
-            if (marks.rects.length < 4 * (marks.count + 1)) {
-              const drawnShare = new Float32Array(Math.max(64, marks.rects.length * 2))
-              drawnShare.set(marks.rects)
-              marks.rects = drawnShare
-            }
-            const q = 4 * marks.count++
-            marks.rects[q] = textX - halfW
-            marks.rects[q + 1] = b.textY - halfH
-            marks.rects[q + 2] = textX + halfW
-            marks.rects[q + 3] = b.textY + halfH
+            pushMark(marks, textX - halfW, b.textY - halfH, textX + halfW, b.textY + halfH)
           }
+        }
+      }
+      // releases: each tagged station's name in a pill under it (else over it), newest first, left
+      // out at this zoom where it would cover a station or a newer release's pill. The pills go to
+      // the label placer with the run markers, so branch names keep off them.
+      if (releases.length > 0) {
+        ctx.font = `600 ${RELEASE_FONT_PX * px}px ${MONO_FONT}`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const h = RELEASE_PILL_H_PX * px
+        const pad = RELEASE_PAD_PX * px
+        const clear = 6 + 2 * px
+        const placed: number[] = []
+        for (const rel of releases) {
+          const at = metro.targets.get(rel.id)
+          if (!at || nodeRevealed(rel.id) < 1) continue
+          const w = ctx.measureText(rel.text).width + 2 * pad
+          const r = metroStationRadius(metro.stations.get(rel.id), index.nodeById.get(rel.id)?.isTip ?? false)
+          const gap = Math.max(r, RELEASE_STATION_HALF_H) + RELEASE_GAP_PX * px
+          // under the station, else over it; on a coral, whose stalk rises, right of it, else left
+          const spots = metro.wholeFit
+            ? [
+                [at.x + gap, at.y - h / 2],
+                [at.x - gap - w, at.y - h / 2],
+              ]
+            : [
+                [at.x - w / 2, at.y + gap],
+                [at.x - w / 2, at.y - gap - h],
+              ]
+          let spot: number[] | null = null
+          for (const [x0, y0] of spots) {
+            if (overlapsBox(placed, x0, y0, x0 + w, y0 + h)) continue
+            let covers = false
+            for (const [id, p] of metro.targets) {
+              if (id !== rel.id && p.x > x0 - clear && p.x < x0 + w + clear && p.y > y0 - clear && p.y < y0 + h + clear) {
+                covers = true
+                break
+              }
+            }
+            if (covers) continue
+            spot = [x0, y0]
+            break
+          }
+          if (spot === null) continue
+          const [x0, top] = spot
+          placed.push(x0, top, x0 + w, top + h)
+          pushMark(marks, x0, top, x0 + w, top + h)
+          ctx.globalAlpha = isDimmed(rel.id, hovered, index.neighbours, reachSet) ? th.dimAlpha : 1
+          ctx.beginPath()
+          ctx.roundRect(x0, top, w, h, h / 2)
+          ctx.fillStyle = th.badgeBg
+          ctx.fill()
+          ctx.strokeStyle = th.accent
+          ctx.lineWidth = 1.2 * px
+          ctx.stroke()
+          ctx.fillStyle = th.text
+          ctx.fillText(rel.text, x0 + w / 2, top + h / 2 + 0.5 * px)
         }
       }
       ctx.restore()
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [metro, index, colours, bleached, reachSet, litLinks, hoverVersion, linkShown, nodeRevealed],
+    [metro, index, colours, bleached, reachSet, litLinks, hoverVersion, linkShown, nodeRevealed, releases],
   )
 
   // Time-lapse frames paint their own background (the canvas is otherwise transparent over a CSS

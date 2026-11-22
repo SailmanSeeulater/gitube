@@ -78,6 +78,15 @@ export function buildFullGraph(data: RepoData, hiddenBranches?: ReadonlySet<stri
     else tipsBySha.set(branch.tipSha, [branch.name])
   }
 
+  // ---- tags: names on each sha, in data order (GitHub lists the newest first)
+  const tagsBySha = new Map<string, string[]>()
+  for (const tag of data.tags ?? []) {
+    if (!get(tag.sha)) continue
+    const list = tagsBySha.get(tag.sha)
+    if (list) list.push(tag.name)
+    else tagsBySha.set(tag.sha, [tag.name])
+  }
+
   // ---- 1. commit set: reachable from any visible tip through fetched parents
   const inSet = new Set<string>()
   const shaStack: string[] = []
@@ -179,6 +188,7 @@ export function buildFullGraph(data: RepoData, hiddenBranches?: ReadonlySet<stri
     const tips = tipsBySha.get(sha) ?? []
     const ownerName = ownerIdx[i] >= 0 ? order[ownerIdx[i]].name : ''
     const hasMissingParent = commit.parents.some((parent) => !get(parent))
+    const tags = tagsBySha.get(sha)
     nodes[i] = {
       id: sha,
       commit,
@@ -189,6 +199,7 @@ export function buildFullGraph(data: RepoData, hiddenBranches?: ReadonlySet<stri
       isMerge: commit.parents.length >= 2,
       isRoot: commit.parents.length === 0 || hasMissingParent || truncatedAt.has(sha),
       reach: reach[i],
+      ...(tags ? { tags } : {}),
     }
     for (const j of parentIdx[i]) {
       links.push({ source: sha, target: shas[j], collapsedCount: 0, owner: ownerName })

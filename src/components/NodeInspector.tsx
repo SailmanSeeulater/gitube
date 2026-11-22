@@ -43,6 +43,7 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
   if (node.isFork) kinds.push('fork')
   if (node.isMerge) kinds.push('merge')
   if (node.isRoot) kinds.push('root')
+  if (node.tags && node.tags.length > 0) kinds.push('release')
   const fallback = useTheme().fallback
   const ownerColour = palette[node.owner] ?? fallback
   const prs = pulls && node.isTip ? nodePrs(pulls.view.index, node.tips) : []
@@ -117,6 +118,16 @@ export default function NodeInspector({ node, palette, onClose, authorKey = null
             >
               <span className="h-2 w-2 rounded-full" style={{ background: palette[tip] ?? fallback }} />
               {tip}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {node.tags && node.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Tags">
+          {node.tags.map((tag) => (
+            <span key={tag} className="rounded-full border border-ui-accent/60 px-2 py-px font-mono text-[11px] text-ui-text">
+              {tag}
             </span>
           ))}
         </div>

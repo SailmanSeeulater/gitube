@@ -8,9 +8,12 @@
 import type { GraphLink, GraphNode } from '../types'
 import type { GraphBody } from './build'
 
-/** A node survives skeleton mode when it is a tip, a fork point, a merge or a root. */
+/**
+ * A node survives skeleton mode when it is a tip, a fork point, a merge or a root, or carries a
+ * tag: a release is a named station, never folded into a run.
+ */
 export function isSkeletonNode(node: GraphNode): boolean {
-  return node.isTip || node.isFork || node.isMerge || node.isRoot
+  return node.isTip || node.isFork || node.isMerge || node.isRoot || (node.tags !== undefined && node.tags.length > 0)
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type FocusEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
-import { FileIcon, ImageIcon, OpenIcon } from './icons'
+import { FileIcon, ImageIcon, OpenIcon, PosterIcon, VectorIcon } from './icons'
 
 export interface ExportMenuProps {
   id: string
@@ -9,6 +9,13 @@ export interface ExportMenuProps {
   canExportData?: boolean
   onExportImage: () => void
   onExportData: () => void
+  /**
+   * The map as a poster (PNG) and as an SVG: offered only where they are given (repo mode), and
+   * enabled while a metro map or coral is on show (canExportMap); organic has no stations to draw.
+   */
+  onExportPoster?: () => void
+  onExportSvg?: () => void
+  canExportMap?: boolean
   onOpenFile: () => void
   /** close the menu; refocus: hand focus back to the toggle button */
   onClose: (refocus: boolean) => void
@@ -43,11 +50,23 @@ function Item({ icon, label, hint, disabled = false, onSelect }: ItemProps) {
 }
 
 /**
- * Drop-down from the top bar: save the graph as a PNG or the loaded data as JSON, or open a saved
- * file. Up/Down move between items; tabbing away closes it. Escape and a click outside close it
+ * Drop-down from the top bar: save the graph as a PNG, the map as a poster or an SVG, or the
+ * loaded data as JSON, or open a saved file. Up/Down move between items; tabbing away closes it. Escape and a click outside close it
  * too, through TopBar (which also covers the menu's placeholder while it loads).
  */
-export default function ExportMenu({ id, canExport, canExportData = canExport, onExportImage, onExportData, onOpenFile, onClose, buttonRef }: ExportMenuProps) {
+export default function ExportMenu({
+  id,
+  canExport,
+  canExportData = canExport,
+  onExportImage,
+  onExportData,
+  onExportPoster,
+  onExportSvg,
+  canExportMap = false,
+  onOpenFile,
+  onClose,
+  buttonRef,
+}: ExportMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   const items = (): HTMLButtonElement[] =>
@@ -100,6 +119,24 @@ export default function ExportMenu({ id, canExport, canExportData = canExport, o
         disabled={!canExport}
         onSelect={run(onExportImage)}
       />
+      {onExportPoster && (
+        <Item
+          icon={<PosterIcon size={14} />}
+          label="Save poster (PNG)"
+          hint={canExportMap || !canExport ? 'the map framed with its name, numbers and a key of its lines' : 'switch to metro or coral to make one'}
+          disabled={!canExport || !canExportMap}
+          onSelect={run(onExportPoster)}
+        />
+      )}
+      {onExportSvg && (
+        <Item
+          icon={<VectorIcon size={14} />}
+          label="Save map (SVG)"
+          hint={canExportMap || !canExport ? 'sharp at any size: put it in your README' : 'switch to metro or coral to make one'}
+          disabled={!canExport || !canExportMap}
+          onSelect={run(onExportSvg)}
+        />
+      )}
       <Item
         icon={<FileIcon size={14} />}
         label="Save data (JSON)"
