@@ -1,6 +1,7 @@
 import { GitHubFetchError } from '../types'
-import type { Branch, Commit, FetchOptions, FetchProgress, FetchStage, RepoData } from '../types'
+import type { Branch, Commit, FetchOptions, FetchProgress, FetchStage, RepoData, RepoTag } from '../types'
 import type { RepoRef } from './parseRepoUrl'
+import { isTagName } from './tagName'
 import {
   PER_PAGE,
   createCountingClient,
@@ -392,6 +393,23 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
     tipDate: commitMap.get(defaultTipSha)?.date ?? '',
   }
 
+  // ---------- 4b. tags ----------
+  // Releases, drawn as named stations: one request for the newest hundred tags, kept where they
+  // land on a fetched commit. Skipped when the hour is down to its spare, and never fatal: a map
+  // without its release names is still the map.
+  const tags: RepoTag[] = []
+  if (!limitHit && (state.remaining === null || state.remaining > SPARE_REQUESTS)) {
+    throwIfAborted()
+    try {
+      const res = await octokit.repos.listTags({ owner, repo, per_page: PER_PAGE })
+      for (const tag of res.data) {
+        if (commitMap.has(tag.commit.sha) && isTagName(tag.name)) tags.push({ name: tag.name, sha: tag.commit.sha })
+      }
+    } catch (err) {
+      if (toFetchError(err, ctx('reading tags')).code === 'aborted') throw new GitHubFetchError('Fetch aborted', 'aborted')
+    }
+  }
+
   // ---------- 5. make graph roots explicit ----------
   for (const commit of commitMap.values()) {
     for (const parent of commit.parents) {
@@ -424,6 +442,7 @@ export async function fetchRepoData(ref: RepoRef, opts: FetchOptions = {}): Prom
     truncated,
     truncatedAt: [...truncatedAt],
     ...(language === null ? {} : { language }),
+    ...(tags.length > 0 ? { tags } : {}),
     ...(budgetSkipped > 0 ? { budgetCut: { compared: branches.length - 1, skipped: budgetSkipped, resetAt: state.resetAt } } : {}),
   }
 }

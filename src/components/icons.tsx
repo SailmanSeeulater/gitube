@@ -169,6 +169,26 @@ export function ImageIcon(props: IconProps) {
   )
 }
 
+export function PosterIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="5" y="3" width="14" height="18" rx="1.5" />
+      <path d="M8 7h8" />
+      <path d="M8 15h8M11 15l2.5-3H16" />
+    </svg>
+  )
+}
+
+export function VectorIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5 18c3-9 11-9 14-12" />
+      <rect x="3" y="16" width="4" height="4" rx="0.5" />
+      <rect x="17" y="4" width="4" height="4" rx="0.5" />
+    </svg>
+  )
+}
+
 export function FileIcon(props: IconProps) {
   return (
     <svg {...base(props)}>

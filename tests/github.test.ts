@@ -74,6 +74,13 @@ function makeFetch(router: Router, rate: { remaining?: string; reset?: string } 
   return { fetch, calls }
 }
 
+/** One tag on a fetched trunk commit, one on a commit the fetch never saw (dropped), one with no usable name. */
+const TAGS = [
+  { name: 'v1.0', commit: { sha: M3 } },
+  { name: 'v0.1', commit: { sha: UNFETCHED } },
+  { name: 'bad\nname', commit: { sha: M2 } },
+]
+
 const NEXT_LINK = '<https://api.github.com/repos/owner/repo/commits?sha=main&per_page=100&page=2>; rel="next"'
 
 /** Routes matching the JSON fixtures: 3 branches, 2 compares, 2 pages of trunk commits. */
@@ -88,6 +95,7 @@ const standardRouter: Router = (url) => {
     if (basehead === 'main...old') return { body: compareOld }
     return undefined
   }
+  if (path === '/repos/owner/repo/tags') return { body: TAGS }
   if (path === '/repos/owner/repo/commits') {
     if (url.searchParams.get('sha') !== 'main') return undefined
     const page = url.searchParams.get('page') ?? '1'
@@ -217,12 +225,15 @@ describe('fetchRepoData', () => {
     expect(data.commits[M5].author).toBe('Alice')
     expect(data.commits[M5].parents).toEqual([ROOT_PARENT])
 
+    // Tags: kept where they land on a fetched commit and have a name the map can show.
+    expect(data.tags).toEqual([{ name: 'v1.0', sha: M3 }])
+
     // Roots: only the oldest trunk commit has an unfetched parent.
     expect(data.truncatedAt).toEqual([M5])
     expect(data.truncated).toBe(false)
 
-    // Requests: repo + branches + 2 compares + 2 trunk pages.
-    expect(calls).toHaveLength(6)
+    // Requests: repo + branches + 2 compares + 2 trunk pages + tags.
+    expect(calls).toHaveLength(7)
     expect(calls.every((c) => c.method === 'GET')).toBe(true)
     expect(calls.some((c) => c.url.includes('/repos/owner/repo/compare/main...feature%2Fx'))).toBe(true)
     expect(calls.some((c) => c.url.includes('/repos/owner/repo/compare/main...old'))).toBe(true)
@@ -244,7 +255,7 @@ describe('fetchRepoData', () => {
       stage: 'done',
       done: 1,
       total: 1,
-      requestsUsed: 6,
+      requestsUsed: 7,
       rateLimitRemaining: Number(RATE_REMAINING),
       rateLimitResetAt: RATE_RESET_ISO,
     })
@@ -478,7 +489,7 @@ describe('fetchRepoData', () => {
     expect(data.commits[M4]).toBeDefined()
     // A vanished branch is not missing history, so the data is not flagged as truncated.
     expect(data.truncated).toBe(false)
-    expect(calls).toHaveLength(6)
+    expect(calls).toHaveLength(7)
     const skip = progress.find((p) => p.stage === 'compare' && /skipped/i.test(p.message))
     expect(skip).toBeDefined()
     expect(skip?.message).toContain('old')
@@ -497,15 +508,15 @@ describe('fetchRepoData', () => {
     expect(data.branches.map((b) => b.name)).toEqual(['main', 'feature/x'])
     expect(data.commits[F2]).toBeDefined()
     expect(data.truncated).toBe(true)
-    // repo + branches + feature/x compare + old compare twice (one retry) + 2 trunk pages
-    expect(calls).toHaveLength(7)
+    // repo + branches + feature/x compare + old compare twice (one retry) + 2 trunk pages + tags
+    expect(calls).toHaveLength(8)
     expect(calls.filter((c) => c.url.includes('/compare/main...old'))).toHaveLength(2)
     const skip = progress.find((p) => p.stage === 'compare' && /skipped .*old.*HTTP 500/i.test(p.message))
     expect(skip).toBeDefined()
     expect(skip?.message).toMatch(/too large/i)
     expect(progress.filter((p) => p.stage === 'compare').map((p) => p.done)).toEqual([1, 2])
     expect(progress[progress.length - 1].stage).toBe('done')
-    expect(progress[progress.length - 1].requestsUsed).toBe(7)
+    expect(progress[progress.length - 1].requestsUsed).toBe(8)
   })
 
   it('recovers when a compare 502s once and then succeeds, without flagging truncation', async () => {
@@ -522,7 +533,7 @@ describe('fetchRepoData', () => {
 
     expect(data.branches.map((b) => b.name)).toEqual(['main', 'feature/x', 'old'])
     expect(data.truncated).toBe(false)
-    expect(calls).toHaveLength(7)
+    expect(calls).toHaveLength(8)
     expect(progress.some((p) => /skipped/i.test(p.message))).toBe(false)
   })
 
@@ -536,7 +547,7 @@ describe('fetchRepoData', () => {
 
     expect(data.branches.map((b) => b.name)).toEqual(['main', 'feature/x'])
     expect(data.truncated).toBe(true)
-    expect(calls).toHaveLength(6)
+    expect(calls).toHaveLength(7)
     const skip = progress.find((p) => p.stage === 'compare' && /skipped .*old.*HTTP 422/i.test(p.message))
     expect(skip).toBeDefined()
     expect(skip?.message).not.toMatch(/too large/i)
@@ -857,6 +868,23 @@ describe('fetchRepoData', () => {
     expect(data.truncated).toBe(true)
     expect(data.truncatedAt).toContain(F2)
     expect(data.branches[1]).toMatchObject({ name: 'feature/x', tipSha: F2, tipDate: '2026-10-07T09:00:00Z' })
+  })
+
+  it('leaves the tags out when the hour is down to its spare requests', async () => {
+    const { fetch, calls } = makeFetch(standardRouter, { remaining: String(SPARE_REQUESTS) })
+    const data = await fetchRepoData(REF, { fetch })
+    expect(calls.some((c) => c.url.includes('/tags'))).toBe(false)
+    expect(data.tags).toBeUndefined()
+    expect(data.commits[M1]).toBeDefined()
+  })
+
+  it('still draws the map when the tags request fails', async () => {
+    const router: Router = (url, init) =>
+      url.pathname === '/repos/owner/repo/tags' ? { status: 500, body: { message: 'Server Error' } } : standardRouter(url, init)
+    const { fetch } = makeFetch(router)
+    const data = await fetchRepoData(REF, { fetch })
+    expect(data.tags).toBeUndefined()
+    expect(data.commits[M3]).toBeDefined()
   })
 
   it('parses the rate-limit headers into every progress event', async () => {

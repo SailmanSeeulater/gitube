@@ -6,7 +6,8 @@
  * drops anything else, and only keeps links and avatars that point at GitHub.
  */
 import { parseRepoUrl } from '../api/parseRepoUrl'
-import type { Branch, Commit, RepoData } from '../types'
+import { isTagName } from '../api/tagName'
+import type { Branch, Commit, RepoData, RepoTag } from '../types'
 
 export const REPO_FILE_FORMAT = 'gitube'
 /** The format name files had before the rename; they open as they always did. */
@@ -163,11 +164,18 @@ export function parseRepoFile(text: string): RepoFile {
   const truncatedAt = raw.truncatedAt.map((s, i) => sha(s, `truncation entry ${i + 1}`))
   // optional (files saved before it was kept have none); a name, never markup: it is only looked up and shown as text
   const language = typeof raw.language === 'string' && LANGUAGE_RE.test(raw.language) ? raw.language : null
+  // optional too; a tag that names no commit in the file, or no usable name, is dropped rather than failing the file
+  const tags: RepoTag[] = []
+  if (Array.isArray(raw.tags)) {
+    for (const t of raw.tags) {
+      if (isObject(t) && isTagName(t.name) && typeof t.sha === 'string' && Object.hasOwn(commits, t.sha)) tags.push({ name: t.name, sha: t.sha })
+    }
+  }
 
   return {
     format: REPO_FILE_FORMAT,
     version: REPO_FILE_VERSION,
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
-    data: { owner, repo, defaultBranch, branches, commits, truncated: raw.truncated, truncatedAt, ...(language === null ? {} : { language }) },
+    data: { owner, repo, defaultBranch, branches, commits, truncated: raw.truncated, truncatedAt, ...(language === null ? {} : { language }), ...(tags.length > 0 ? { tags } : {}) },
   }
 }

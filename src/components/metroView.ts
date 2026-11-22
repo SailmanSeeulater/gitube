@@ -193,6 +193,8 @@ export interface MetroStubLine {
 }
 
 export interface MetroView {
+  /** the layout this view was built from (the SVG and poster exports draw it again, with labels) */
+  layout?: MetroLayout
   /** node id -> pinned position in graph units */
   targets: Map<string, { x: number; y: number }>
   stations: Map<string, MetroStationKind>
@@ -368,6 +370,7 @@ export function buildMetroView(layout: MetroLayout, nodes: ReadonlyArray<{ id: s
     wholeFit: layout.fit === 'whole',
     bleach: layout.bleach ?? null,
     polyps: layout.polyps ?? null,
+    layout,
   }
 }
 

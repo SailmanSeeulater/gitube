@@ -18,6 +18,7 @@ type GlyphKind =
   | 'spike'
   | 'pr'
   | 'pr-station'
+  | 'release'
 
 /** The spikes RepoGraph draws around a diverged tip (drawSpikes), as an SVG path around (9, 9). */
 const SPIKE_PATH = Array.from({ length: 9 }, (_, i) => {
@@ -56,6 +57,15 @@ function Glyph({ kind, theme, prKnown }: { kind: GlyphKind; theme: Theme; prKnow
           <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
           <circle cx="9" cy="9" r="4.5" fill={theme.stationRing} />
           <circle cx="9" cy="9" r="2.2" fill={theme.derived.stationCore} />
+        </svg>
+      )
+    // a tagged commit: a capsule across the line, its name in a pill beside it on the canvas
+    case 'release':
+      return (
+        <svg {...common}>
+          <line x1="0" y1="9" x2="18" y2="9" stroke={branch} strokeWidth="2.5" />
+          <rect x="6" y="3.5" width="6" height="11" rx="3" fill={theme.stationRing} />
+          <rect x="7.4" y="4.9" width="3.2" height="8.2" rx="1.6" fill={theme.derived.stationCore} />
         </svg>
       )
     case 'origin':
@@ -193,16 +203,20 @@ export interface LegendProps {
   prKnown?: boolean
   /** the repo's primary language, which picks the coral's species (the coral layout's note names it) */
   language?: string
+  /** some commit on the map carries a tag: the legend explains the release station (only then) */
+  hasReleases?: boolean
 }
 
-export default function Legend({ hasPrs = false, prKnown = false, language }: LegendProps) {
+const RELEASE_ITEM = { kind: 'release', label: 'release', hint: 'a tagged commit, named in a pill beside it (click it for every tag)' } as const
+
+export default function Legend({ hasPrs = false, prKnown = false, language, hasReleases = false }: LegendProps) {
   const theme = useTheme()
   const layout = useAppStore((s) => s.layoutMode)
   // the coral is drawn with the metro map's stations and lines
   const stations = layout !== 'organic'
   const base = stations ? METRO_ITEMS : ITEMS
   const prItem = { kind: PR_KINDS[stations ? 'metro' : 'organic'], label: 'pull request', hint: prKnown ? PR_HINT.known : PR_HINT.unknown }
-  const items = hasPrs ? [...base, prItem] : base
+  const items = [...base, ...(stations && hasReleases ? [RELEASE_ITEM] : []), ...(hasPrs ? [prItem] : [])]
   return (
     <div>
       <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">

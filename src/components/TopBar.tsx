@@ -53,6 +53,10 @@ export interface TopBarProps {
   canExportData?: boolean
   onExportImage: () => void
   onExportData: () => void
+  /** the map as a poster and as an SVG (repo mode); canExportMap: a metro map or coral is on show */
+  onExportPoster?: () => void
+  onExportSvg?: () => void
+  canExportMap?: boolean
   /** a file was picked to open */
   onOpenFile: (file: File) => void
   /** the side panel is open: keep clear of it (the address field gives up width first) */
@@ -71,6 +75,9 @@ export default function TopBar({
   canExportData,
   onExportImage,
   onExportData,
+  onExportPoster,
+  onExportSvg,
+  canExportMap,
   onOpenFile,
   besidePanel,
 }: TopBarProps) {
@@ -345,6 +352,9 @@ export default function TopBar({
               canExportData={canExportData}
               onExportImage={onExportImage}
               onExportData={onExportData}
+              onExportPoster={onExportPoster}
+              onExportSvg={onExportSvg}
+              canExportMap={canExportMap}
               onOpenFile={pickFile}
               onClose={closeExport}
               buttonRef={exportButtonRef}

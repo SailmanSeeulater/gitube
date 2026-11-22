@@ -31,6 +31,7 @@ import NodeInspector, { type InspectorPulls } from './components/NodeInspector'
 import { staleBranchNames } from './components/graphUtils'
 import { ChunkPlaceholder, LazySlot, lazyPart, reloadPage } from './components/LazyPart'
 import { useMetroView, type MetroLayoutFn } from './components/useMetroView'
+import { metroOptionsFor } from './components/metroView'
 
 /** Side panel width (300px) plus its 12px edge gap and a 12px breathing gap. */
 const PANEL_INSET = 324
@@ -460,6 +461,41 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
     }
   }, [data, loadExporters, viewMode, drawnLayout, selectedBranch, selectedContributor, contributors, theme, marks, timelapseOpen, pulls.index])
 
+  /**
+   * The map on show (metro or coral) as a poster PNG or an SVG. The layout is made again with its
+   * branch names placed (the canvas places its own, on screen) and its own lanes as hints, so the
+   * lines keep the lanes they have on screen.
+   */
+  const exportMap = useCallback(
+    async (kind: 'poster' | 'svg') => {
+      const shown = metro?.layout
+      if (!data || !graph || !shown || !metroLayout) return
+      const kit = await loadExporters()
+      if (!kit) return
+      try {
+        const layout = metroLayout(graph, data, { ...metroOptionsFor(viewMode, shown.laneHints), labels: true })
+        const now = new Date()
+        const input = { layout, nodes: graph.nodes, palette, theme, data, now, layoutName: drawnLayout, viewMode }
+        if (kind === 'svg') {
+          const picture = kit.mapSvg(input)
+          kit.downloadBlob(new Blob([picture.svg], { type: 'image/svg+xml' }), kit.exportFileName(data, 'svg', now))
+        } else {
+          const picture = kit.posterSvg(input)
+          // twice the size while that stays within what every browser's canvas allows
+          const scale = picture.width * picture.height * 4 <= 16_000_000 ? 2 : 1
+          kit.downloadBlob(await kit.svgToPng(picture.svg, picture.width, picture.height, scale), kit.exportFileName(data, 'png', now, 'poster'))
+        }
+        setExportError(null)
+        track('export', { format: kind })
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [data, graph, metro, metroLayout, loadExporters, viewMode, palette, theme, drawnLayout],
+  )
+  const exportPoster = useCallback(() => void exportMap('poster'), [exportMap])
+  const exportSvg = useCallback(() => void exportMap('svg'), [exportMap])
+
   const exportData = useCallback(async () => {
     if (!data) return
     const kit = await loadExporters()
@@ -625,6 +661,9 @@ export default function RepoApp({ onUser, initial }: RepoAppProps) {
         canExport={graph !== null}
         onExportImage={exportImage}
         onExportData={exportData}
+        onExportPoster={exportPoster}
+        onExportSvg={exportSvg}
+        canExportMap={metro?.layout !== undefined && metroLayout !== null}
         onOpenFile={openFile}
         besidePanel={graph !== null && panelOpen}
       />

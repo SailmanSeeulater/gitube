@@ -83,6 +83,26 @@ export function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
+/**
+ * An SVG (a poster) drawn into a PNG at scale times its size. Goes through a data: URL, which the
+ * site's Content-Security-Policy allows for images (blob: it does not).
+ */
+export async function svgToPng(svg: string, width: number, height: number, scale = 1): Promise<Blob> {
+  const image = new Image()
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve()
+    image.onerror = () => reject(new Error('could not draw the poster'))
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(width * scale)
+  canvas.height = Math.round(height * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('canvas 2D context unavailable')
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+  return canvasToPng(canvas)
+}
+
 /** Hands a blob to the browser as a file download. */
 export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)

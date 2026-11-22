@@ -55,6 +55,17 @@ export interface RepoData {
    * could instead of failing. Never cached or saved (a later load should try for all of them).
    */
   budgetCut?: BudgetCut
+  /**
+   * Tags on fetched commits (the newest hundred GitHub lists), drawn as named release stations.
+   * Left out when there are none, and in data loaded before tags were kept.
+   */
+  tags?: RepoTag[]
+}
+
+/** A tag on a fetched commit: a release, as the map names it. */
+export interface RepoTag {
+  name: string
+  sha: string
 }
 
 /** Branches a repo fetch left out to stay within the hourly request budget. */
@@ -133,6 +144,8 @@ export interface GraphNode {
   isRoot: boolean
   /** Number of branches whose history contains this commit. Drives node size. */
   reach: number
+  /** Tags on this commit (RepoData.tags), newest listed first; left out when it has none. */
+  tags?: string[]
   // populated by react-force-graph at runtime
   x?: number
   y?: number

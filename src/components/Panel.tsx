@@ -673,7 +673,7 @@ export default function Panel({ data, palette, contributors, cleanup, onVs, onUs
       )}
 
       <footer className="border-t border-ui-border px-3 py-2.5">
-        <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} language={data.language} />
+        <Legend hasPrs={hasPrMarks} prKnown={prMarksKnown} language={data.language} hasReleases={(data.tags?.length ?? 0) > 0} />
       </footer>
     </aside>
   )
